@@ -1,3 +1,4 @@
+import { DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES, normalizeGoogleFlightsCountryCodes } from "./googleFlightsBooking";
 import type { ExtensionSettings } from "./types";
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
@@ -6,6 +7,9 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   preferredFrequentFlyerPrograms: [],
   affiliateOptOut: false,
   debugMode: false,
+  googleFlights: {
+    countryCodes: [...DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES],
+  },
   airportHelper: {
     region: "",
     continent: "",
@@ -42,6 +46,10 @@ export async function patchSettings(patch: Partial<ExtensionSettings>): Promise<
       ...current.backend,
       ...(patch.backend || {}),
     },
+    googleFlights: {
+      ...current.googleFlights,
+      ...(patch.googleFlights || {}),
+    },
   });
   await saveSettings(next);
   return next;
@@ -51,6 +59,7 @@ export function mergeSettings(value: unknown): ExtensionSettings {
   const candidate = isRecord(value) ? value : {};
   const airportHelper = isRecord(candidate.airportHelper) ? candidate.airportHelper : {};
   const backend = isRecord(candidate.backend) ? candidate.backend : {};
+  const googleFlights = isRecord(candidate.googleFlights) ? candidate.googleFlights : {};
 
   return {
     hiddenProviderIds: stringArray(candidate.hiddenProviderIds, DEFAULT_SETTINGS.hiddenProviderIds),
@@ -61,6 +70,12 @@ export function mergeSettings(value: unknown): ExtensionSettings {
     ),
     affiliateOptOut: booleanValue(candidate.affiliateOptOut, DEFAULT_SETTINGS.affiliateOptOut),
     debugMode: booleanValue(candidate.debugMode, DEFAULT_SETTINGS.debugMode),
+    googleFlights: {
+      countryCodes: normalizeGoogleFlightsCountryCodes(
+        googleFlights.countryCodes,
+        DEFAULT_SETTINGS.googleFlights.countryCodes,
+      ),
+    },
     airportHelper: {
       region: stringValue(airportHelper.region, DEFAULT_SETTINGS.airportHelper.region),
       continent: stringValue(airportHelper.continent, DEFAULT_SETTINGS.airportHelper.continent),

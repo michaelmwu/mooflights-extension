@@ -2,13 +2,16 @@ import {
   DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES,
   type GoogleFlightsCountryResult,
   parseGoogleFlightsBookingOptions,
+  parseGoogleFlightsCountryInput,
 } from "../shared/googleFlightsBooking";
+import { loadSettings } from "../shared/storage";
 
 type CompareState = {
   comparing: boolean;
   baseline: GoogleFlightsCountryResult | null;
   results: GoogleFlightsCountryResult[];
   error: string;
+  countryInput: string;
 };
 
 type CompareResponse = {
@@ -25,6 +28,7 @@ const state: CompareState = {
   baseline: null,
   results: [],
   error: "",
+  countryInput: DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES.join(", "),
 };
 
 chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
@@ -35,7 +39,17 @@ chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) =
 });
 
 if (isBookingPage()) {
+  void init();
+}
+
+async function init(): Promise<void> {
   installPanel();
+  try {
+    const settings = await loadSettings();
+    state.countryInput = settings.googleFlights.countryCodes.join(", ");
+  } catch {
+    state.countryInput = DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES.join(", ");
+  }
   scheduleRender();
   installObserver();
 }
@@ -84,16 +98,30 @@ function render(): void {
         <span>Country price check</span>
       </header>
       ${renderBaseline(baseline)}
-      <button type="button" ${state.comparing ? "disabled" : ""} data-action="compare-countries">
-        ${state.comparing ? "Checking..." : "Compare countries"}
-      </button>
+      <label class="country-input">
+        Countries
+        <input type="text" value="${escapeHtml(state.countryInput)}" data-role="country-input" spellcheck="false" />
+      </label>
+      <div class="actions">
+        <button type="button" ${state.comparing ? "disabled" : ""} data-action="compare-countries">
+          ${state.comparing ? "Checking..." : "Compare countries"}
+        </button>
+        <button type="button" class="secondary" data-action="open-options">Options</button>
+      </div>
       ${state.error ? `<p class="error">${escapeHtml(state.error)}</p>` : ""}
       ${renderResults(state.results)}
     </section>
   `;
 
+  const input = shadow.querySelector<HTMLInputElement>('[data-role="country-input"]');
+  input?.addEventListener("input", () => {
+    state.countryInput = input.value;
+  });
   shadow.querySelector('[data-action="compare-countries"]')?.addEventListener("click", () => {
     void compareCountries();
+  });
+  shadow.querySelector('[data-action="open-options"]')?.addEventListener("click", () => {
+    void chrome.runtime.openOptionsPage();
   });
 }
 
@@ -126,11 +154,12 @@ function renderResults(results: GoogleFlightsCountryResult[]): string {
     <div class="results">
       ${sorted
         .map((result) => {
-          const cheapest = result.cheapest ? `${result.cheapest.priceText} ${result.cheapest.provider}` : "No options";
+          const cheapest = renderCheapest(result);
           const direct = result.direct ? `${result.direct.priceText} direct` : "No direct";
+          const isCurrent = state.baseline?.url === result.url;
           return `
             <div class="result ${result.status}">
-              <strong>${escapeHtml(result.country)}</strong>
+              <strong>${escapeHtml(result.country)}${isCurrent ? ' <span class="current">current</span>' : ""}</strong>
               <span>${escapeHtml(cheapest)}</span>
               <small>${escapeHtml(direct)} · ${result.options.length} option(s)${result.refreshed ? " · retried" : ""}</small>
             </div>
@@ -141,7 +170,22 @@ function renderResults(results: GoogleFlightsCountryResult[]): string {
   `;
 }
 
+function renderCheapest(result: GoogleFlightsCountryResult): string {
+  if (!result.cheapest) return "No options";
+  const tiedProviders = result.options
+    .filter((option) => option.price === result.cheapest?.price)
+    .map((option) => option.provider);
+  return `${result.cheapest.priceText} ${tiedProviders.join(", ")}`;
+}
+
 async function compareCountries(): Promise<void> {
+  const selectedCountries = parseGoogleFlightsCountryInput(state.countryInput);
+  if (selectedCountries.length === 0) {
+    state.error = "Enter at least one country code.";
+    render();
+    return;
+  }
+  state.countryInput = selectedCountries.join(", ");
   state.comparing = true;
   state.error = "";
   state.results = [];
@@ -149,7 +193,7 @@ async function compareCountries(): Promise<void> {
   render();
 
   const currentCountry = currentCountryCode();
-  const countries = DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES.filter((country) => country !== currentCountry);
+  const countries = selectedCountries.filter((country) => country !== currentCountry);
   try {
     const response = (await chrome.runtime.sendMessage({
       command: "compareGoogleFlightsCountries",
@@ -158,7 +202,7 @@ async function compareCountries(): Promise<void> {
       baselineOptionCount: state.baseline.options.length,
     })) as CompareResponse;
     if (!response?.ok) throw new Error(response?.error || "Country comparison failed.");
-    state.results = response.results || [];
+    state.results = [state.baseline, ...(response.results || [])];
   } catch (error) {
     state.error = error instanceof Error ? error.message : "Country comparison failed.";
   } finally {
@@ -217,9 +261,32 @@ function styles(): string {
     }
     dt { color: #64748b; font-weight: 650; }
     dd { margin: 0; text-align: right; }
+    .country-input {
+      display: grid;
+      gap: 6px;
+      padding: 10px 12px 0;
+      color: #64748b;
+      font-weight: 650;
+    }
+    .country-input input {
+      width: 100%;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      background: #ffffff;
+      color: #172033;
+      -webkit-text-fill-color: #172033;
+      appearance: none;
+      padding: 7px 9px;
+      font: inherit;
+      font-weight: 400;
+    }
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      padding: 10px 12px;
+    }
     button {
-      width: calc(100% - 24px);
-      margin: 10px 12px;
       border: 1px solid #0f766e;
       border-radius: 6px;
       background: #0f766e;
@@ -228,6 +295,11 @@ function styles(): string {
       font: inherit;
       font-weight: 650;
       cursor: pointer;
+    }
+    button.secondary {
+      border-color: #94a3b8;
+      background: #ffffff;
+      color: #334155;
     }
     button:disabled { cursor: wait; opacity: 0.72; }
     .error {
@@ -253,6 +325,15 @@ function styles(): string {
     .result.sparse { border-left-color: #d97706; }
     .result.empty, .result.error { border-left-color: #dc2626; }
     .result span { font-weight: 650; }
+    .result .current {
+      margin-left: 6px;
+      border-radius: 999px;
+      background: #e0f2fe;
+      color: #0369a1;
+      padding: 1px 6px;
+      font-size: 11px;
+      font-weight: 700;
+    }
     .result small { color: #64748b; }
   `;
 }

@@ -64,6 +64,9 @@ export type ExtensionSettings = {
   preferredFrequentFlyerPrograms: string[];
   affiliateOptOut: boolean;
   debugMode: boolean;
+  googleFlights: {
+    countryCodes: string[];
+  };
   airportHelper: {
     region: string;
     continent: string;

@@ -232,6 +232,40 @@ button.secondary {
   cursor: pointer;
 }
 
+.country-picker {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.country-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.country-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #f8fafc;
+  padding: 5px 8px 5px 10px;
+}
+
+.country-chip button {
+  border: 0;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #334155;
+  padding: 2px 7px;
+  font: inherit;
+  cursor: pointer;
+}
+
 .dev-panel {
   border-color: #f59e0b;
   background: #fffbeb;
@@ -256,7 +290,8 @@ button.secondary {
 
 @media (max-width: 720px) {
   .grid,
-  .provider {
+  .provider,
+  .country-picker {
     grid-template-columns: 1fr;
   }
 }

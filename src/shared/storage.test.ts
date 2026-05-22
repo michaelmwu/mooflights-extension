@@ -27,6 +27,9 @@ describe("settings", () => {
         preferredFrequentFlyerPrograms: ["Air Canada Aeroplan", 123, "British Airways Club"],
         affiliateOptOut: "yes",
         debugMode: 1,
+        googleFlights: {
+          countryCodes: ["jp", "MY", "not-a-country", null, "JP"],
+        },
         airportHelper: {
           region: 7,
           continent: 123,
@@ -43,6 +46,9 @@ describe("settings", () => {
     ).toEqual({
       ...DEFAULT_SETTINGS,
       preferredFrequentFlyerPrograms: ["Air Canada Aeroplan", "British Airways Club"],
+      googleFlights: {
+        countryCodes: ["JP", "MY"],
+      },
       airportHelper: {
         ...DEFAULT_SETTINGS.airportHelper,
         countries: ["US"],

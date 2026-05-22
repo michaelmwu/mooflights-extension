@@ -8,6 +8,11 @@ import {
   uniqueAirportRegions,
   uniqueAirportValues,
 } from "../shared/airports";
+import {
+  DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES,
+  normalizeGoogleFlightsCountryCodes,
+  parseGoogleFlightsCountryInput,
+} from "../shared/googleFlightsBooking";
 import { LOCAL_PROVIDERS, providerConfidence } from "../shared/providers";
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from "../shared/storage";
 import type { ExtensionSettings } from "../shared/types";
@@ -17,6 +22,7 @@ import "./options.css";
 function Options(): React.ReactElement {
   const [settings, setSettings] = useState<ExtensionSettings>(DEFAULT_SETTINGS);
   const [programSearch, setProgramSearch] = useState("");
+  const [googleFlightsCountrySearch, setGoogleFlightsCountrySearch] = useState("");
   const [saved, setSaved] = useState(false);
   const countries = useMemo(() => uniqueAirportCountries(), []);
   const continents = useMemo(() => uniqueAirportValues("continent"), []);
@@ -50,6 +56,34 @@ function Options(): React.ReactElement {
     void persist({
       ...settings,
       preferredFrequentFlyerPrograms: Array.from(values),
+    });
+  }
+
+  function addGoogleFlightsCountry(): void {
+    const country =
+      countryCodeFromSearchValue(googleFlightsCountrySearch) ||
+      parseGoogleFlightsCountryInput(googleFlightsCountrySearch)[0] ||
+      "";
+    if (!country) return;
+    setGoogleFlightsCountrySearch("");
+    void persist({
+      ...settings,
+      googleFlights: {
+        ...settings.googleFlights,
+        countryCodes: normalizeGoogleFlightsCountryCodes([...settings.googleFlights.countryCodes, country]),
+      },
+    });
+  }
+
+  function removeGoogleFlightsCountry(country: string): void {
+    void persist({
+      ...settings,
+      googleFlights: {
+        ...settings.googleFlights,
+        countryCodes: normalizeGoogleFlightsCountryCodes(
+          settings.googleFlights.countryCodes.filter((code) => code !== country),
+        ),
+      },
     });
   }
 
@@ -145,6 +179,65 @@ function Options(): React.ReactElement {
             </button>
           </div>
         ) : null}
+      </section>
+
+      <section>
+        <h2>Google Flights Country Check</h2>
+        <p className="note">Default countries for booking-page price comparisons.</p>
+        <div className="country-picker">
+          <label>
+            Add country
+            <input
+              type="search"
+              list="google-country-options"
+              value={googleFlightsCountrySearch}
+              placeholder="Search country or enter code"
+              onChange={(event) => setGoogleFlightsCountrySearch(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                addGoogleFlightsCountry();
+              }}
+            />
+            <datalist id="google-country-options">
+              {countries.map((country) => (
+                <option key={country.code} value={country.searchValue} />
+              ))}
+            </datalist>
+          </label>
+          <button type="button" className="secondary" onClick={addGoogleFlightsCountry}>
+            Add
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() =>
+              void persist({
+                ...settings,
+                googleFlights: {
+                  ...settings.googleFlights,
+                  countryCodes: DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES,
+                },
+              })
+            }
+          >
+            Reset
+          </button>
+        </div>
+        <div className="country-list">
+          {settings.googleFlights.countryCodes.map((country) => (
+            <span className="country-chip" key={country}>
+              {countrySearchValue(country) || country}
+              <button
+                type="button"
+                aria-label={`Remove ${country}`}
+                onClick={() => removeGoogleFlightsCountry(country)}
+              >
+                Remove
+              </button>
+            </span>
+          ))}
+        </div>
       </section>
 
       <section>

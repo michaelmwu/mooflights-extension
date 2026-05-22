@@ -65,7 +65,7 @@ async function compareGoogleFlightsCountry(
       await waitForTabComplete(tabId);
       result = await parseGoogleFlightsTab(tabId, country, url);
       result.refreshed = true;
-      if (shouldRetrySparseResult(result, baselineOptionCount)) result.status = "sparse";
+      if (isSparseResult(result, baselineOptionCount)) result.status = "sparse";
     }
     return result;
   } catch (error) {
@@ -82,7 +82,11 @@ async function compareGoogleFlightsCountry(
 }
 
 function shouldRetrySparseResult(result: GoogleFlightsCountryResult, baselineOptionCount: number): boolean {
-  return baselineOptionCount > 3 && result.status !== "error" && result.options.length <= 3 && !result.refreshed;
+  return isSparseResult(result, baselineOptionCount) && !result.refreshed;
+}
+
+function isSparseResult(result: GoogleFlightsCountryResult, baselineOptionCount: number): boolean {
+  return baselineOptionCount > 3 && result.status !== "error" && result.options.length <= 3;
 }
 
 async function parseGoogleFlightsTab(tabId: number, country: string, url: string): Promise<GoogleFlightsCountryResult> {
