@@ -26,6 +26,33 @@ describe("ITA itinerary parsing", () => {
     });
   });
 
+  it("rejects non-ITA payloads without valid flight segments", () => {
+    expect(() => parseItaBookingDetails({})).toThrow("ITA itinerary JSON did not contain any flight segments.");
+  });
+
+  it("requires three-character airport codes", () => {
+    expect(() =>
+      parseItaBookingDetails({
+        itinerary: {
+          slices: [
+            {
+              origin: { code: "HN" },
+              destination: { code: "SJC" },
+              segments: [
+                {
+                  origin: { code: "HN" },
+                  destination: { code: "SJC" },
+                  carrier: { code: "AS" },
+                  bookingInfos: [{ bookingCode: "X", cabin: "COACH" }],
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    ).toThrow("ITA itinerary JSON did not contain any flight segments.");
+  });
+
   it("builds direct Where to Credit URLs from carrier and booking class", () => {
     const itinerary = parseItaBookingDetails(fixture);
 

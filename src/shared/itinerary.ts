@@ -1,6 +1,7 @@
 import type { Cabin, ItinerarySegment, NormalizedItinerary, TripType } from "./types";
 
-const IATA_RE = /^[A-Z0-9]{2,3}$/;
+const AIRPORT_CODE_RE = /^[A-Z0-9]{3}$/;
+const CARRIER_CODE_RE = /^[A-Z0-9]{2,3}$/;
 
 export function parseItaBookingDetails(input: unknown): NormalizedItinerary {
   const data = input as any;
@@ -20,6 +21,11 @@ export function parseItaBookingDetails(input: unknown): NormalizedItinerary {
   });
 
   const allSegments = normalizedSlices.flatMap((slice) => slice.segments);
+  const validSegments = allSegments.filter((segment) => segment.origin && segment.destination && segment.carrier);
+  if (normalizedSlices.length === 0 || validSegments.length === 0) {
+    throw new Error("ITA itinerary JSON did not contain any flight segments.");
+  }
+
   const carriers = unique(allSegments.map((segment: ItinerarySegment) => segment.carrier).filter(Boolean));
   const fareBases = unique(
     allSegments.map((segment: ItinerarySegment) => segment.fareBasis).filter(Boolean) as string[],
@@ -90,7 +96,7 @@ function normalizeCarrier(value: unknown): string {
   const carrier = String(value || "")
     .trim()
     .toUpperCase();
-  return /^[A-Z0-9]{2,3}$/.test(carrier) ? carrier : "";
+  return CARRIER_CODE_RE.test(carrier) ? carrier : "";
 }
 
 function normalizeBookingClass(value: unknown): string {
@@ -226,7 +232,7 @@ function airportCode(value: unknown): string {
   const code = String(value || "")
     .trim()
     .toUpperCase();
-  return IATA_RE.test(code) ? code : "";
+  return AIRPORT_CODE_RE.test(code) ? code : "";
 }
 
 function stringOrUndefined(value: unknown): string | undefined {

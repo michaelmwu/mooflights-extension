@@ -2,7 +2,7 @@ import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { uniqueAirlines, uniqueAirportValues, uniqueAlliances } from "../shared/airports";
-import { LOCAL_PROVIDERS } from "../shared/providers";
+import { LOCAL_PROVIDERS, providerConfidence } from "../shared/providers";
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from "../shared/storage";
 import type { ExtensionSettings } from "../shared/types";
 import "./options.css";
@@ -238,14 +238,15 @@ function Select(props: {
 }
 
 function providerReliabilityCopy(score: number): { tone: "high" | "medium" | "low"; label: string; help: string } {
-  if (score >= 85) {
+  const confidence = providerConfidence(score);
+  if (confidence === "high") {
     return {
       tone: "high",
       label: "Reliable",
       help: "Usually opens the right route and date.",
     };
   }
-  if (score >= 70) {
+  if (confidence === "medium") {
     return {
       tone: "medium",
       label: "Check details",

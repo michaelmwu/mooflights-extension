@@ -206,11 +206,25 @@ function applyPageLinkOverrides(links: RankedProviderLink[]): RankedProviderLink
 function findGoogleFlightsHref(): string {
   const anchors = Array.from(document.querySelectorAll<HTMLAnchorElement>("a[href]"));
   const anchor = anchors.find((candidate) => {
-    const href = candidate.href;
-    if (!href.includes("google.com/travel/flights")) return false;
-    return href.includes("source=ita_matrix") || /open\s+in\s+google\s+flights/i.test(candidate.textContent || "");
+    if (!isAllowedGoogleFlightsUrl(candidate.href)) return false;
+    return (
+      candidate.href.includes("source=ita_matrix") || /open\s+in\s+google\s+flights/i.test(candidate.textContent || "")
+    );
   });
   return anchor?.href || "";
+}
+
+function isAllowedGoogleFlightsUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      (url.hostname === "www.google.com" || url.hostname === "google.com") &&
+      (url.pathname === "/travel/flights" || url.pathname.startsWith("/travel/flights/"))
+    );
+  } catch {
+    return false;
+  }
 }
 
 async function updateAirportSetting(key: string, value: string): Promise<void> {

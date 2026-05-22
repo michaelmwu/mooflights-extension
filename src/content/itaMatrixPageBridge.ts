@@ -66,7 +66,19 @@ async function captureJson(requestId: string): Promise<void> {
     }
   }
 
-  button.click();
+  try {
+    button.click();
+  } catch (error) {
+    window.clearTimeout(timeoutId);
+    restoreWriteText(clipboard, originalWriteText);
+    if (!captured) {
+      postResult({
+        requestId,
+        ok: false,
+        error: error instanceof Error ? error.message : "ITA Matrix JSON button click failed.",
+      });
+    }
+  }
 }
 
 function restoreWriteText(clipboard: Clipboard, originalWriteText: Clipboard["writeText"]): void {

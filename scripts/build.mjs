@@ -57,7 +57,6 @@ async function buildEntry(entry) {
 const staticFiles = [
   ["src/popup/index.html", "popup/index.html"],
   ["src/options/index.html", "options/index.html"],
-  ["src/shared/data/airports.json", "data/airports.json"],
 ];
 
 async function copyStaticFiles() {
@@ -93,8 +92,8 @@ async function copyStaticFiles() {
       "This browser extension is AGPL-3.0-only open-source software.",
       "The optional hosted Mu Travel backend is a separate closed-source service.",
       "",
-      "Bundled airport coordinate data is derived from lxndrblz/Airports and licensed CC-BY-SA-4.0.",
-      "Source: https://github.com/lxndrblz/Airports",
+      "Bundled airport coordinate data is derived from OurAirports public-domain data.",
+      "Source: https://ourairports.com/data/",
       "",
       "See README.md, LICENSE, and the repository docs for development and contribution details.",
       "",

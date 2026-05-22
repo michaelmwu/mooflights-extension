@@ -150,7 +150,7 @@ describe("Where to Credit earnings estimates", () => {
 
     expect(estimateEarnings(itinerary).map((estimate) => estimate.formula)).toEqual([
       "524 miles x 40%",
-      "1,306 miles x 40%",
+      "1,307 miles x 40%",
     ]);
   });
 

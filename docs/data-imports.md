@@ -11,13 +11,12 @@ review the diff before committing.
 
 The extension must keep working without the backend, but it should not bundle every private or brittle commercial rule.
 
-## Suggested Scripts
+## Current Scripts
 
-- `bun run data:earnings`: rebuild the compact mileage earning snapshot from approved reference data.
-- `bun run data:airlines`: rebuild public airline code/name fallbacks from approved sources.
-- `bun run import:airport-coordinates`: rebuild the compact airport/city-code coordinate snapshot.
-- `bun run data:verify`: validate generated snapshots, fail on duplicate codes, missing names, invalid URLs, and oversized
-  output.
+- `bun run import:airport-coordinates`: rebuild the compact airport coordinate snapshot.
+
+Planned import scripts for mileage earnings, airline names, and generated-data validation should be added before those
+snapshots become regularly refreshed.
 
 ## Mileage Earning Sources
 
@@ -44,10 +43,10 @@ Generated airline snapshots should include source attribution and a `fetched_at`
 bun run import:airport-coordinates
 ```
 
-The script imports `airports.csv` and `citycodes.csv` from
-`https://github.com/lxndrblz/Airports`, keeps only IATA/city code plus latitude and longitude, and stores coordinates as
-integer degrees multiplied by `10000`.
+The script imports `airports.csv` from `https://davidmegginson.github.io/ourairports-data/airports.csv`, keeps only
+medium and large airports with valid three-character IATA codes, and stores coordinates as integer degrees multiplied
+by `10000`.
 
-The upstream airport database is licensed CC-BY-SA-4.0. Keep attribution in docs and release notices when bundling this
-snapshot. The extension uses it only for offline great-circle distance estimates; backend services may use a different
-licensed source if Mu Travel needs closed-source or proprietary enrichment.
+OurAirports publishes this data into the public domain. Keep attribution to `https://ourairports.com/data/` in docs and
+release notices when bundling this snapshot. The extension uses it only for offline great-circle distance estimates;
+backend services may use a different source if Mu Travel needs closed-source or proprietary enrichment.

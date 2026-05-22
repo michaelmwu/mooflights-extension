@@ -8,6 +8,11 @@ import type {
 } from "./types";
 import { buildValidatedWhereToCreditUrl } from "./wheretocredit";
 
+export const PROVIDER_CONFIDENCE_THRESHOLDS = {
+  high: 85,
+  medium: 70,
+} as const;
+
 export const LOCAL_PROVIDERS: LinkProvider[] = [
   {
     id: "where-to-credit",
@@ -81,7 +86,7 @@ export function rankProviderLinks(
         provider: linkProvider,
         url,
         rankScore,
-        confidence: confidence(provider.reliabilityScore),
+        confidence: providerConfidence(provider.reliabilityScore),
       };
     })
     .filter((link): link is RankedProviderLink => Boolean(link))
@@ -102,9 +107,9 @@ export function summarizeItinerary(itinerary: NormalizedItinerary): string {
     .join(" // ");
 }
 
-function confidence(score: number): RankedProviderLink["confidence"] {
-  if (score >= 85) return "high";
-  if (score >= 70) return "medium";
+export function providerConfidence(score: number): RankedProviderLink["confidence"] {
+  if (score >= PROVIDER_CONFIDENCE_THRESHOLDS.high) return "high";
+  if (score >= PROVIDER_CONFIDENCE_THRESHOLDS.medium) return "medium";
   return "low";
 }
 
