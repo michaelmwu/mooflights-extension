@@ -21,6 +21,26 @@ describe("Where to Credit earnings estimates", () => {
     );
   });
 
+  it("includes curated preferred earning rows that are not the compact top row", () => {
+    const thai: NormalizedItinerary = itineraryFor("TG", "W");
+    expect(estimateEarnings(thai, ["United MileagePlus"]).map((estimate) => estimate.program)).toEqual([
+      "Miles&More",
+      "United MileagePlus",
+    ]);
+    expect(estimateEarnings(thai, ["United MileagePlus"]).at(-1)).toMatchObject({
+      estimatedMiles: 250,
+      formula: "1,000 miles x 25%",
+      program: "United MileagePlus",
+    });
+
+    const asiana: NormalizedItinerary = itineraryFor("OZ", "S");
+    expect(estimateEarnings(asiana, ["Asiana Club"]).at(-1)).toMatchObject({
+      estimatedMiles: 1000,
+      formula: "1,000 miles x 100%",
+      program: "Asiana Club",
+    });
+  });
+
   it("estimates distance-percent earnings", () => {
     const itinerary: NormalizedItinerary = {
       source: "ita-matrix",
@@ -431,3 +451,29 @@ describe("Where to Credit earnings estimates", () => {
     expect(buildValidatedWhereToCreditUrl(itinerary)).toBe("https://wheretocredit.com/en/AS");
   });
 });
+
+function itineraryFor(carrier: string, bookingClass: string): NormalizedItinerary {
+  return {
+    source: "ita-matrix",
+    capturedAt: "2026-01-01T00:00:00Z",
+    tripType: "one-way",
+    totalDistance: 1000,
+    carriers: [carrier],
+    fareBases: [],
+    slices: [
+      {
+        origin: "BKK",
+        destination: "HND",
+        segments: [
+          {
+            origin: "BKK",
+            destination: "HND",
+            carrier,
+            bookingClass,
+            cabin: "economy",
+          },
+        ],
+      },
+    ],
+  };
+}

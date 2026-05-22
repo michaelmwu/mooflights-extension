@@ -585,10 +585,9 @@ function resultRowForGrid(grid: HTMLElement): HTMLTableRowElement | null {
 }
 
 function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSummary {
-  const estimates = estimateEarnings(itinerary);
-  const preferredProgramRanks = new Map(
-    (state.settings?.preferredFrequentFlyerPrograms || []).map((program, index) => [program, index]),
-  );
+  const preferredPrograms = state.settings?.preferredFrequentFlyerPrograms || [];
+  const estimates = estimateEarnings(itinerary, preferredPrograms);
+  const preferredProgramRanks = new Map(preferredPrograms.map((program, index) => [program, index]));
   const byProgram = new Map<string, { miles: number; formulas: MileageFormula[] }>();
   for (const estimate of estimates) {
     if (typeof estimate.estimatedMiles !== "number" || estimate.estimatedMiles <= 0) continue;
@@ -625,9 +624,8 @@ function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSumm
     return {
       entries: [
         {
-          value: "No preferred",
-          program: "earning match",
-          calculation: best ? `best local row: ${best.program} ~${best.miles.toLocaleString()}` : undefined,
+          value: "No preferred match",
+          program: best ? `best local row: ${best.program}` : "local earning data",
         },
       ],
       title:
@@ -637,8 +635,8 @@ function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSumm
   }
 
   if (visiblePrograms.length > 0) {
-    const visible = visiblePrograms.slice(0, 2);
-    const remaining = visiblePrograms.length - visible.length;
+    const visible = hasPreferredPrograms ? visiblePrograms : visiblePrograms.slice(0, 2);
+    const remaining = hasPreferredPrograms ? 0 : visiblePrograms.length - visible.length;
     const entries: ResultMileageEntry[] = visible.map((program) => ({
       value: `~${program.miles.toLocaleString()}`,
       program: program.program,
@@ -963,8 +961,9 @@ function providerConfidenceCopy(link: RankedProviderLink): { label: string } {
 }
 
 function renderWhereToCreditLinks(itinerary: NormalizedItinerary): string {
-  const estimates = estimateEarnings(itinerary);
-  const preferredPrograms = new Set(state.settings?.preferredFrequentFlyerPrograms || []);
+  const preferredProgramList = state.settings?.preferredFrequentFlyerPrograms || [];
+  const estimates = estimateEarnings(itinerary, preferredProgramList);
+  const preferredPrograms = new Set(preferredProgramList);
   const visibleEstimates =
     preferredPrograms.size > 0 ? estimates.filter((estimate) => preferredPrograms.has(estimate.program)) : estimates;
   const hiddenEstimateCount = estimates.length - visibleEstimates.length;

@@ -13,6 +13,12 @@ type CompactBookingClass = {
   top_qualifying_value: string | null;
 };
 
+type SupplementalProgramEarning = {
+  program: string;
+  percent: number | null;
+  value: string | null;
+};
+
 type CompactAirline = {
   iata: string;
   name: string;
@@ -110,6 +116,34 @@ const PROGRAM_OWNER_CARRIER_CODES: Record<string, string[]> = {
   "Xiamen Airlines Egret Club": ["MF"],
 };
 
+// Temporary curated rows for preferred-program display until the generated
+// snapshot stores all program earning rows. Keep this small and source future
+// additions from airline/program public earning charts or licensed data.
+const SUPPLEMENTAL_PROGRAM_EARNINGS: Record<string, Record<string, SupplementalProgramEarning[]>> = {
+  OZ: {
+    S: [
+      { program: "Air India Maharaja Club", percent: 100, value: "100%" },
+      { program: "Asiana Club", percent: 100, value: "100%" },
+      { program: "Avianca LifeMiles", percent: 100, value: "100%" },
+      { program: "Copa Airlines ConnectMiles", percent: 100, value: "100%" },
+      { program: "Ethiopian ShebaMiles", percent: 100, value: "100%" },
+      { program: "Singapore Airlines KrisFlyer", percent: 100, value: "100%" },
+      { program: "TAP Miles&Go", percent: 100, value: "100%" },
+      { program: "Thai Royal Orchid Plus", percent: 100, value: "100%" },
+      { program: "Turkish Airlines Miles&Smiles", percent: 100, value: "100% 500 Miles" },
+      { program: "United MileagePlus", percent: 75, value: "75%" },
+    ],
+  },
+  TG: {
+    W: [
+      { program: "Air India Maharaja Club", percent: 100, value: "100%" },
+      { program: "TAP Miles&Go", percent: 100, value: "100%" },
+      { program: "Thai Royal Orchid Plus", percent: 25, value: "25% 500 Miles" },
+      { program: "United MileagePlus", percent: 25, value: "25%" },
+    ],
+  },
+};
+
 export function buildValidatedWhereToCreditUrl(itinerary: NormalizedItinerary): string {
   const insights = inspectWhereToCreditSegments(itinerary);
   return (
@@ -126,10 +160,10 @@ export function inspectWhereToCreditSegments(itinerary: NormalizedItinerary): Wh
     .filter((insight): insight is WhereToCreditSegmentInsight => Boolean(insight));
 }
 
-export function estimateEarnings(itinerary: NormalizedItinerary): EarningsEstimate[] {
+export function estimateEarnings(itinerary: NormalizedItinerary, preferredPrograms: string[] = []): EarningsEstimate[] {
   const segments = flattenSegments(itinerary);
   return segments
-    .map((segment, index) => estimateSegmentEarnings(segment, itinerary, segments, index))
+    .flatMap((segment, index) => estimateSegmentEarningsRows(segment, itinerary, segments, index, preferredPrograms))
     .filter((estimate): estimate is EarningsEstimate => Boolean(estimate));
 }
 
@@ -214,32 +248,68 @@ export function estimateSegmentEarnings(
   segmentsOrCount: ItinerarySegment[] | number = flattenSegments(itinerary),
   segmentIndex = 0,
 ): EarningsEstimate | null {
+  return estimateSegmentEarningsRows(segment, itinerary, segmentsOrCount, segmentIndex)[0] || null;
+}
+
+function estimateSegmentEarningsRows(
+  segment: ItinerarySegment,
+  itinerary: NormalizedItinerary,
+  segmentsOrCount: ItinerarySegment[] | number = flattenSegments(itinerary),
+  segmentIndex = 0,
+  preferredPrograms: string[] = [],
+): EarningsEstimate[] {
   const segments = Array.isArray(segmentsOrCount) ? segmentsOrCount : flattenSegments(itinerary);
   const segmentCount = Array.isArray(segmentsOrCount) ? segmentsOrCount.length : segmentsOrCount;
   const carrier = normalizeCarrier(segment.fareCarrier || segment.carrier);
   const bookingClass = normalizeBookingClass(segment.bookingClass);
-  if (!carrier || !bookingClass) return null;
+  if (!carrier || !bookingClass) return [];
 
   const airline = DATA.airlines[carrier];
   const booking = airline?.booking_classes[bookingClass];
-  if (!airline || !booking) return null;
+  if (!airline || !booking) return [];
 
   const distance = segment.distance ?? inferSegmentDistance(itinerary, segment, segments, segmentIndex, segmentCount);
   const fare = inferSegmentFare(itinerary, segmentCount, segmentIndex);
-  const program = booking.top_program || "Best available program";
-  const computed = computeMiles(booking.top_redeemable_percent, booking.top_redeemable_value, distance, fare);
+  const rows = earningRows(carrier, bookingClass, booking, preferredPrograms);
 
-  return {
-    segment,
-    airlineName: airline.name,
-    bookingClass,
-    url: whereToCreditBookingUrl(carrier, bookingClass),
-    program,
-    estimatedMiles: computed.estimatedMiles,
-    formula: computed.formula,
-    basis: computed.basis,
-    sourceFetchedAt: DATA.fetched_at,
-  };
+  return rows.map((row) => {
+    const computed = computeMiles(row.percent, row.value, distance, fare);
+    return {
+      segment,
+      airlineName: airline.name,
+      bookingClass,
+      url: whereToCreditBookingUrl(carrier, bookingClass),
+      program: row.program,
+      estimatedMiles: computed.estimatedMiles,
+      formula: computed.formula,
+      basis: computed.basis,
+      sourceFetchedAt: DATA.fetched_at,
+    };
+  });
+}
+
+function earningRows(
+  carrier: string,
+  bookingClass: string,
+  booking: CompactBookingClass,
+  preferredPrograms: string[],
+): SupplementalProgramEarning[] {
+  const rows = new Map<string, SupplementalProgramEarning>();
+  if (booking.top_program) {
+    rows.set(booking.top_program, {
+      program: booking.top_program,
+      percent: booking.top_redeemable_percent,
+      value: booking.top_redeemable_value,
+    });
+  }
+
+  const preferred = new Set(preferredPrograms);
+  for (const row of SUPPLEMENTAL_PROGRAM_EARNINGS[carrier]?.[bookingClass] || []) {
+    if (preferred.size > 0 && !preferred.has(row.program)) continue;
+    rows.set(row.program, row);
+  }
+
+  return Array.from(rows.values());
 }
 
 function computeMiles(
