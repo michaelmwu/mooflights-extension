@@ -25,7 +25,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: release-extension-package-${{ github.ref_name }}
+  group: release-extension-package-${{ inputs.release_tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -76,7 +76,25 @@ jobs:
           DRAFT_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.draft || 'false' }}
           PRERELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || 'false' }}
         run: |
+          release_notes="Mu Travel Flights extension package for ${RELEASE_TAG}. Chrome Web Store publishing is intentionally manual for now."
           if gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            edit_args=(
+              "${RELEASE_TAG}"
+              --repo "${GITHUB_REPOSITORY}"
+              --title "${RELEASE_TAG}"
+              --notes "${release_notes}"
+            )
+            if [ "${DRAFT_RELEASE}" = "true" ]; then
+              edit_args+=(--draft)
+            else
+              edit_args+=(--draft=false)
+            fi
+            if [ "${PRERELEASE}" = "true" ]; then
+              edit_args+=(--prerelease)
+            else
+              edit_args+=(--prerelease=false)
+            fi
+            gh release edit "${edit_args[@]}"
             gh release upload "${RELEASE_TAG}" artifacts/mu-travel-flights.zip \
               --repo "${GITHUB_REPOSITORY}" \
               --clobber
@@ -86,7 +104,7 @@ jobs:
               artifacts/mu-travel-flights.zip
               --repo "${GITHUB_REPOSITORY}"
               --title "${RELEASE_TAG}"
-              --notes "Mu Travel Flights extension package for ${RELEASE_TAG}. Chrome Web Store publishing is intentionally manual for now."
+              --notes "${release_notes}"
             )
             if [ "${DRAFT_RELEASE}" = "true" ]; then
               args+=(--draft)
