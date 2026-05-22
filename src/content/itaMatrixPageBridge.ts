@@ -16,6 +16,7 @@ type CaptureResponse = {
 const SOURCE = "mu-travel-flights";
 const REQUEST_TYPE = "capture-ita-json";
 const RESPONSE_TYPE = "capture-ita-json-result";
+const NEVER_SETTLING_WRITE = new Promise<void>(() => {});
 
 window.addEventListener("message", (event: MessageEvent<CaptureRequest>) => {
   if (event.source !== window || event.data?.source !== SOURCE || event.data.type !== REQUEST_TYPE) return;
@@ -49,7 +50,7 @@ async function captureJson(requestId: string): Promise<void> {
     restoreWriteText(clipboard, originalWriteText);
     postResult({ requestId, ok: true, data });
     dismissCopyConfirmationSoon();
-    return originalWriteText(data);
+    return NEVER_SETTLING_WRITE;
   };
 
   try {
