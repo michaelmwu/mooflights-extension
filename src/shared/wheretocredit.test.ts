@@ -165,6 +165,7 @@ describe("Where to Credit earnings estimates", () => {
               origin: "HKG",
               destination: "BKK",
               carrier: "HB",
+              carrierName: "Greater Bay Airlines",
               bookingClass: "Y",
               cabin: "economy",
             },

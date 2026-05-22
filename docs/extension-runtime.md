@@ -5,9 +5,12 @@
 The extension targets Manifest V3 and currently requests:
 
 - `storage`
-- `clipboardRead`
 - `clipboardWrite`
-- host access for `https://matrix.itasoftware.com/*`
+- required host access for `https://matrix.itasoftware.com/*`
+- optional host access for `https://travel.mu-travel.com/*`
+
+Dev builds also add required host access for `https://travel.mu-travel.com/*`, `http://localhost/*`, and
+`http://127.0.0.1/*` so local/backend metadata debugging can work without runtime permission prompts.
 
 ## Content Script
 

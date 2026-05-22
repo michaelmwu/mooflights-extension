@@ -27,6 +27,8 @@ type PanelState = {
 const PANEL_ID = "mu-travel-flights-panel";
 const BRIDGE_ID = "mu-travel-flights-page-bridge";
 const MESSAGE_SOURCE = "mu-travel-flights";
+const AUTO_CAPTURE_DEBOUNCE_MS = 150;
+let autoCaptureCheckTimer: number | undefined;
 
 const state: PanelState = {
   settings: null,
@@ -305,23 +307,23 @@ function onBridgeMessage(event: MessageEvent): void {
 }
 
 function installAutoCaptureObserver(): void {
-  const observer = new MutationObserver(() => {
-    resetForLocationChange();
-    maybeAutoCapture();
-  });
+  const observer = new MutationObserver(scheduleAutoCaptureCheck);
   observer.observe(document.documentElement, { childList: true, subtree: true });
-  window.addEventListener("popstate", () => {
-    resetForLocationChange();
-    maybeAutoCapture();
-  });
-  window.addEventListener("hashchange", () => {
-    resetForLocationChange();
-    maybeAutoCapture();
-  });
+  window.addEventListener("popstate", scheduleAutoCaptureCheck);
+  window.addEventListener("hashchange", scheduleAutoCaptureCheck);
 }
 
-function maybeAutoCapture(): void {
-  resetForLocationChange();
+function scheduleAutoCaptureCheck(): void {
+  if (autoCaptureCheckTimer) window.clearTimeout(autoCaptureCheckTimer);
+  autoCaptureCheckTimer = window.setTimeout(() => {
+    autoCaptureCheckTimer = undefined;
+    resetForLocationChange();
+    maybeAutoCapture(false);
+  }, AUTO_CAPTURE_DEBOUNCE_MS);
+}
+
+function maybeAutoCapture(shouldResetLocation = true): void {
+  if (shouldResetLocation) resetForLocationChange();
   if (state.itinerary || state.captureInFlight || state.autoCaptureAttempted) return;
   if (!isItineraryPage()) return;
   if (!hasCopyJsonButton()) return;
@@ -460,7 +462,7 @@ function renderWhereToCreditLinks(itinerary: NormalizedItinerary): string {
                   <a href="${escapeHtml(estimate.url)}" target="_blank" rel="noreferrer" class="earning">
                     <span>${escapeHtml(`${estimate.segment.origin}-${estimate.segment.destination} ${estimate.segment.fareCarrier || estimate.segment.carrier} ${estimate.bookingClass}`)}</span>
                     <em>${escapeHtml(estimate.program)}</em>
-                    <small>${estimate.estimatedMiles ? `${estimate.estimatedMiles.toLocaleString()} miles · ` : ""}${escapeHtml(estimate.formula)}</small>
+                    <small>${typeof estimate.estimatedMiles === "number" ? `${estimate.estimatedMiles.toLocaleString()} miles · ` : ""}${escapeHtml(estimate.formula)}</small>
                   </a>
                 `,
               )

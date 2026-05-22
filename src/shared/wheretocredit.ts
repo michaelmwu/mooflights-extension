@@ -26,11 +26,6 @@ type CompactMileageEarningData = {
   airlines: Record<string, CompactAirline>;
 };
 
-const AIRLINE_NAME_FALLBACKS: Record<string, string> = {
-  HB: "Greater Bay Airlines",
-  HX: "Hong Kong Airlines",
-};
-
 export type EarningsEstimate = {
   segment: ItinerarySegment;
   airlineName: string;
@@ -128,7 +123,7 @@ function inspectWhereToCreditSegment(segment: ItinerarySegment): WhereToCreditSe
 
 function displayAirlineName(carrier: string, segment: ItinerarySegment): string {
   const carrierName = segment.fareCarrier === carrier ? undefined : segment.carrierName;
-  return carrierName || AIRLINE_NAME_FALLBACKS[carrier] || carrier;
+  return carrierName || carrier;
 }
 
 export function estimateSegmentEarnings(
