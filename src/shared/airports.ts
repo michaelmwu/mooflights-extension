@@ -45,12 +45,13 @@ export function filterAirports(filters: AirportFilters, list: Airport[] = AIRPOR
   const exclusions = new Set(filters.exclusions.map((code) => code.toUpperCase()));
   const regionCodes = regionAirportCodes(filters.region);
 
-  return list
+  const filtered = list
     .filter((airport) => regionCodes.size === 0 || regionCodes.has(airport.code))
     .filter((airport) => regionCodes.size > 0 || !filters.continent || airport.continent === filters.continent)
     .filter((airport) => regionCodes.size > 0 || countries.size === 0 || countries.has(airport.country))
-    .filter((airport) => !exclusions.has(airport.code))
-    .sort((a, b) => a.code.localeCompare(b.code));
+    .filter((airport) => !exclusions.has(airport.code));
+
+  return list === AIRPORTS ? filtered : filtered.sort((a, b) => a.code.localeCompare(b.code));
 }
 
 export function airportCodes(filters: AirportFilters, list: Airport[] = AIRPORTS): string[] {

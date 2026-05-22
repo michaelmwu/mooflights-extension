@@ -26,6 +26,30 @@ describe("ITA itinerary parsing", () => {
     });
   });
 
+  it("parses comma-decimal display totals", () => {
+    const itinerary = parseItaBookingDetails({
+      displayTotal: "EUR 1.234,56",
+      itinerary: {
+        slices: [
+          {
+            origin: { code: "FRA" },
+            destination: { code: "LHR" },
+            segments: [
+              {
+                origin: { code: "FRA" },
+                destination: { code: "LHR" },
+                carrier: { code: "LH" },
+                bookingInfos: [{ bookingCode: "Y", cabin: "COACH" }],
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(itinerary.totalPrice).toBe(1234.56);
+  });
+
   it("rejects non-ITA payloads without valid flight segments", () => {
     expect(() => parseItaBookingDetails({})).toThrow("ITA itinerary JSON did not contain any flight segments.");
   });

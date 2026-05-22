@@ -43,8 +43,8 @@ async function buildEntry(entry) {
   return {
     ...entry,
     bundle: true,
-    sourcemap: true,
-    minify: false,
+    sourcemap: devBuild,
+    minify: !devBuild,
     target: "chrome114",
     legalComments: "linked",
     define: {

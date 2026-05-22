@@ -219,8 +219,16 @@ function parseDisplayTotal(value: unknown): number | undefined {
   if (!text) return undefined;
   const match = text.match(/[A-Z]{3}\s*([\d,.]+)/);
   if (!match) return undefined;
-  const parsed = Number(match[1].replace(/,/g, ""));
+  const parsed = Number(normalizeLocalizedNumber(match[1]));
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function normalizeLocalizedNumber(value: string): string {
+  const normalized = value.trim();
+  const comma = normalized.lastIndexOf(",");
+  const period = normalized.lastIndexOf(".");
+  if (comma > period) return normalized.replace(/\./g, "").replace(",", ".");
+  return normalized.replace(/,/g, "");
 }
 
 function isoDate(value: unknown): string | undefined {

@@ -251,7 +251,7 @@ function computeMiles(
   if (finiteNumber(percent) && finiteNumber(distance)) {
     return {
       estimatedMiles: Math.round(distance * (percent / 100)),
-      formula: `${Math.round(distance).toLocaleString()} miles x ${formatPercent(percent)}`,
+      formula: `${formatNumber(Math.round(distance))} miles x ${formatPercent(percent)}`,
       basis: "distance-percent",
     };
   }
@@ -269,7 +269,7 @@ function computeMiles(
   if (finiteNumber(fixedMiles)) {
     return {
       estimatedMiles: fixedMiles,
-      formula: value || `${fixedMiles.toLocaleString()} miles`,
+      formula: value || `${formatNumber(fixedMiles)} miles`,
       basis: "fixed",
     };
   }
@@ -372,7 +372,11 @@ function formatPercent(value: number): string {
 }
 
 function formatCurrency(value: number): string {
-  return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
+}
+
+function formatNumber(value: number): string {
+  return value.toLocaleString("en-US");
 }
 
 function segmentDurationMinutes(segment: ItinerarySegment): number | undefined {

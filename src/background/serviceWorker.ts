@@ -24,6 +24,9 @@ chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) =
 
 async function fetchProviderMetadata(baseUrl: string): Promise<RemoteProviderMetadata[]> {
   if (!baseUrl) return [];
+  const origin = hostPermissionOrigin(baseUrl);
+  if (origin && !(await hasHostPermission(origin))) return [];
+
   const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/extension/v1/providers`, {
     headers: {
       Accept: "application/json",
@@ -32,6 +35,20 @@ async function fetchProviderMetadata(baseUrl: string): Promise<RemoteProviderMet
   if (!response.ok) return [];
   const body = (await response.json()) as { providers?: RemoteProviderMetadata[] };
   return Array.isArray(body.providers) ? body.providers : [];
+}
+
+async function hasHostPermission(origin: string): Promise<boolean> {
+  if (!chrome.permissions?.contains) return true;
+  return chrome.permissions.contains({ origins: [origin] });
+}
+
+function hostPermissionOrigin(baseUrl: string): string {
+  try {
+    const url = new URL(baseUrl);
+    return `${url.origin}/*`;
+  } catch {
+    return "";
+  }
 }
 
 function openOptionsPage(): void {

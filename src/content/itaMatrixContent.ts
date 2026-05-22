@@ -29,6 +29,7 @@ type PanelState = {
   airportPreview: string[];
   autoCaptureAttempted: boolean;
   captureInFlight: boolean;
+  activeCaptureId: string;
   locationKey: string;
 };
 
@@ -67,6 +68,7 @@ const state: PanelState = {
   airportPreview: [],
   autoCaptureAttempted: false,
   captureInFlight: false,
+  activeCaptureId: "",
   locationKey: currentLocationKey(),
 };
 
@@ -197,7 +199,9 @@ function bind(root: ShadowRoot): void {
 
 async function captureItinerary(isAutomatic: boolean): Promise<void> {
   if (state.captureInFlight) return;
+  const captureId = crypto.randomUUID();
   state.captureInFlight = true;
+  state.activeCaptureId = captureId;
   state.error = "";
   const captureLocationKey = state.locationKey;
   setStatus(isAutomatic ? "Loading ITA itinerary..." : "Looking for ITA Matrix Copy as JSON...");
@@ -207,17 +211,23 @@ async function captureItinerary(isAutomatic: boolean): Promise<void> {
     if (captureLocationKey !== state.locationKey) return;
     await parseAndSetItinerary(text, captureLocationKey);
   } catch (error) {
+    if (!isActiveCapture(captureId, captureLocationKey)) return;
     if (isAutomatic) {
-      state.captureInFlight = false;
       state.status = "Auto-load did not find ITA JSON yet.";
-      state.autoCaptureAttempted = false;
       render();
       return;
     }
     setError(`Capture failed. Paste JSON manually. ${error instanceof Error ? error.message : ""}`.trim());
   } finally {
-    state.captureInFlight = false;
+    if (isActiveCapture(captureId, captureLocationKey)) {
+      state.captureInFlight = false;
+      state.activeCaptureId = "";
+    }
   }
+}
+
+function isActiveCapture(captureId: string, locationKey: string): boolean {
+  return state.activeCaptureId === captureId && state.locationKey === locationKey;
 }
 
 async function parseAndSetItinerary(text: string, expectedLocationKey = state.locationKey): Promise<void> {
@@ -377,14 +387,22 @@ function onBridgeMessage(event: MessageEvent): void {
 }
 
 function installAutoCaptureObserver(): void {
-  const observer = new MutationObserver(scheduleAutoCaptureCheck);
+  const observer = new MutationObserver(() => {
+    if (isItineraryPage()) {
+      scheduleAutoCaptureCheck();
+    } else {
+      resetForLocationChange();
+    }
+  });
   observer.observe(document.documentElement, { childList: true, subtree: true });
   window.addEventListener("popstate", scheduleAutoCaptureCheck);
   window.addEventListener("hashchange", scheduleAutoCaptureCheck);
 }
 
 function installFlightResultObserver(): void {
-  const observer = new MutationObserver(annotateFlightResultsSoon);
+  const observer = new MutationObserver(() => {
+    if (isFlightsPage()) annotateFlightResultsSoon();
+  });
   observer.observe(document.documentElement, { childList: true, subtree: true });
   window.addEventListener("popstate", annotateFlightResultsSoon);
   window.addEventListener("hashchange", annotateFlightResultsSoon);
@@ -414,14 +432,19 @@ function annotateFlightResults(): void {
 
   for (const grid of document.querySelectorAll<HTMLElement>("matrix-itinerary-grid")) {
     const items = Array.from(grid.querySelectorAll<HTMLElement>("mat-list-item"));
-    const segments = items.map(parseResultSegment).filter((segment): segment is ItinerarySegment => Boolean(segment));
+    const parsedItems = items.map((item) => ({ item, segment: parseResultSegment(item) }));
+    const segments = parsedItems
+      .map((entry) => entry.segment)
+      .filter((segment): segment is ItinerarySegment => Boolean(segment));
     if (segments.length === 0) continue;
 
     const itinerary = resultSegmentsToItinerary(segments);
-    items.forEach((item, index) => {
-      if (item.querySelector(".mu-mileage-earnings")) return;
-      const segment = segments[index];
+    let segmentIndex = 0;
+    parsedItems.forEach(({ item, segment }) => {
       if (!segment) return;
+      const index = segmentIndex;
+      segmentIndex++;
+      if (item.querySelector(".mu-mileage-earnings")) return;
       const estimate = estimateSegmentEarnings(segment, itinerary, segments, index);
       const target = item.querySelector<HTMLElement>(".info-grid");
       if (!target) return;
@@ -822,6 +845,7 @@ function resetForLocationChange(): void {
   state.status = "Ready";
   state.autoCaptureAttempted = false;
   state.captureInFlight = false;
+  state.activeCaptureId = "";
   render();
 }
 

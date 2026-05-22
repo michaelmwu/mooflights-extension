@@ -239,6 +239,14 @@ function DeveloperBackend(props: {
     "http://localhost:8787",
   ];
 
+  async function persistBackend(enabled: boolean, baseUrl = props.settings.backend.baseUrl): Promise<void> {
+    const allowed = !enabled || (await requestBackendHostPermission(baseUrl));
+    await props.persist({
+      ...props.settings,
+      backend: { enabled: allowed && enabled, baseUrl },
+    });
+  }
+
   return (
     <section className="dev-panel">
       <h2>Developer Backend</h2>
@@ -250,12 +258,7 @@ function DeveloperBackend(props: {
         <input
           type="checkbox"
           checked={props.settings.backend.enabled}
-          onChange={(event) =>
-            void props.persist({
-              ...props.settings,
-              backend: { ...props.settings.backend, enabled: event.currentTarget.checked },
-            })
-          }
+          onChange={(event) => void persistBackend(event.currentTarget.checked)}
         />
         Fetch optional provider metadata from backend.
       </label>
@@ -279,22 +282,29 @@ function DeveloperBackend(props: {
       </label>
       <div className="target-row">
         {localTargets.map((target) => (
-          <button
-            type="button"
-            key={target}
-            onClick={() =>
-              void props.persist({
-                ...props.settings,
-                backend: { enabled: true, baseUrl: target },
-              })
-            }
-          >
+          <button type="button" key={target} onClick={() => void persistBackend(true, target)}>
             {target}
           </button>
         ))}
       </div>
     </section>
   );
+}
+
+async function requestBackendHostPermission(baseUrl: string): Promise<boolean> {
+  if (!chrome.permissions?.request) return true;
+  const origin = hostPermissionOrigin(baseUrl);
+  if (!origin) return false;
+  return chrome.permissions.request({ origins: [origin] });
+}
+
+function hostPermissionOrigin(baseUrl: string): string {
+  try {
+    const url = new URL(baseUrl);
+    return `${url.origin}/*`;
+  } catch {
+    return "";
+  }
 }
 
 function Select(props: {
@@ -371,8 +381,7 @@ function filteredMileagePrograms(
         return (selectedRanks.get(left.program) ?? 0) - (selectedRanks.get(right.program) ?? 0);
       }
       return left.label.localeCompare(right.label);
-    })
-    .slice(0, query ? 30 : 14);
+    });
 }
 
 createRoot(document.getElementById("root") as HTMLElement).render(<Options />);

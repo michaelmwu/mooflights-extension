@@ -16,7 +16,6 @@ type CaptureResponse = {
 const SOURCE = "mu-travel-flights";
 const REQUEST_TYPE = "capture-ita-json";
 const RESPONSE_TYPE = "capture-ita-json-result";
-const NEVER_SETTLING_WRITE = new Promise<void>(() => {});
 const XHR_REQUEST_URLS = new WeakMap<XMLHttpRequest, string>();
 
 installAlkaliBatchInterceptor();
@@ -184,7 +183,7 @@ async function captureJson(requestId: string): Promise<void> {
     restoreWriteText(clipboard, originalWriteText);
     postResult({ requestId, ok: true, data });
     dismissCopyConfirmationSoon();
-    return NEVER_SETTLING_WRITE;
+    return Promise.resolve();
   };
 
   try {

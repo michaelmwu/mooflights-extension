@@ -31,7 +31,18 @@ export async function saveSettings(settings: ExtensionSettings): Promise<void> {
 
 export async function patchSettings(patch: Partial<ExtensionSettings>): Promise<ExtensionSettings> {
   const current = await loadSettings();
-  const next = mergeSettings({ ...current, ...patch });
+  const next = mergeSettings({
+    ...current,
+    ...patch,
+    airportHelper: {
+      ...current.airportHelper,
+      ...(patch.airportHelper || {}),
+    },
+    backend: {
+      ...current.backend,
+      ...(patch.backend || {}),
+    },
+  });
   await saveSettings(next);
   return next;
 }

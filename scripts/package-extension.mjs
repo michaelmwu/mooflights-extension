@@ -9,5 +9,10 @@ const artifacts = resolve(root, "artifacts");
 const zipPath = resolve(artifacts, "mu-travel-flights.zip");
 
 await mkdir(artifacts, { recursive: true });
+try {
+  await execFileAsync("zip", ["--version"]);
+} catch {
+  throw new Error("The `zip` CLI is required to package the extension. Install zip or run `bun run build` only.");
+}
 await execFileAsync("zip", ["-r", zipPath, "."], { cwd: resolve(root, "dist") });
 console.log(`Wrote ${zipPath}`);
