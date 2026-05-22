@@ -13,6 +13,7 @@
     "check": "biome check .",
     "dev": "node scripts/build.mjs --watch",
     "format": "biome format --write .",
+    "import:airport-coordinates": "node scripts/import-airport-coordinates.mjs",
     "lint": "biome lint .",
     "package": "bun run build && node scripts/package-extension.mjs",
     "test": "vitest run",

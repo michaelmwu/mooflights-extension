@@ -83,20 +83,20 @@ describe("Where to Credit earnings estimates", () => {
       fareBases: [],
       slices: [
         {
-          origin: "AAA",
-          destination: "CCC",
+          origin: "QAA",
+          destination: "QAC",
           segments: [
             {
-              origin: "AAA",
-              destination: "BBB",
+              origin: "QAA",
+              destination: "QAB",
               carrier: "AS",
               bookingClass: "X",
               duration: 30,
               cabin: "economy",
             },
             {
-              origin: "BBB",
-              destination: "CCC",
+              origin: "QAB",
+              destination: "QAC",
               carrier: "AS",
               bookingClass: "X",
               duration: 70,
@@ -113,6 +113,47 @@ describe("Where to Credit earnings estimates", () => {
     expect(estimates.map((estimate) => estimate.formula)).toEqual(["300 miles x 30%", "700 miles x 30%"]);
   });
 
+  it("uses airport coordinate distance before duration splitting for known airports", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "multi-city",
+      totalDistance: 9999,
+      totalPrice: 200,
+      carriers: ["NX"],
+      fareBases: [],
+      slices: [
+        {
+          origin: "TPE",
+          destination: "ICN",
+          segments: [
+            {
+              origin: "TPE",
+              destination: "MFM",
+              carrier: "NX",
+              bookingClass: "R",
+              duration: 1,
+              cabin: "economy",
+            },
+            {
+              origin: "MFM",
+              destination: "ICN",
+              carrier: "NX",
+              bookingClass: "R",
+              duration: 999,
+              cabin: "economy",
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(estimateEarnings(itinerary).map((estimate) => estimate.formula)).toEqual([
+      "524 miles x 40%",
+      "1,306 miles x 40%",
+    ]);
+  });
+
   it("splits itinerary distance by parsed departure and arrival times when duration is missing", () => {
     const itinerary: NormalizedItinerary = {
       source: "ita-matrix",
@@ -124,12 +165,12 @@ describe("Where to Credit earnings estimates", () => {
       fareBases: [],
       slices: [
         {
-          origin: "AAA",
-          destination: "CCC",
+          origin: "QAA",
+          destination: "QAC",
           segments: [
             {
-              origin: "AAA",
-              destination: "BBB",
+              origin: "QAA",
+              destination: "QAB",
               carrier: "AS",
               bookingClass: "X",
               departure: "2026-01-01T10:00:00Z",
@@ -137,8 +178,8 @@ describe("Where to Credit earnings estimates", () => {
               cabin: "economy",
             },
             {
-              origin: "BBB",
-              destination: "CCC",
+              origin: "QAB",
+              destination: "QAC",
               carrier: "AS",
               bookingClass: "X",
               departure: "2026-01-01T11:00:00Z",
@@ -164,12 +205,12 @@ describe("Where to Credit earnings estimates", () => {
       fareBases: [],
       slices: [
         {
-          origin: "AAA",
-          destination: "BBB",
+          origin: "QAA",
+          destination: "QAB",
           segments: [
             {
-              origin: "AAA",
-              destination: "BBB",
+              origin: "QAA",
+              destination: "QAB",
               carrier: "AS",
               bookingClass: "X",
               duration: 45,
@@ -178,12 +219,12 @@ describe("Where to Credit earnings estimates", () => {
           ],
         },
         {
-          origin: "BBB",
-          destination: "AAA",
+          origin: "QAB",
+          destination: "QAA",
           segments: [
             {
-              origin: "BBB",
-              destination: "AAA",
+              origin: "QAB",
+              destination: "QAA",
               carrier: "AS",
               bookingClass: "X",
               duration: 55,

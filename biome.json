@@ -7,7 +7,15 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "includes": ["**", "!.context", "!dist", "!artifacts", "!node_modules", "!coverage"]
+    "includes": [
+      "**",
+      "!.context",
+      "!dist",
+      "!artifacts",
+      "!node_modules",
+      "!coverage",
+      "!src/shared/data/airport-coordinates-compact.json"
+    ]
   },
   "formatter": {
     "enabled": true,

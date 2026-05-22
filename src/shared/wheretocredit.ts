@@ -1,3 +1,4 @@
+import { airportDistanceMiles } from "./airportCoordinates";
 import mileageEarningData from "./data/mileage-earning-compact.json";
 import { flattenSegments } from "./itinerary";
 import type { ItinerarySegment, NormalizedItinerary } from "./types";
@@ -143,7 +144,7 @@ export function estimateSegmentEarnings(
   const booking = airline?.booking_classes[bookingClass];
   if (!airline || !booking) return null;
 
-  const distance = segment.distance ?? inferSegmentDistance(itinerary, segments, segmentIndex, segmentCount);
+  const distance = segment.distance ?? inferSegmentDistance(itinerary, segment, segments, segmentIndex, segmentCount);
   const fare = inferSegmentFare(itinerary, segmentCount, segmentIndex);
   const program = booking.top_program || "Best available program";
   const computed = computeMiles(booking.top_redeemable_percent, booking.top_redeemable_value, distance, fare);
@@ -201,12 +202,17 @@ function computeMiles(
 
 function inferSegmentDistance(
   itinerary: NormalizedItinerary,
+  segment: ItinerarySegment,
   segments: ItinerarySegment[],
   segmentIndex: number,
   segmentCount: number,
 ): number | undefined {
+  if (segmentCount <= 1 && finiteNumber(itinerary.totalDistance)) return itinerary.totalDistance;
+
+  const coordinateDistance = airportDistanceMiles(segment.origin, segment.destination);
+  if (finiteNumber(coordinateDistance)) return coordinateDistance;
+
   if (!finiteNumber(itinerary.totalDistance)) return undefined;
-  if (segmentCount <= 1) return itinerary.totalDistance;
 
   const reciprocalRoundTripDistance = inferReciprocalRoundTripDistance(itinerary, segments, segmentIndex);
   if (finiteNumber(reciprocalRoundTripDistance)) return reciprocalRoundTripDistance;
