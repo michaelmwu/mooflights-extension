@@ -33,6 +33,15 @@ export const LOCAL_PROVIDERS: LinkProvider[] = [
     buildUrl: kayakUrl,
   },
   {
+    id: "expedia",
+    label: "Expedia",
+    category: "ota",
+    reliabilityScore: 78,
+    knownIssues: "Search page link; verify price and flight details before booking.",
+    supportedTripTypes: ["one-way", "round-trip"],
+    buildUrl: expediaSearchUrl,
+  },
+  {
     id: "ita-copy",
     label: "Copy ITA Summary",
     category: "utility",
@@ -118,11 +127,34 @@ function googleFlightsUrl(itinerary: NormalizedItinerary): string {
 function kayakUrl(itinerary: NormalizedItinerary): string {
   const slices = routeSlices(itinerary);
   if (slices.length === 0) return "";
-  const cabin = kayakCabin(itinerary);
   const pax = itinerary.passengerCount && itinerary.passengerCount > 1 ? `/${itinerary.passengerCount}adults` : "";
   return `https://www.kayak.com/flights/${slices
     .map((slice) => `${slice.origin}-${slice.destination}/${slice.date}`)
-    .join("/")}${pax}/${cabin}`;
+    .join("/")}${pax}`;
+}
+
+function expediaSearchUrl(itinerary: NormalizedItinerary): string {
+  const slices = routeSlices(itinerary);
+  if (slices.length === 0) return "";
+
+  const params = new URLSearchParams();
+  const isRoundTrip = itinerary.tripType === "round-trip" && slices.length >= 2;
+  params.set("flight-type", "on");
+  params.set("mode", "search");
+  params.set("trip", isRoundTrip ? "roundtrip" : "oneway");
+  params.set("leg1", expediaLeg(slices[0]));
+  params.set("options", `cabinclass:${expediaCabin(itinerary)}`);
+  params.set("fromDate", expediaSlashedDate(slices[0].date));
+  params.set("d1", expediaLooseDate(slices[0].date));
+  params.set("passengers", `adults:${itinerary.passengerCount || 1},infantinlap:N`);
+
+  if (isRoundTrip) {
+    params.set("leg2", expediaLeg(slices[1]));
+    params.set("toDate", expediaSlashedDate(slices[1].date));
+    params.set("d2", expediaLooseDate(slices[1].date));
+  }
+
+  return `https://www.expedia.com/Flights-Search?${params.toString()}`;
 }
 
 function routeSlices(itinerary: NormalizedItinerary): Array<{ origin: string; destination: string; date: string }> {
@@ -152,10 +184,30 @@ function cabinRank(cabin: string): number {
   return index === -1 ? order.length : index;
 }
 
-function kayakCabin(itinerary: NormalizedItinerary): string {
+function expediaCabin(itinerary: NormalizedItinerary): string {
   const cabin = lowestCabin(itinerary);
   if (cabin === "premium-economy") return "premium";
   if (cabin === "business") return "business";
   if (cabin === "first") return "first";
   return "economy";
+}
+
+function expediaLeg(slice: { origin: string; destination: string; date: string }): string {
+  return [
+    `from:${slice.origin}`,
+    `to:${slice.destination}`,
+    `departure:${expediaSlashedDate(slice.date)}TANYT`,
+    "fromType:AIRPORT",
+    "toType:AIRPORT",
+  ].join(",");
+}
+
+function expediaSlashedDate(date: string): string {
+  const [year, month, day] = date.split("-");
+  return `${Number(month)}/${Number(day)}/${year}`;
+}
+
+function expediaLooseDate(date: string): string {
+  const [year, month, day] = date.split("-");
+  return `${year}-${Number(month)}-${Number(day)}`;
 }

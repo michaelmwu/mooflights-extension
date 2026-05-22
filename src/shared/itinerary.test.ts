@@ -43,4 +43,72 @@ describe("ITA itinerary parsing", () => {
       "https://www.wheretocredit.com/calculator#JFK-LHR-AA-I/LHR-JFK-BA-R",
     );
   });
+
+  it("keeps repeated origin-destination booking classes mapped to their own fares", () => {
+    const itinerary = parseItaBookingDetails({
+      displayTotal: "USD 500.00",
+      passengerCount: 1,
+      itinerary: {
+        slices: [repeatedSlice("2026-08-10T10:00:00", "100"), repeatedSlice("2026-08-15T10:00:00", "200")],
+      },
+      tickets: [
+        {
+          pricings: [
+            {
+              fares: [repeatedFare("AA", "FIRSTFARE"), repeatedFare("BA", "SECONDFARE")],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(itinerary.slices[0]?.segments[0]).toMatchObject({
+      fareCarrier: "AA",
+      fareBasis: "FIRSTFARE",
+    });
+    expect(itinerary.slices[1]?.segments[0]).toMatchObject({
+      fareCarrier: "BA",
+      fareBasis: "SECONDFARE",
+    });
+  });
 });
+
+function repeatedSlice(departure: string, flightNumber: string): unknown {
+  return {
+    origin: { code: "JFK" },
+    destination: { code: "LAX" },
+    departure,
+    segments: [
+      {
+        origin: { code: "JFK" },
+        destination: { code: "LAX" },
+        carrier: { code: "AA" },
+        flight: { number: flightNumber },
+        bookingInfos: [{ bookingCode: "X", cabin: "COACH" }],
+        legs: [
+          {
+            origin: { code: "JFK" },
+            destination: { code: "LAX" },
+            departure,
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function repeatedFare(carrier: string, code: string): unknown {
+  return {
+    carrier,
+    code,
+    bookingInfos: [
+      {
+        bookingCode: "X",
+        segment: {
+          origin: "JFK",
+          destination: "LAX",
+        },
+      },
+    ],
+  };
+}

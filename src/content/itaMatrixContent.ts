@@ -21,6 +21,7 @@ type PanelState = {
   airportPreview: string[];
   autoCaptureAttempted: boolean;
   captureInFlight: boolean;
+  locationKey: string;
 };
 
 const PANEL_ID = "mu-travel-flights-panel";
@@ -36,6 +37,7 @@ const state: PanelState = {
   airportPreview: [],
   autoCaptureAttempted: false,
   captureInFlight: false,
+  locationKey: currentLocationKey(),
 };
 
 void init();
@@ -154,10 +156,12 @@ async function captureItinerary(isAutomatic: boolean): Promise<void> {
   if (state.captureInFlight) return;
   state.captureInFlight = true;
   state.error = "";
+  const captureLocationKey = state.locationKey;
   setStatus(isAutomatic ? "Loading ITA itinerary..." : "Looking for ITA Matrix Copy as JSON...");
 
   try {
     const text = await captureViaPageBridge();
+    if (captureLocationKey !== state.locationKey) return;
     await parseAndSetItinerary(text);
   } catch (error) {
     if (isAutomatic) {
@@ -183,6 +187,8 @@ async function parseAndSetItinerary(text: string): Promise<void> {
     state.error = "";
     setStatus("Itinerary captured.");
   } catch (error) {
+    state.itinerary = null;
+    state.links = [];
     setError(`Could not parse ITA JSON: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
@@ -306,16 +312,45 @@ function onBridgeMessage(event: MessageEvent): void {
 }
 
 function installAutoCaptureObserver(): void {
-  const observer = new MutationObserver(() => maybeAutoCapture());
+  const observer = new MutationObserver(() => {
+    resetForLocationChange();
+    maybeAutoCapture();
+  });
   observer.observe(document.documentElement, { childList: true, subtree: true });
+  window.addEventListener("popstate", () => {
+    resetForLocationChange();
+    maybeAutoCapture();
+  });
+  window.addEventListener("hashchange", () => {
+    resetForLocationChange();
+    maybeAutoCapture();
+  });
 }
 
 function maybeAutoCapture(): void {
+  resetForLocationChange();
   if (state.itinerary || state.captureInFlight || state.autoCaptureAttempted) return;
   if (!isItineraryPage()) return;
   if (!hasCopyJsonButton()) return;
   state.autoCaptureAttempted = true;
   void captureItinerary(true);
+}
+
+function resetForLocationChange(): void {
+  const nextLocationKey = currentLocationKey();
+  if (nextLocationKey === state.locationKey) return;
+  state.locationKey = nextLocationKey;
+  state.itinerary = null;
+  state.links = [];
+  state.error = "";
+  state.status = "Ready";
+  state.autoCaptureAttempted = false;
+  state.captureInFlight = false;
+  render();
+}
+
+function currentLocationKey(): string {
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`;
 }
 
 function hasCopyJsonButton(): boolean {

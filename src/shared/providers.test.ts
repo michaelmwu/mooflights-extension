@@ -9,7 +9,9 @@ describe("provider ranking", () => {
     const links = rankProviderLinks(itinerary, DEFAULT_SETTINGS);
 
     expect(links[0]?.provider.id).toBe("where-to-credit");
-    expect(links.some((link) => link.provider.id === "kayak")).toBe(true);
+    expect(links.findIndex((link) => link.provider.id === "kayak")).toBeLessThan(
+      links.findIndex((link) => link.provider.id === "expedia"),
+    );
   });
 
   it("honors hidden providers and remote reliability metadata", () => {
@@ -29,10 +31,12 @@ describe("provider ranking", () => {
     const links = rankProviderLinks(itinerary, DEFAULT_SETTINGS);
     const urls = new Map(links.map((link) => [link.provider.id, link.url]));
 
-    expect(urls.get("kayak")).toBe("https://www.kayak.com/flights/JFK-LHR/2026-08-10/LHR-JFK/2026-08-20/business");
+    expect(urls.get("kayak")).toBe("https://www.kayak.com/flights/JFK-LHR/2026-08-10/LHR-JFK/2026-08-20");
     expect(urls.get("google-flights")).toContain("https://www.google.com/travel/flights?");
     expect(urls.has("skyscanner")).toBe(false);
-    expect(urls.has("expedia")).toBe(false);
+    expect(urls.get("expedia")).toContain("https://www.expedia.com/Flights-Search?");
+    expect(urls.get("expedia")).toContain("trip=roundtrip");
+    expect(urls.get("expedia")).toContain("leg1=from%3AJFK%2Cto%3ALHR%2Cdeparture%3A8%2F10%2F2026TANYT");
     expect(urls.get("where-to-credit")).toMatch(/^https:\/\/wheretocredit\.com\/en\/[A-Z0-9]{2,3}\/[A-Z]$/);
   });
 });
