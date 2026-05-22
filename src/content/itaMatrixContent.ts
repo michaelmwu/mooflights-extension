@@ -73,13 +73,16 @@ function render(): void {
           state.itinerary
             ? `<p class="summary">${escapeHtml(summarizeItinerary(state.itinerary))}</p>
                <p class="muted">${escapeHtml(state.itinerary.tripType)} · ${state.itinerary.passengerCount || 1} passenger(s) · ${escapeHtml(state.itinerary.currency || "")} ${state.itinerary.totalPrice ?? ""}</p>`
-            : `<p class="muted">Open an ITA result. The extension will auto-load ITA JSON when Share & Export is visible. Paste JSON below if capture fails.</p>`
+            : `<p class="muted">Open an ITA result. The extension will auto-load ITA JSON when Share & Export is visible.</p>`
         }
-        <textarea placeholder="Paste ITA Matrix Copy as JSON output here" data-role="json-input"></textarea>
-        <div class="actions">
-          <button type="button" class="secondary" data-action="capture">Retry capture</button>
-          <button type="button" class="secondary" data-action="parse-paste">Parse pasted JSON</button>
-        </div>
+        <details class="advanced" ${state.error ? "open" : ""}>
+          <summary>Advanced fallback</summary>
+          <textarea placeholder="Paste ITA Matrix Copy as JSON output here" data-role="json-input"></textarea>
+          <div class="actions">
+            <button type="button" class="secondary" data-action="capture">Retry capture</button>
+            <button type="button" class="secondary" data-action="parse-paste">Parse pasted JSON</button>
+          </div>
+        </details>
       </details>
 
       <details ${state.itinerary ? "open" : ""}>
@@ -581,6 +584,8 @@ function styles(): string {
     .link-button { border-color: transparent; text-decoration: underline; }
     details { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; }
     summary { cursor: pointer; font-weight: 650; }
+    details.advanced { margin-top: 8px; padding: 8px 0 0; border: 0; }
+    details.advanced summary { color: #64748b; font-size: 12px; font-weight: 600; }
     label { display: grid; gap: 4px; margin-top: 8px; color: #334155; }
     input, select, textarea { box-sizing: border-box; width: 100%; border: 1px solid #cbd5e1; border-radius: 6px; padding: 7px; color: #162033; background: white; }
     textarea { min-height: 74px; resize: vertical; }
