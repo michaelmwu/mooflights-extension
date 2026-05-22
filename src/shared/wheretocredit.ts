@@ -211,8 +211,11 @@ function inferSegmentFare(
   _segmentIndex: number,
 ): number | undefined {
   if (!finiteNumber(itinerary.totalPrice)) return undefined;
-  if (segmentCount <= 1) return itinerary.totalPrice;
-  return itinerary.totalPrice / segmentCount;
+  const passengerCount =
+    finiteNumber(itinerary.passengerCount) && itinerary.passengerCount > 0 ? itinerary.passengerCount : 1;
+  const perPassengerTotal = itinerary.totalPrice / passengerCount;
+  if (segmentCount <= 1) return perPassengerTotal;
+  return perPassengerTotal / segmentCount;
 }
 
 function finiteNumber(value: number | null | undefined): value is number {

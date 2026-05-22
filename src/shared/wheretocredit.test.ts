@@ -72,6 +72,83 @@ describe("Where to Credit earnings estimates", () => {
     });
   });
 
+  it("estimates revenue-based earnings from per-passenger fare", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "one-way",
+      totalPrice: 200,
+      passengerCount: 2,
+      carriers: ["JA"],
+      fareBases: [],
+      slices: [
+        {
+          origin: "SCL",
+          destination: "LIM",
+          segments: [
+            {
+              origin: "SCL",
+              destination: "LIM",
+              carrier: "JA",
+              bookingClass: "Y",
+              cabin: "economy",
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(estimateEarnings(itinerary)[0]).toMatchObject({
+      airlineName: "JetSmart",
+      bookingClass: "Y",
+      estimatedMiles: 200,
+      formula: "100 x 2 miles per currency unit",
+      basis: "revenue-multiplier",
+    });
+  });
+
+  it("splits revenue-based earnings by passenger and segment", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "round-trip",
+      totalPrice: 400,
+      passengerCount: 2,
+      carriers: ["JA"],
+      fareBases: [],
+      slices: [
+        {
+          origin: "SCL",
+          destination: "LIM",
+          segments: [
+            {
+              origin: "SCL",
+              destination: "LIM",
+              carrier: "JA",
+              bookingClass: "Y",
+              cabin: "economy",
+            },
+          ],
+        },
+        {
+          origin: "LIM",
+          destination: "SCL",
+          segments: [
+            {
+              origin: "LIM",
+              destination: "SCL",
+              carrier: "JA",
+              bookingClass: "Y",
+              cabin: "economy",
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(estimateEarnings(itinerary).map((estimate) => estimate.estimatedMiles)).toEqual([200, 200]);
+  });
+
   it("does not synthesize Where to Credit deep links for missing carriers", () => {
     const itinerary: NormalizedItinerary = {
       source: "ita-matrix",

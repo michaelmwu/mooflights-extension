@@ -151,7 +151,7 @@ async function captureItinerary(isAutomatic: boolean): Promise<void> {
   try {
     const text = await captureViaPageBridge();
     if (captureLocationKey !== state.locationKey) return;
-    await parseAndSetItinerary(text);
+    await parseAndSetItinerary(text, captureLocationKey);
   } catch (error) {
     if (isAutomatic) {
       state.captureInFlight = false;
@@ -166,17 +166,20 @@ async function captureItinerary(isAutomatic: boolean): Promise<void> {
   }
 }
 
-async function parseAndSetItinerary(text: string): Promise<void> {
+async function parseAndSetItinerary(text: string, expectedLocationKey = state.locationKey): Promise<void> {
   try {
     const itinerary = parseItineraryJson(text);
-    state.itinerary = itinerary;
     const settings = state.settings || (await loadSettings());
+    if (expectedLocationKey !== state.locationKey) return;
     state.settings = settings;
     const remoteMetadata = await fetchRemoteProviderMetadata(settings);
+    if (expectedLocationKey !== state.locationKey) return;
+    state.itinerary = itinerary;
     state.links = applyPageLinkOverrides(rankProviderLinks(itinerary, settings, remoteMetadata));
     state.error = "";
     setStatus("Itinerary captured.");
   } catch (error) {
+    if (expectedLocationKey !== state.locationKey) return;
     state.itinerary = null;
     state.links = [];
     setError(`Could not parse ITA JSON: ${error instanceof Error ? error.message : String(error)}`);
