@@ -41,6 +41,7 @@ type ResultMileageSummary = {
 type ResultMileageEntry = {
   value: string;
   program: string;
+  calculation?: string;
   preferred?: boolean;
 };
 
@@ -585,6 +586,7 @@ function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSumm
     const entries: ResultMileageEntry[] = visible.map((program) => ({
       value: `~${program.miles.toLocaleString()}`,
       program: program.program,
+      calculation: compactMileageCalculation(program.formulas),
       preferred: program.preferred,
     }));
     if (remaining > 0) {
@@ -642,6 +644,7 @@ function updateResultRowMileage(row: HTMLTableRowElement, summary: ResultMileage
         <span class="mu-mileage-program ${entry.preferred ? "preferred" : ""}">
           <strong>${escapeHtml(entry.value)}</strong>
           <span>${escapeHtml(entry.program)}${entry.preferred ? `<em>Preferred</em>` : ""}</span>
+          ${entry.calculation ? `<small>${escapeHtml(entry.calculation)}</small>` : ""}
         </span>
       `,
     )
@@ -672,22 +675,23 @@ function installFlightResultStyles(): void {
   style.id = "mu-travel-flight-result-styles";
   style.textContent = `
     .mu-mileage-column {
-      min-width: 160px;
-      max-width: 220px;
+      min-width: 190px;
+      max-width: 270px;
       white-space: normal;
-      color: #0f766e;
+      color: #ffffff;
       text-align: left;
-      line-height: 1.2;
+      line-height: 1.25;
       vertical-align: middle;
+      font-size: 14px;
     }
     .mu-mileage-column[data-status="fallback"] {
-      color: #92400e;
+      color: #ffffff;
     }
     .mu-mileage-column[data-status="missing"] {
-      color: #64748b;
+      color: rgba(255, 255, 255, 0.7);
     }
     .mu-mileage-placeholder {
-      color: #64748b;
+      color: rgba(255, 255, 255, 0.72);
       font-weight: 500;
     }
     .mu-mileage-program {
@@ -698,23 +702,28 @@ function installFlightResultStyles(): void {
       margin-top: 5px;
     }
     .mu-mileage-program strong {
-      color: inherit;
-      font-size: 12px;
-      font-weight: 750;
+      color: #ffffff;
+      font-size: 15px;
+      font-weight: 700;
     }
     .mu-mileage-program span {
       display: flex;
       flex-wrap: wrap;
       gap: 4px;
       align-items: center;
-      color: #334155;
-      font-size: 11px;
-      font-weight: 550;
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .mu-mileage-program small {
+      color: rgba(255, 255, 255, 0.74);
+      font-size: 12px;
+      font-weight: 500;
     }
     .mu-mileage-program em {
       border-radius: 999px;
-      background: #d1fae5;
-      color: #047857;
+      background: rgba(255, 255, 255, 0.18);
+      color: #ffffff;
       padding: 1px 5px;
       font-size: 10px;
       font-style: normal;
@@ -726,6 +735,10 @@ function installFlightResultStyles(): void {
     }
   `;
   document.head.appendChild(style);
+}
+
+function compactMileageCalculation(formulas: string[]): string {
+  return formulas.map((formula) => formula.replace(": ", " ").replace(/\bmiles x\b/g, "x")).join(" + ");
 }
 
 function maybeAutoCapture(shouldResetLocation = true): void {
