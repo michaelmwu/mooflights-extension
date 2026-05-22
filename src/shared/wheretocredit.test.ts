@@ -1,5 +1,5 @@
 import type { NormalizedItinerary } from "./types";
-import { estimateEarnings } from "./wheretocredit";
+import { buildValidatedWhereToCreditUrl, estimateEarnings, inspectWhereToCreditSegments } from "./wheretocredit";
 
 describe("Where to Credit earnings estimates", () => {
   it("estimates distance-percent earnings", () => {
@@ -70,5 +70,39 @@ describe("Where to Credit earnings estimates", () => {
       formula: "0 miles x 30%",
       basis: "distance-percent",
     });
+  });
+
+  it("does not synthesize Where to Credit deep links for missing carriers", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "one-way",
+      carriers: ["HB"],
+      fareBases: [],
+      slices: [
+        {
+          origin: "HKG",
+          destination: "BKK",
+          segments: [
+            {
+              origin: "HKG",
+              destination: "BKK",
+              carrier: "HB",
+              bookingClass: "Y",
+              cabin: "economy",
+            },
+          ],
+        },
+      ],
+    };
+
+    const insight = inspectWhereToCreditSegments(itinerary)[0];
+
+    expect(buildValidatedWhereToCreditUrl(itinerary)).toBe("");
+    expect(insight).toMatchObject({
+      label: "HKG-BKK HB Y",
+      status: "missing-airline",
+    });
+    expect(insight).not.toHaveProperty("url");
   });
 });

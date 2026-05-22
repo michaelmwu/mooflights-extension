@@ -37,40 +37,46 @@ function Options(): React.ReactElement {
       <header>
         <div>
           <h1>Mu Travel Flights</h1>
-          <p>Extension settings stay local unless the optional Mu Travel backend is enabled.</p>
+          <p>Preferences for provider links, ITA Matrix helpers, and optional Mu Travel services.</p>
         </div>
         <span>{saved ? "Saved" : " "}</span>
       </header>
 
       <section>
-        <h2>Provider Ranking</h2>
+        <h2>Provider Preferences</h2>
+        <p className="note">Statuses describe how likely each link is to open the right route and date.</p>
         <div className="providers">
-          {LOCAL_PROVIDERS.map((provider) => (
-            <div className="provider" key={provider.id}>
-              <div>
-                <strong>{provider.label}</strong>
-                <small>
-                  {provider.category} · {provider.reliabilityScore}% confidence
-                </small>
+          {LOCAL_PROVIDERS.map((provider) => {
+            const reliability = providerReliabilityCopy(provider.reliabilityScore);
+            return (
+              <div className={`provider ${reliability.tone}`} key={provider.id}>
+                <div>
+                  <strong>{provider.label}</strong>
+                  <small>
+                    <span className="status-dot" aria-hidden="true" />
+                    {reliability.label} · {categoryLabel(provider.category)}
+                  </small>
+                  <small>{provider.knownIssues || reliability.help}</small>
+                </div>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={settings.preferredProviderIds.includes(provider.id)}
+                    onChange={() => toggleList("preferredProviderIds", provider.id)}
+                  />
+                  Prefer
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={settings.hiddenProviderIds.includes(provider.id)}
+                    onChange={() => toggleList("hiddenProviderIds", provider.id)}
+                  />
+                  Hide
+                </label>
               </div>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={settings.preferredProviderIds.includes(provider.id)}
-                  onChange={() => toggleList("preferredProviderIds", provider.id)}
-                />
-                Prefer
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={settings.hiddenProviderIds.includes(provider.id)}
-                  onChange={() => toggleList("hiddenProviderIds", provider.id)}
-                />
-                Hide
-              </label>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
@@ -229,6 +235,36 @@ function Select(props: {
       </select>
     </label>
   );
+}
+
+function providerReliabilityCopy(score: number): { tone: "high" | "medium" | "low"; label: string; help: string } {
+  if (score >= 85) {
+    return {
+      tone: "high",
+      label: "Reliable",
+      help: "Usually opens the matching route and date. Verify fare and flight details before booking.",
+    };
+  }
+  if (score >= 70) {
+    return {
+      tone: "medium",
+      label: "Check details",
+      help: "Often opens the right search, but may need manual adjustment.",
+    };
+  }
+  return {
+    tone: "low",
+    label: "Unreliable",
+    help: "May fail or require manual search. Use only as a fallback.",
+  };
+}
+
+function categoryLabel(category: string): string {
+  if (category === "miles") return "miles credit";
+  if (category === "meta") return "flight search";
+  if (category === "ota") return "booking site";
+  if (category === "airline") return "airline";
+  return category;
 }
 
 createRoot(document.getElementById("root") as HTMLElement).render(<Options />);

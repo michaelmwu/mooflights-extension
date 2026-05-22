@@ -40,13 +40,82 @@ export type EarningsEstimate = {
   sourceFetchedAt: string;
 };
 
+export type WhereToCreditSegmentInsight = {
+  segment: ItinerarySegment;
+  label: string;
+  status: "earning-data" | "airline-only" | "missing-airline" | "missing-booking-class";
+  message: string;
+  url?: string;
+};
+
 const DATA = whereToCreditData as CompactWhereToCredit;
+
+export function buildValidatedWhereToCreditUrl(itinerary: NormalizedItinerary): string {
+  const insights = inspectWhereToCreditSegments(itinerary);
+  return (
+    insights.find((insight) => insight.status === "earning-data")?.url ||
+    insights.find((insight) => insight.status === "airline-only")?.url ||
+    ""
+  );
+}
+
+export function inspectWhereToCreditSegments(itinerary: NormalizedItinerary): WhereToCreditSegmentInsight[] {
+  return flattenSegments(itinerary)
+    .map((segment) => inspectWhereToCreditSegment(segment))
+    .filter((insight): insight is WhereToCreditSegmentInsight => Boolean(insight));
+}
 
 export function estimateEarnings(itinerary: NormalizedItinerary): EarningsEstimate[] {
   const segments = flattenSegments(itinerary);
   return segments
     .map((segment, index) => estimateSegmentEarnings(segment, itinerary, segments.length, index))
     .filter((estimate): estimate is EarningsEstimate => Boolean(estimate));
+}
+
+function inspectWhereToCreditSegment(segment: ItinerarySegment): WhereToCreditSegmentInsight | null {
+  const carrier = normalizeCarrier(segment.fareCarrier || segment.carrier);
+  const bookingClass = normalizeBookingClass(segment.bookingClass);
+  if (!carrier) return null;
+
+  const label = `${segment.origin}-${segment.destination} ${carrier}${bookingClass ? ` ${bookingClass}` : ""}`;
+  const airline = DATA.airlines[carrier];
+  if (!airline) {
+    return {
+      segment,
+      label,
+      status: "missing-airline",
+      message: `No Where to Credit earning data is bundled for ${carrier}. This usually means no useful partner earning data is published; check the airline loyalty program directly.`,
+    };
+  }
+
+  if (!bookingClass) {
+    return {
+      segment,
+      label,
+      status: "missing-booking-class",
+      url: airline.url,
+      message: `${airline.name} is in Where to Credit, but ITA did not expose a booking class for this segment.`,
+    };
+  }
+
+  const booking = airline.booking_classes[bookingClass];
+  if (!booking) {
+    return {
+      segment,
+      label,
+      status: "airline-only",
+      url: airline.url,
+      message: `${airline.name} is in Where to Credit, but booking class ${bookingClass} has no bundled earning rows. This may earn only with the airline's own program or not earn at all.`,
+    };
+  }
+
+  return {
+    segment,
+    label,
+    status: "earning-data",
+    url: booking.url,
+    message: `${airline.name} booking class ${bookingClass} has earning data.`,
+  };
 }
 
 export function estimateSegmentEarnings(

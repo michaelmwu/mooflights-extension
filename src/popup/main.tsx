@@ -40,7 +40,11 @@ function Popup(): React.ReactElement {
         <button type="button" onClick={() => chrome.tabs.create({ url: "https://matrix.itasoftware.com/" })}>
           Open ITA Matrix
         </button>
-        <button type="button" className="secondary" onClick={() => chrome.runtime.openOptionsPage()}>
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => chrome.runtime.sendMessage({ command: "openOptionsPage" })}
+        >
           Options
         </button>
       </section>

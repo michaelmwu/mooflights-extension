@@ -11,6 +11,19 @@ The extension has four runtime surfaces:
 
 Shared domain code lives under `src/shared/` and is intentionally browser-safe.
 
+## Preference Surfaces
+
+The product can have two preference surfaces:
+
+- Local extension preferences: the Chrome options page. This is the MVP source of truth for offline behavior, provider
+  hiding/preference, airport helper defaults, affiliate opt-out, and dev-only backend API targets. It stores data in
+  `chrome.storage.local`.
+- Hosted account preferences: a future Mu Travel web page backed by the private API. This should handle Google sign-in,
+  cross-browser sync, account-level frequent-flyer preferences, premium entitlements, and backend-owned provider config.
+
+When both exist, the extension should boot from local preferences first, then merge authenticated hosted preferences as an
+optional overlay. Local opt-out and privacy controls should remain available even when the hosted service is unavailable.
+
 ## Offline-First Flow
 
 1. The content script loads local settings from `chrome.storage.local`.

@@ -30,6 +30,21 @@ bun run dev
 
 Production builds hide these controls from normal users.
 
+## Preference Sync Model
+
+The Chrome options page remains the local/offline preference sheet. Future hosted preferences are an authenticated Mu
+Travel account surface, not a replacement for local settings.
+
+Merge direction:
+
+- Load local `chrome.storage.local` settings immediately.
+- If the user is signed in and the API is reachable, fetch hosted preferences.
+- Apply hosted values only for syncable/account-level fields such as preferred frequent-flyer programs, provider
+  preferences, and premium feature toggles.
+- Keep local-only fields such as dev backend URL, debug controls, and immediate privacy opt-outs on the device.
+
+The extension should continue working if preference sync fails.
+
 ## Initial Endpoint
 
 ```http

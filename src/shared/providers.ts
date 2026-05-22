@@ -1,4 +1,3 @@
-import { buildWhereToCreditUrl } from "./itinerary";
 import type {
   ExtensionSettings,
   LinkProvider,
@@ -6,6 +5,7 @@ import type {
   RankedProviderLink,
   RemoteProviderMetadata,
 } from "./types";
+import { buildValidatedWhereToCreditUrl } from "./wheretocredit";
 
 export const LOCAL_PROVIDERS: LinkProvider[] = [
   {
@@ -14,7 +14,7 @@ export const LOCAL_PROVIDERS: LinkProvider[] = [
     category: "miles",
     reliabilityScore: 98,
     supportedTripTypes: ["one-way", "round-trip", "multi-city"],
-    buildUrl: buildWhereToCreditUrl,
+    buildUrl: buildValidatedWhereToCreditUrl,
   },
   {
     id: "google-flights",
@@ -40,14 +40,6 @@ export const LOCAL_PROVIDERS: LinkProvider[] = [
     knownIssues: "Search page link; verify price and flight details before booking.",
     supportedTripTypes: ["one-way", "round-trip"],
     buildUrl: expediaSearchUrl,
-  },
-  {
-    id: "ita-copy",
-    label: "Copy ITA Summary",
-    category: "utility",
-    reliabilityScore: 100,
-    supportedTripTypes: ["one-way", "round-trip", "multi-city"],
-    buildUrl: () => "#copy-summary",
   },
 ];
 
@@ -77,7 +69,7 @@ export function rankProviderLinks(
       if (!url) return null;
       const { disabled: _disabled, ...linkProvider } = provider;
       const preferenceBoost = preferred.has(provider.id) ? 20 : 0;
-      const categoryBoost = provider.category === "miles" ? 10 : provider.category === "utility" ? -5 : 0;
+      const categoryBoost = provider.category === "miles" ? 10 : 0;
       const rankScore = provider.reliabilityScore + preferenceBoost + categoryBoost;
       return {
         provider: linkProvider,

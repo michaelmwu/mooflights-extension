@@ -33,6 +33,7 @@ describe("provider ranking", () => {
 
     expect(urls.get("kayak")).toBe("https://www.kayak.com/flights/JFK-LHR/2026-08-10/LHR-JFK/2026-08-20");
     expect(urls.get("google-flights")).toContain("https://www.google.com/travel/flights?");
+    expect(urls.has("ita-copy")).toBe(false);
     expect(urls.has("skyscanner")).toBe(false);
     expect(urls.get("expedia")).toContain("https://www.expedia.com/Flights-Search?");
     expect(urls.get("expedia")).toContain("trip=roundtrip");

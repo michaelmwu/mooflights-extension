@@ -18,6 +18,17 @@ Add Google sign-in through the private Mu Travel backend and sync preferences ac
 
 Let users mark whether provider links reproduced the expected fare and submit feedback to the backend.
 
+## Direct Airline Booking Links
+
+Build a maintained database of airline direct booking/search URL formats. Prefer backend-delivered metadata for
+carrier-specific rules so the open extension does not bundle brittle commercial routing knowledge.
+
+## Preferred Frequent-Flyer Programs
+
+Let users rank the frequent-flyer programs they actually use, then prefer those programs in miles-credit guidance instead
+of always showing the absolute highest earning option. This requires expanding the bundled/backend Where to Credit snapshot
+beyond top-program fields.
+
 ## Opened OTA Page Checks
 
 When a user opens a provider page and grants host permission, inspect the page for rough flight/price match signals. Do not automate headless backend probing in this phase.

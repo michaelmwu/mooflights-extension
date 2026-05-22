@@ -58,6 +58,7 @@ small {
 
 .note {
   max-width: 680px;
+  margin-bottom: 12px;
   color: #64748b;
 }
 
@@ -73,12 +74,50 @@ small {
   align-items: center;
   padding: 10px;
   border: 1px solid #e2e8f0;
+  border-left-width: 4px;
   border-radius: 6px;
+}
+
+.provider.high {
+  border-left-color: #059669;
+}
+
+.provider.medium {
+  border-left-color: #d97706;
+}
+
+.provider.low {
+  border-left-color: #dc2626;
 }
 
 .provider div {
   display: grid;
   gap: 2px;
+}
+
+.provider small {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #64748b;
+}
+
+.provider.high .status-dot {
+  background: #059669;
+}
+
+.provider.medium .status-dot {
+  background: #d97706;
+}
+
+.provider.low .status-dot {
+  background: #dc2626;
 }
 
 .grid {

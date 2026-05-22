@@ -6,11 +6,11 @@ import {
   uniqueAlliances,
 } from "../shared/airports";
 import { fetchRemoteProviderMetadata } from "../shared/backendClient";
-import { buildWhereToCreditSegmentUrls, parseItineraryJson } from "../shared/itinerary";
+import { parseItineraryJson } from "../shared/itinerary";
 import { rankProviderLinks, summarizeItinerary } from "../shared/providers";
 import { loadSettings, saveSettings } from "../shared/storage";
 import type { ExtensionSettings, NormalizedItinerary, RankedProviderLink } from "../shared/types";
-import { estimateEarnings } from "../shared/wheretocredit";
+import { estimateEarnings, inspectWhereToCreditSegments } from "../shared/wheretocredit";
 
 type PanelState = {
   settings: ExtensionSettings | null;
@@ -123,7 +123,7 @@ function bind(root: ShadowRoot): void {
     void navigator.clipboard.writeText(state.airportPreview.join(", ")).then(() => setStatus("Copied airport codes."));
   });
   root.querySelector('[data-action="options"]')?.addEventListener("click", () => {
-    void chrome.runtime.openOptionsPage();
+    void chrome.runtime.sendMessage({ command: "openOptionsPage" });
   });
 
   root.querySelectorAll<HTMLSelectElement>("select[data-setting]").forEach((select) => {
@@ -138,17 +138,6 @@ function bind(root: ShadowRoot): void {
   root.querySelector<HTMLInputElement>('input[data-setting="affiliateOptOut"]')?.addEventListener("change", (event) => {
     const target = event.currentTarget as HTMLInputElement;
     void updateTopLevelSetting("affiliateOptOut", target.checked);
-  });
-
-  root.querySelectorAll<HTMLAnchorElement>("a[data-copy-summary]").forEach((anchor) => {
-    anchor.addEventListener("click", (event) => {
-      event.preventDefault();
-      if (state.itinerary) {
-        void navigator.clipboard
-          .writeText(summarizeItinerary(state.itinerary))
-          .then(() => setStatus("Copied ITA summary."));
-      }
-    });
   });
 }
 
@@ -415,13 +404,14 @@ function renderLinks(links: RankedProviderLink[]): string {
   if (!state.itinerary) return `<p class="muted">Capture an itinerary to rank links.</p>`;
   return links
     .map((link) => {
-      const issue = link.provider.knownIssues ? `<small>${escapeHtml(link.provider.knownIssues)}</small>` : "";
-      const href = link.url === "#copy-summary" ? "#" : link.url;
-      const copyAttr = link.url === "#copy-summary" ? "data-copy-summary" : "";
+      const confidence = providerConfidenceCopy(link);
+      const issue = link.provider.knownIssues
+        ? `<small>${escapeHtml(link.provider.knownIssues)}</small>`
+        : `<small>${escapeHtml(confidence.help)}</small>`;
       return `
-        <a href="${escapeHtml(href)}" ${copyAttr} target="_blank" rel="noreferrer" class="provider ${link.confidence}">
+        <a href="${escapeHtml(link.url)}" target="_blank" rel="noreferrer" class="provider ${link.confidence}">
           <span>${escapeHtml(link.provider.label)}</span>
-          <em>${link.provider.reliabilityScore}% ${link.confidence}</em>
+          <em class="confidence"><i aria-hidden="true"></i>${escapeHtml(confidence.label)}</em>
           ${issue}
         </a>
       `;
@@ -429,10 +419,38 @@ function renderLinks(links: RankedProviderLink[]): string {
     .join("");
 }
 
+function providerConfidenceCopy(link: RankedProviderLink): { label: string; help: string } {
+  if (link.confidence === "high") {
+    return {
+      label: "Reliable",
+      help: "Usually opens the matching route and date. Always verify fare and flight details before booking.",
+    };
+  }
+  if (link.confidence === "medium") {
+    return {
+      label: "Check details",
+      help: "Often opens the right search, but price or flight matching may need manual adjustment.",
+    };
+  }
+  return {
+    label: "Unreliable",
+    help: "May fail or require manual search. Use only as a fallback.",
+  };
+}
+
 function renderWhereToCreditLinks(itinerary: NormalizedItinerary): string {
-  const segmentLinks = buildWhereToCreditSegmentUrls(itinerary);
   const estimates = estimateEarnings(itinerary);
-  if (segmentLinks.length === 0 && estimates.length === 0) return "";
+  const insights = inspectWhereToCreditSegments(itinerary);
+  const estimatedLabels = new Set(
+    estimates.map(
+      (estimate) =>
+        `${estimate.segment.origin}-${estimate.segment.destination} ${estimate.segment.fareCarrier || estimate.segment.carrier} ${estimate.bookingClass}`,
+    ),
+  );
+  const notices = insights.filter(
+    (insight) => insight.status !== "earning-data" && !estimatedLabels.has(insight.label),
+  );
+  if (insights.length === 0 && estimates.length === 0) return "";
   return `
     <div class="segment-links">
       <strong>Miles credit</strong>
@@ -449,16 +467,19 @@ function renderWhereToCreditLinks(itinerary: NormalizedItinerary): string {
                 `,
               )
               .join("")
-          : segmentLinks
-              .map(
-                (link) => `
-                  <a href="${escapeHtml(link.url)}" target="_blank" rel="noreferrer">
-                    ${escapeHtml(link.label)}
-                  </a>
-                `,
-              )
-              .join("")
+          : ""
       }
+      ${notices
+        .map(
+          (insight) => `
+            <div class="earning notice">
+              <span>${escapeHtml(insight.label)}</span>
+              ${insight.url ? `<a href="${escapeHtml(insight.url)}" target="_blank" rel="noreferrer">Open airline page</a>` : ""}
+              <small>${escapeHtml(insight.message)}</small>
+            </div>
+          `,
+        )
+        .join("")}
     </div>
   `;
 }
@@ -532,6 +553,7 @@ function styles(): string {
     .links { display: grid; gap: 8px; margin-top: 10px; }
     .segment-links { display: grid; gap: 6px; margin-top: 10px; padding: 8px; border-radius: 6px; background: #f0fdfa; }
     .segment-links .earning { display: grid; gap: 2px; }
+    .segment-links .notice { padding: 6px; border-radius: 6px; background: #fff7ed; color: #7c2d12; }
     .segment-links em { font-style: normal; color: #115e59; }
     .segment-links a { color: #0f766e; text-decoration: none; }
     .segment-links a:hover { text-decoration: underline; }
@@ -541,6 +563,14 @@ function styles(): string {
     .provider.low { border-left-color: #dc2626; }
     .provider span { font-weight: 650; }
     .provider em { font-style: normal; color: #475569; }
+    .provider .confidence { display: inline-flex; align-items: center; gap: 5px; font-weight: 650; }
+    .provider .confidence i { width: 8px; height: 8px; border-radius: 999px; background: #64748b; }
+    .provider.high .confidence { color: #047857; }
+    .provider.high .confidence i { background: #059669; }
+    .provider.medium .confidence { color: #b45309; }
+    .provider.medium .confidence i { background: #d97706; }
+    .provider.low .confidence { color: #b91c1c; }
+    .provider.low .confidence i { background: #dc2626; }
     .airport-output { min-height: 42px; max-height: 88px; overflow: auto; margin: 10px 0; padding: 8px; border-radius: 6px; background: #f8fafc; color: #334155; word-break: break-word; }
     .actions { display: flex; gap: 8px; }
     .inline { display: flex; grid-template-columns: none; align-items: center; gap: 6px; margin: 0; }
