@@ -116,13 +116,14 @@ function bind(root: ShadowRoot): void {
   });
   root.querySelector('[data-action="insert-airports"]')?.addEventListener("click", () => {
     const ok = insertAirportCodes(state.airportPreview);
-    setStatus(
-      ok ? "Inserted airport codes into the active field." : "Copied airport codes; no active ITA input was found.",
-    );
-    if (!ok) void navigator.clipboard.writeText(state.airportPreview.join(", "));
+    if (ok) {
+      setStatus("Inserted airport codes into the active field.");
+      return;
+    }
+    void copyAirportPreview("Copied airport codes; no active ITA input was found.");
   });
   root.querySelector('[data-action="copy-airports"]')?.addEventListener("click", () => {
-    void navigator.clipboard.writeText(state.airportPreview.join(", ")).then(() => setStatus("Copied airport codes."));
+    void copyAirportPreview("Copied airport codes.");
   });
   root.querySelector('[data-action="options"]')?.addEventListener("click", () => {
     void chrome.runtime.sendMessage({ command: "openOptionsPage" });
@@ -441,14 +442,9 @@ function providerConfidenceCopy(link: RankedProviderLink): { label: string } {
 function renderWhereToCreditLinks(itinerary: NormalizedItinerary): string {
   const estimates = estimateEarnings(itinerary);
   const insights = inspectWhereToCreditSegments(itinerary);
-  const estimatedLabels = new Set(
-    estimates.map(
-      (estimate) =>
-        `${estimate.segment.origin}-${estimate.segment.destination} ${estimate.segment.fareCarrier || estimate.segment.carrier} ${estimate.bookingClass}`,
-    ),
-  );
+  const estimatedKeys = new Set(estimates.map((estimate) => creditSegmentKey(estimate.segment, estimate.bookingClass)));
   const notices = insights.filter(
-    (insight) => insight.status !== "earning-data" && !estimatedLabels.has(insight.label),
+    (insight) => insight.status !== "earning-data" && !estimatedKeys.has(creditSegmentKey(insight.segment)),
   );
   if (insights.length === 0 && estimates.length === 0) return "";
   return `
@@ -484,6 +480,19 @@ function renderWhereToCreditLinks(itinerary: NormalizedItinerary): string {
   `;
 }
 
+function creditSegmentKey(
+  segment: { origin: string; destination: string; carrier: string; fareCarrier?: string; bookingClass?: string },
+  bookingClass = segment.bookingClass,
+): string {
+  return [segment.origin, segment.destination, segment.fareCarrier || segment.carrier, bookingClass || ""]
+    .map((part) =>
+      String(part || "")
+        .trim()
+        .toUpperCase(),
+    )
+    .join(":");
+}
+
 function selectHtml(name: string, label: string, values: string[], selected: string): string {
   return `
     <label>
@@ -504,6 +513,15 @@ function setStatus(message: string): void {
 function setError(message: string): void {
   state.error = message;
   render();
+}
+
+async function copyAirportPreview(successMessage: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(state.airportPreview.join(", "));
+    setStatus(successMessage);
+  } catch (error) {
+    setError(`Could not copy airport codes: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 function escapeHtml(value: unknown): string {
