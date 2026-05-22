@@ -45,6 +45,12 @@ type ResultMileageEntry = {
   preferred?: boolean;
 };
 
+type MileageFormula = {
+  direction: string;
+  segment: string;
+  formula: string;
+};
+
 const PANEL_ID = "mu-travel-flights-panel";
 const BRIDGE_ID = "mu-travel-flights-page-bridge";
 const MESSAGE_SOURCE = "mu-travel-flights";
@@ -558,13 +564,17 @@ function resultRowForGrid(grid: HTMLElement): HTMLTableRowElement | null {
 function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSummary {
   const estimates = estimateEarnings(itinerary);
   const preferredPrograms = new Set(state.settings?.preferredFrequentFlyerPrograms || []);
-  const byProgram = new Map<string, { miles: number; formulas: string[] }>();
+  const byProgram = new Map<string, { miles: number; formulas: MileageFormula[] }>();
   for (const estimate of estimates) {
     if (typeof estimate.estimatedMiles !== "number" || estimate.estimatedMiles <= 0) continue;
     const program = estimate.program || "Best available program";
     const current = byProgram.get(program) || { miles: 0, formulas: [] };
     current.miles += estimate.estimatedMiles;
-    current.formulas.push(`${estimate.segment.origin}-${estimate.segment.destination}: ${estimate.formula}`);
+    current.formulas.push({
+      direction: segmentDirectionLabel(itinerary, estimate.segment),
+      segment: `${estimate.segment.origin}-${estimate.segment.destination}`,
+      formula: estimate.formula,
+    });
     byProgram.set(program, current);
   }
 
@@ -599,7 +609,13 @@ function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSumm
       entries,
       title: programs
         .map(
-          (program) => `${program.program}: ~${program.miles.toLocaleString()} miles (${program.formulas.join("; ")})`,
+          (program) =>
+            `${program.program}: ~${program.miles.toLocaleString()} miles (${program.formulas
+              .map(
+                (formula) =>
+                  `${formula.direction ? `${formula.direction} ` : ""}${formula.segment}: ${formula.formula}`,
+              )
+              .join("; ")})`,
         )
         .join("\n"),
       status: "ready",
@@ -737,8 +753,28 @@ function installFlightResultStyles(): void {
   document.head.appendChild(style);
 }
 
-function compactMileageCalculation(formulas: string[]): string {
-  return formulas.map((formula) => formula.replace(": ", " ").replace(/\bmiles x\b/g, "x")).join(" + ");
+function compactMileageCalculation(formulas: MileageFormula[]): string {
+  const byDirection = new Map<string, MileageFormula[]>();
+  for (const formula of formulas) {
+    const direction = formula.direction || "matched";
+    byDirection.set(direction, [...(byDirection.get(direction) || []), formula]);
+  }
+  return Array.from(byDirection.entries())
+    .map(([direction, values]) => {
+      const parts = values.map((value) => `${value.segment} ${value.formula.replace(/\bmiles x\b/g, "x")}`);
+      return `${direction}: ${parts.join(" + ")}`;
+    })
+    .join("; ");
+}
+
+function segmentDirectionLabel(itinerary: NormalizedItinerary, segment: ItinerarySegment): string {
+  if (itinerary.slices.length <= 1) return "";
+  const sliceIndex = itinerary.slices.findIndex((slice) => slice.segments.includes(segment));
+  if (sliceIndex < 0) return "";
+  if (itinerary.tripType === "round-trip" && itinerary.slices.length === 2) {
+    return sliceIndex === 0 ? "outbound" : "return";
+  }
+  return `slice ${sliceIndex + 1}`;
 }
 
 function maybeAutoCapture(shouldResetLocation = true): void {
