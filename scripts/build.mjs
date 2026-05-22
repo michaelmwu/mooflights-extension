@@ -19,6 +19,11 @@ const entries = [
     format: "iife",
   },
   {
+    entryPoints: ["src/content/googleFlightsContent.ts"],
+    outfile: "dist/content/googleFlightsContent.js",
+    format: "iife",
+  },
+  {
     entryPoints: ["src/background/serviceWorker.ts"],
     outfile: "dist/background/serviceWorker.js",
     format: "esm",

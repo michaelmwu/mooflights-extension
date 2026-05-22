@@ -5,6 +5,7 @@ Offline-first Chrome/Arc extension for ITA Matrix power users.
 The first MVP helps with:
 
 - Show estimated mileage earnings in the ITA companion panel and first-page search results.
+- Compare Google Flights booking-page offers across selected countries while keeping currency fixed.
 - Open prefilled Where to Credit links for fare-class lookup.
 - Rank curated booking links by local confidence.
 - Filter and insert airport codes on ITA search pages.
