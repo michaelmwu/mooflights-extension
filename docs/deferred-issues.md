@@ -22,6 +22,10 @@ Let users mark whether provider links reproduced the expected fare and submit fe
 
 When a user opens a provider page and grants host permission, inspect the page for rough flight/price match signals. Do not automate headless backend probing in this phase.
 
+## Verified OTA Deep Links
+
+Re-add OTA/provider links such as Skyscanner and Expedia only after their current URL formats are verified against live pages and covered by fixtures.
+
 ## Affiliate Routing
 
 Add transparent affiliate routing controlled by backend config and local user opt-out.

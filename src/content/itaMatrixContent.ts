@@ -65,7 +65,6 @@ function render(): void {
           <strong>Mu Travel</strong>
           <span>ITA Matrix companion</span>
         </div>
-        <button type="button" data-action="capture">Capture ITA JSON</button>
       </header>
 
       ${state.error ? `<p class="message error">${escapeHtml(state.error)}</p>` : `<p class="message">${escapeHtml(state.status)}</p>`}
@@ -79,7 +78,10 @@ function render(): void {
             : `<p class="muted">Open an ITA result. The extension will auto-load ITA JSON when Share & Export is visible. Paste JSON below if capture fails.</p>`
         }
         <textarea placeholder="Paste ITA Matrix Copy as JSON output here" data-role="json-input"></textarea>
-        <button type="button" class="secondary" data-action="parse-paste">Parse pasted JSON</button>
+        <div class="actions">
+          <button type="button" class="secondary" data-action="capture">Retry capture</button>
+          <button type="button" class="secondary" data-action="parse-paste">Parse pasted JSON</button>
+        </div>
       </details>
 
       <details ${state.itinerary ? "open" : ""}>

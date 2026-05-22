@@ -17,7 +17,7 @@ Shared domain code lives under `src/shared/` and is intentionally browser-safe.
 2. The user captures ITA Matrix "Copy as JSON" output or pastes it manually.
 3. Shared itinerary code normalizes slices, segments, fare carriers, fare bases, booking classes, price, and trip type.
 4. Provider ranking combines local provider definitions with optional remote provider metadata.
-5. The panel renders Where to Credit, meta-search, OTA, and utility links.
+5. The panel renders Where to Credit, verified booking, and utility links.
 6. Airport helper filters local airport data and inserts or copies airport codes.
 
 If the backend is disabled or unavailable, steps 1-6 still work.

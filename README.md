@@ -6,7 +6,7 @@ The first MVP helps with:
 
 - Capturing ITA Matrix itinerary JSON.
 - Opening prefilled Where to Credit links.
-- Ranking curated OTA/meta/direct booking links by local confidence.
+- Ranking curated booking links by local confidence.
 - Filtering and inserting airport codes.
 - Keeping settings local by default.
 

@@ -33,23 +33,6 @@ export const LOCAL_PROVIDERS: LinkProvider[] = [
     buildUrl: kayakUrl,
   },
   {
-    id: "skyscanner",
-    label: "Skyscanner",
-    category: "meta",
-    reliabilityScore: 82,
-    supportedTripTypes: ["one-way", "round-trip"],
-    buildUrl: skyscannerUrl,
-  },
-  {
-    id: "expedia",
-    label: "Expedia",
-    category: "ota",
-    reliabilityScore: 76,
-    knownIssues: "Works best when ITA includes flight numbers and dates.",
-    supportedTripTypes: ["one-way", "round-trip"],
-    buildUrl: expediaUrl,
-  },
-  {
     id: "ita-copy",
     label: "Copy ITA Summary",
     category: "utility",
@@ -142,56 +125,6 @@ function kayakUrl(itinerary: NormalizedItinerary): string {
     .join("/")}${pax}/${cabin}`;
 }
 
-function skyscannerUrl(itinerary: NormalizedItinerary): string {
-  const slices = routeSlices(itinerary);
-  if (slices.length === 0) return "";
-  const params = new URLSearchParams();
-  params.set("adults", String(itinerary.passengerCount || 1));
-  params.set("adultsv2", String(itinerary.passengerCount || 1));
-  params.set("cabinclass", skyscannerCabin(itinerary));
-  params.set("ref", "day-view");
-  params.set("market", "US");
-  return `https://www.skyscanner.com/transport/d/${slices
-    .map((slice) => `${slice.origin.toLowerCase()}/${slice.date}/${slice.destination.toLowerCase()}`)
-    .join("/")}?${params.toString()}`;
-}
-
-function expediaUrl(itinerary: NormalizedItinerary): string {
-  const slices = routeSlices(itinerary);
-  if (slices.length === 0) return "";
-  const params = new URLSearchParams();
-  params.set("action", "dl");
-  params.set("trip", "MultipleDestination");
-  params.set("cabinClass", expediaCabin(itinerary));
-  params.set("adults", String(itinerary.passengerCount || 1));
-
-  itinerary.slices.forEach((slice, sliceIndex) => {
-    const route = routeSlice(slice);
-    if (!route) return;
-    params.set(`legs[${sliceIndex}].departureAirport`, route.origin);
-    params.set(`legs[${sliceIndex}].arrivalAirport`, route.destination);
-    params.set(`legs[${sliceIndex}].departureDate`, route.date);
-
-    slice.segments.forEach((segment, segmentIndex) => {
-      if (!segment.flightNumber || !segment.departure) return;
-      const segmentDate = segment.departure.slice(0, 10);
-      const segmentValue = [
-        segmentDate,
-        expediaCabin(itinerary),
-        segment.origin,
-        segment.destination,
-        segment.carrier,
-        segment.flightNumber,
-      ]
-        .join("-")
-        .toLowerCase();
-      params.set(`legs[${sliceIndex}].segments[${segmentIndex}]`, segmentValue);
-    });
-  });
-
-  return `https://www.expedia.com/Flight-Search-Details?${params.toString()}`;
-}
-
 function routeSlices(itinerary: NormalizedItinerary): Array<{ origin: string; destination: string; date: string }> {
   return itinerary.slices
     .map(routeSlice)
@@ -225,20 +158,4 @@ function kayakCabin(itinerary: NormalizedItinerary): string {
   if (cabin === "business") return "business";
   if (cabin === "first") return "first";
   return "economy";
-}
-
-function skyscannerCabin(itinerary: NormalizedItinerary): string {
-  const cabin = lowestCabin(itinerary);
-  if (cabin === "premium-economy") return "premiumeconomy";
-  if (cabin === "business") return "business";
-  if (cabin === "first") return "first";
-  return "economy";
-}
-
-function expediaCabin(itinerary: NormalizedItinerary): string {
-  const cabin = lowestCabin(itinerary);
-  if (cabin === "premium-economy") return "premium";
-  if (cabin === "business") return "business";
-  if (cabin === "first") return "first";
-  return "coach";
 }
