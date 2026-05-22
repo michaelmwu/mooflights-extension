@@ -1,7 +1,13 @@
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { uniqueAirportRegions, uniqueAirportValues } from "../shared/airports";
+import {
+  countryCodeFromSearchValue,
+  countrySearchValue,
+  uniqueAirportCountries,
+  uniqueAirportRegions,
+  uniqueAirportValues,
+} from "../shared/airports";
 import { LOCAL_PROVIDERS, providerConfidence } from "../shared/providers";
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from "../shared/storage";
 import type { ExtensionSettings } from "../shared/types";
@@ -10,7 +16,7 @@ import "./options.css";
 function Options(): React.ReactElement {
   const [settings, setSettings] = useState<ExtensionSettings>(DEFAULT_SETTINGS);
   const [saved, setSaved] = useState(false);
-  const countries = useMemo(() => uniqueAirportValues("country"), []);
+  const countries = useMemo(() => uniqueAirportCountries(), []);
   const continents = useMemo(() => uniqueAirportValues("continent"), []);
   const regions = useMemo(() => uniqueAirportRegions(), []);
 
@@ -97,17 +103,44 @@ function Options(): React.ReactElement {
               void persist({ ...settings, airportHelper: { ...settings.airportHelper, continent } })
             }
           />
-          <Select
-            label="Country"
-            value={settings.airportHelper.countries[0] || ""}
-            values={["", ...countries]}
-            onChange={(country) =>
+          <label>
+            Country
+            <input
+              key={settings.airportHelper.countries[0] || "any-country"}
+              type="search"
+              list="country-options"
+              defaultValue={countrySearchValue(settings.airportHelper.countries[0] || "")}
+              placeholder="Search country"
+              onBlur={(event) => {
+                const country = countryCodeFromSearchValue(event.currentTarget.value);
+                void persist({
+                  ...settings,
+                  airportHelper: { ...settings.airportHelper, countries: country ? [country] : [] },
+                });
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                event.currentTarget.blur();
+              }}
+            />
+            <datalist id="country-options">
+              {countries.map((country) => (
+                <option key={country.code} value={country.searchValue} />
+              ))}
+            </datalist>
+          </label>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() =>
               void persist({
                 ...settings,
-                airportHelper: { ...settings.airportHelper, countries: country ? [country] : [] },
+                airportHelper: { ...settings.airportHelper, countries: [] },
               })
             }
-          />
+          >
+            Clear country
+          </button>
         </div>
       </section>
 

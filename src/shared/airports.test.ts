@@ -1,4 +1,11 @@
-import { airportCodes, filterAirports, parseAirportCodes, uniqueAirportRegions } from "./airports";
+import {
+  airportCodes,
+  countryCodeFromSearchValue,
+  countrySearchValue,
+  filterAirports,
+  parseAirportCodes,
+  uniqueAirportRegions,
+} from "./airports";
 import { DEFAULT_SETTINGS } from "./storage";
 
 describe("airport helper", () => {
@@ -37,5 +44,12 @@ describe("airport helper", () => {
 
   it("parses user-entered airport exclusions", () => {
     expect(parseAirportCodes("jfk, lga;ewr")).toEqual(["EWR", "JFK", "LGA"]);
+  });
+
+  it("maps searchable country labels back to airport filter country codes", () => {
+    expect(countrySearchValue("US")).toBe("United States (US)");
+    expect(countryCodeFromSearchValue("United States (US)")).toBe("US");
+    expect(countryCodeFromSearchValue("Japan")).toBe("JP");
+    expect(countryCodeFromSearchValue("XX")).toBe("");
   });
 });

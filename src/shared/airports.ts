@@ -38,6 +38,7 @@ export const AIRPORTS: Airport[] = Object.entries(DATA.airports)
 
 const AIRPORTS_BY_CODE = new Map(AIRPORTS.map((airport) => [airport.code, airport]));
 const REGION_PRESETS_BY_ID = new Map(AIRPORT_REGION_PRESETS.map((preset) => [preset.id, preset]));
+const COUNTRY_DISPLAY = typeof Intl !== "undefined" ? new Intl.DisplayNames(["en"], { type: "region" }) : undefined;
 
 export function filterAirports(filters: AirportFilters, list: Airport[] = AIRPORTS): Airport[] {
   const countries = new Set(filters.countries);
@@ -58,6 +59,36 @@ export function airportCodes(filters: AirportFilters, list: Airport[] = AIRPORTS
 
 export function uniqueAirportValues(field: keyof Pick<Airport, "continent" | "country">): string[] {
   return Array.from(new Set(AIRPORTS.map((airport) => String(airport[field])).filter(Boolean))).sort();
+}
+
+export function uniqueAirportCountries(): Array<{ code: string; label: string; searchValue: string }> {
+  return uniqueAirportValues("country")
+    .map((code) => {
+      const label = countryLabel(code);
+      return {
+        code,
+        label,
+        searchValue: countrySearchValue(code),
+      };
+    })
+    .sort((a, b) => a.label.localeCompare(b.label) || a.code.localeCompare(b.code));
+}
+
+export function countrySearchValue(code: string): string {
+  const normalized = code.trim().toUpperCase();
+  if (!normalized) return "";
+  return `${countryLabel(normalized)} (${normalized})`;
+}
+
+export function countryCodeFromSearchValue(value: string): string {
+  const query = value.trim();
+  if (!query) return "";
+  const countries = uniqueAirportCountries();
+  const directCode = query.toUpperCase();
+  if (countries.some((country) => country.code === directCode)) return directCode;
+  const parenthesizedCode = query.match(/\(([A-Z]{2})\)$/i)?.[1]?.toUpperCase();
+  if (parenthesizedCode && countries.some((country) => country.code === parenthesizedCode)) return parenthesizedCode;
+  return countries.find((country) => country.label.toLowerCase() === query.toLowerCase())?.code || "";
 }
 
 export function uniqueAirportRegions(): AirportRegionPreset[] {
@@ -88,4 +119,12 @@ export function parseAirportCodes(value: string): string[] {
 function regionAirportCodes(regionId: string): Set<string> {
   const preset = REGION_PRESETS_BY_ID.get(regionId);
   return new Set(preset?.codes || []);
+}
+
+function countryLabel(code: string): string {
+  try {
+    return COUNTRY_DISPLAY?.of(code) || code;
+  } catch {
+    return code;
+  }
 }

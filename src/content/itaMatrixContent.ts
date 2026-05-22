@@ -1,10 +1,24 @@
-import { airportCodes, parseAirportCodes, uniqueAirportRegions, uniqueAirportValues } from "../shared/airports";
+import { airportDistanceMiles } from "../shared/airportCoordinates";
+import {
+  airportCodes,
+  countryCodeFromSearchValue,
+  countrySearchValue,
+  parseAirportCodes,
+  uniqueAirportCountries,
+  uniqueAirportRegions,
+  uniqueAirportValues,
+} from "../shared/airports";
 import { fetchRemoteProviderMetadata } from "../shared/backendClient";
 import { parseItineraryJson } from "../shared/itinerary";
 import { rankProviderLinks, summarizeItinerary } from "../shared/providers";
 import { loadSettings, saveSettings } from "../shared/storage";
-import type { ExtensionSettings, NormalizedItinerary, RankedProviderLink } from "../shared/types";
-import { estimateEarnings, inspectWhereToCreditSegments } from "../shared/wheretocredit";
+import type { ExtensionSettings, ItinerarySegment, NormalizedItinerary, RankedProviderLink } from "../shared/types";
+import {
+  type EarningsEstimate,
+  estimateEarnings,
+  estimateSegmentEarnings,
+  inspectWhereToCreditSegments,
+} from "../shared/wheretocredit";
 
 type PanelState = {
   settings: ExtensionSettings | null;
@@ -23,6 +37,7 @@ const BRIDGE_ID = "mu-travel-flights-page-bridge";
 const MESSAGE_SOURCE = "mu-travel-flights";
 const AUTO_CAPTURE_DEBOUNCE_MS = 150;
 let autoCaptureCheckTimer: number | undefined;
+let flightResultAnnotationTimer: number | undefined;
 
 const state: PanelState = {
   settings: null,
@@ -46,7 +61,9 @@ async function init(): Promise<void> {
   state.airportPreview = airportCodes(state.settings.airportHelper).slice(0, 120);
   render();
   installAutoCaptureObserver();
+  installFlightResultObserver();
   maybeAutoCapture();
+  annotateFlightResultsSoon();
 }
 
 function render(): void {
@@ -67,29 +84,9 @@ function render(): void {
 
       ${state.error ? `<p class="message error">${escapeHtml(state.error)}</p>` : `<p class="message">${escapeHtml(state.status)}</p>`}
 
-      <details ${state.itinerary ? "open" : ""}>
-        <summary>Itinerary</summary>
-        ${
-          state.itinerary
-            ? `<p class="summary">${escapeHtml(summarizeItinerary(state.itinerary))}</p>
-               <p class="muted">${escapeHtml(state.itinerary.tripType)} · ${state.itinerary.passengerCount || 1} passenger(s) · ${escapeHtml(state.itinerary.currency || "")} ${state.itinerary.totalPrice ?? ""}</p>`
-            : `<p class="muted">Open an ITA result. The extension will auto-load ITA JSON when Share & Export is visible.</p>`
-        }
-        <details class="advanced" ${state.error ? "open" : ""}>
-          <summary>Advanced fallback</summary>
-          <textarea placeholder="Paste ITA Matrix Copy as JSON output here" data-role="json-input"></textarea>
-          <div class="actions">
-            <button type="button" class="secondary" data-action="capture">Retry capture</button>
-            <button type="button" class="secondary" data-action="parse-paste">Parse pasted JSON</button>
-          </div>
-        </details>
-      </details>
-
-      <details ${state.itinerary ? "open" : ""}>
-        <summary>Links</summary>
-        ${state.itinerary ? renderWhereToCreditLinks(state.itinerary) : ""}
-        <div class="links">${renderLinks(state.links)}</div>
-      </details>
+      ${isItineraryPage() ? renderItineraryPanel() : ""}
+      ${isItineraryPage() ? renderLinksPanel() : ""}
+      ${isFlightsPage() ? renderFlightResultsHelper() : ""}
 
       ${isSearchPage() ? renderAirportHelper(settings) : ""}
 
@@ -101,6 +98,47 @@ function render(): void {
   `;
 
   bind(shadow);
+}
+
+function renderItineraryPanel(): string {
+  return `
+    <details ${state.itinerary ? "open" : ""}>
+      <summary>Itinerary</summary>
+      ${
+        state.itinerary
+          ? `<p class="summary">${escapeHtml(summarizeItinerary(state.itinerary))}</p>
+             <p class="muted">${escapeHtml(state.itinerary.tripType)} · ${state.itinerary.passengerCount || 1} passenger(s) · ${escapeHtml(state.itinerary.currency || "")} ${state.itinerary.totalPrice ?? ""}</p>`
+          : `<p class="muted">Open an ITA result. The extension will auto-load ITA JSON when Share & Export is visible.</p>`
+      }
+      <details class="advanced" ${state.error ? "open" : ""}>
+        <summary>Advanced fallback</summary>
+        <textarea placeholder="Paste ITA Matrix Copy as JSON output here" data-role="json-input"></textarea>
+        <div class="actions">
+          <button type="button" class="secondary" data-action="capture">Retry capture</button>
+          <button type="button" class="secondary" data-action="parse-paste">Parse pasted JSON</button>
+        </div>
+      </details>
+    </details>
+  `;
+}
+
+function renderLinksPanel(): string {
+  return `
+    <details ${state.itinerary ? "open" : ""}>
+      <summary>Links</summary>
+      ${state.itinerary ? renderWhereToCreditLinks(state.itinerary) : ""}
+      <div class="links">${renderLinks(state.links)}</div>
+    </details>
+  `;
+}
+
+function renderFlightResultsHelper(): string {
+  return `
+    <details open>
+      <summary>Search results</summary>
+      <p class="muted">Expand a fare result to show estimated mileage earning by segment.</p>
+    </details>
+  `;
 }
 
 function bind(root: ShadowRoot): void {
@@ -129,6 +167,14 @@ function bind(root: ShadowRoot): void {
   root.querySelectorAll<HTMLSelectElement>("select[data-setting]").forEach((select) => {
     select.addEventListener("change", () => {
       void updateAirportSetting(select.dataset.setting || "", select.value);
+    });
+  });
+  root.querySelectorAll<HTMLInputElement>('input[data-setting="country"]').forEach((input) => {
+    input.addEventListener("change", () => {
+      void updateAirportSetting("country", input.value);
+    });
+    input.addEventListener("input", () => {
+      if (!input.value.trim()) void updateAirportSetting("country", "");
     });
   });
   root.querySelector<HTMLInputElement>('input[data-setting="exclusions"]')?.addEventListener("change", (event) => {
@@ -226,13 +272,14 @@ function isAllowedGoogleFlightsUrl(value: string): boolean {
 
 async function updateAirportSetting(key: string, value: string): Promise<void> {
   if (!state.settings) return;
+  const countryCode = key === "country" ? countryCodeFromSearchValue(value) : "";
   const next: ExtensionSettings = {
     ...state.settings,
     airportHelper: {
       ...state.settings.airportHelper,
       ...(key === "continent" ? { continent: value } : {}),
       ...(key === "region" ? { region: value } : {}),
-      ...(key === "country" ? { countries: value ? [value] : [] } : {}),
+      ...(key === "country" ? { countries: countryCode ? [countryCode] : [] } : {}),
       ...(key === "exclusions" ? { exclusions: parseAirportCodes(value) } : {}),
     },
   };
@@ -325,6 +372,13 @@ function installAutoCaptureObserver(): void {
   window.addEventListener("hashchange", scheduleAutoCaptureCheck);
 }
 
+function installFlightResultObserver(): void {
+  const observer = new MutationObserver(annotateFlightResultsSoon);
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+  window.addEventListener("popstate", annotateFlightResultsSoon);
+  window.addEventListener("hashchange", annotateFlightResultsSoon);
+}
+
 function scheduleAutoCaptureCheck(): void {
   if (autoCaptureCheckTimer) window.clearTimeout(autoCaptureCheckTimer);
   autoCaptureCheckTimer = window.setTimeout(() => {
@@ -332,6 +386,125 @@ function scheduleAutoCaptureCheck(): void {
     resetForLocationChange();
     maybeAutoCapture(false);
   }, AUTO_CAPTURE_DEBOUNCE_MS);
+}
+
+function annotateFlightResultsSoon(): void {
+  if (flightResultAnnotationTimer) window.clearTimeout(flightResultAnnotationTimer);
+  flightResultAnnotationTimer = window.setTimeout(() => {
+    flightResultAnnotationTimer = undefined;
+    annotateFlightResults();
+  }, 150);
+}
+
+function annotateFlightResults(): void {
+  if (!isFlightsPage()) return;
+  installFlightResultStyles();
+
+  for (const grid of document.querySelectorAll<HTMLElement>("matrix-itinerary-grid")) {
+    const items = Array.from(grid.querySelectorAll<HTMLElement>("mat-list-item"));
+    const segments = items.map(parseResultSegment).filter((segment): segment is ItinerarySegment => Boolean(segment));
+    if (segments.length === 0) continue;
+
+    const itinerary = resultSegmentsToItinerary(segments);
+    items.forEach((item, index) => {
+      if (item.querySelector(".mu-mileage-earnings")) return;
+      const segment = segments[index];
+      if (!segment) return;
+      const estimate = estimateSegmentEarnings(segment, itinerary, segments, index);
+      const target = item.querySelector<HTMLElement>(".info-grid");
+      if (!target) return;
+      target.appendChild(renderResultMileageLine(segment, estimate));
+    });
+  }
+}
+
+function parseResultSegment(item: HTMLElement): ItinerarySegment | null {
+  const routeText = normalize(item.querySelector(".info-line b")?.textContent || "");
+  const routeMatch = routeText.match(/\(([A-Z0-9]{3})\)\s+to\s+.*\(([A-Z0-9]{3})\)/);
+  const origin = routeMatch?.[1] || "";
+  const destination = routeMatch?.[2] || "";
+  const carrier = parseCarrierCode(item);
+  const bookingClass =
+    normalize(item.querySelector(".service-line")?.textContent || "").match(/\(([A-Z])\)/)?.[1] || "";
+  if (!origin || !destination || !carrier || !bookingClass) return null;
+
+  return {
+    origin,
+    destination,
+    carrier,
+    carrierName: parseCarrierName(item),
+    bookingClass,
+    cabin: "economy",
+    duration: parseDurationMinutes(item.querySelector(".time-line")?.textContent || ""),
+  };
+}
+
+function parseCarrierCode(item: HTMLElement): string {
+  const logo = item.querySelector<HTMLImageElement>("img.carrier-img")?.src || "";
+  return logo.match(/\/([A-Z0-9]{2,3})\.png(?:$|\?)/)?.[1] || "";
+}
+
+function parseCarrierName(item: HTMLElement): string | undefined {
+  const lines = Array.from(item.querySelectorAll<HTMLElement>(".info-line"));
+  const carrierLine = lines
+    .map((line) => normalize(line.textContent || ""))
+    .find((line) => /^[A-Za-z][A-Za-z .'-]+\s+\d+/.test(line));
+  return carrierLine?.replace(/\s+\d+.*$/, "").trim() || undefined;
+}
+
+function parseDurationMinutes(value: string): number | undefined {
+  const match = normalize(value).match(/\((?:(\d+)h)?\s*(?:(\d+)m)?\)/);
+  if (!match) return undefined;
+  const hours = Number(match[1] || 0);
+  const minutes = Number(match[2] || 0);
+  const total = hours * 60 + minutes;
+  return total > 0 ? total : undefined;
+}
+
+function resultSegmentsToItinerary(segments: ItinerarySegment[]): NormalizedItinerary {
+  return {
+    source: "ita-matrix",
+    capturedAt: new Date().toISOString(),
+    tripType: "multi-city",
+    carriers: Array.from(new Set(segments.map((segment) => segment.carrier))),
+    fareBases: [],
+    slices: [
+      {
+        origin: segments[0]?.origin || "",
+        destination: segments.at(-1)?.destination || "",
+        segments,
+      },
+    ],
+  };
+}
+
+function renderResultMileageLine(segment: ItinerarySegment, estimate: EarningsEstimate | null): HTMLElement {
+  const line = document.createElement("div");
+  line.className = "info-line mu-mileage-earnings";
+  if (estimate) {
+    const miles = estimate.estimatedMiles ? `~${estimate.estimatedMiles.toLocaleString()} miles` : estimate.formula;
+    line.textContent = `Miles credit: ${miles} · ${estimate.program}`;
+    line.title = estimate.formula;
+    return line;
+  }
+
+  const distance = airportDistanceMiles(segment.origin, segment.destination);
+  const distanceText = distance ? `~${Math.round(distance).toLocaleString()} flown miles` : "No distance estimate";
+  line.textContent = `Miles credit: ${distanceText} · no earning data for ${segment.carrier} ${segment.bookingClass}`;
+  return line;
+}
+
+function installFlightResultStyles(): void {
+  if (document.getElementById("mu-travel-flight-result-styles")) return;
+  const style = document.createElement("style");
+  style.id = "mu-travel-flight-result-styles";
+  style.textContent = `
+    .mu-mileage-earnings {
+      color: #0f766e;
+      font-weight: 600;
+    }
+  `;
+  document.head.appendChild(style);
 }
 
 function maybeAutoCapture(shouldResetLocation = true): void {
@@ -374,8 +547,14 @@ function isSearchPage(): boolean {
   return window.location.pathname.startsWith("/search");
 }
 
+function isFlightsPage(): boolean {
+  return window.location.pathname.startsWith("/flights");
+}
+
 function renderAirportHelper(settings: ExtensionSettings): string {
   const regions = uniqueAirportRegions();
+  const countries = uniqueAirportCountries();
+  const countryDatalistId = "mu-travel-country-options";
   return `
     <details>
       <summary>Airport helper</summary>
@@ -388,7 +567,13 @@ function renderAirportHelper(settings: ExtensionSettings): string {
           new Map(regions.map((region) => [region.id, region.label])),
         )}
         ${selectHtml("continent", "Continent", ["", ...uniqueAirportValues("continent")], settings.airportHelper.continent)}
-        ${selectHtml("country", "Country", ["", ...uniqueAirportValues("country")], settings.airportHelper.countries[0] || "")}
+        <label>
+          Country
+          <input type="search" data-setting="country" list="${countryDatalistId}" value="${escapeHtml(countrySearchValue(settings.airportHelper.countries[0] || ""))}" placeholder="Search country">
+          <datalist id="${countryDatalistId}">
+            ${countries.map((country) => `<option value="${escapeHtml(country.searchValue)}"></option>`).join("")}
+          </datalist>
+        </label>
       </div>
       <label>
         Exclude codes
