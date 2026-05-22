@@ -30,6 +30,9 @@ Candidate seed sources:
 - Wikipedia list of airline codes: import only rows with valid two-character IATA codes and real airline article links;
   skip rows without IATA codes or links that point to index/list-style pages.
 
+Add local importer scripts that generate reviewed JSON snapshots and reports. The backend can own the canonical refresh
+pipeline, but the extension repo still needs deterministic scripts to reproduce public fallback snapshots.
+
 ## Preferred Frequent-Flyer Programs
 
 Let users rank the frequent-flyer programs they actually use, then prefer those programs in miles-credit guidance instead

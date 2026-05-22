@@ -44,5 +44,6 @@ bun run package
 - [Architecture](./ARCHITECTURE.md)
 - [Contributing](./CONTRIBUTING.md)
 - [Backend contract](./docs/backend-contract.md)
+- [Data imports](./docs/data-imports.md)
 - [Extension runtime](./docs/extension-runtime.md)
 - [Deferred issues](./docs/deferred-issues.md)
