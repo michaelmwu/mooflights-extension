@@ -140,6 +140,7 @@ describe("Google Flights booking option parser", () => {
     });
 
     const search = new URL(result?.matrixUrl || "").searchParams.get("search") || "";
+    expect(new URL(result?.matrixUrl || "").pathname).toBe("/flights");
     const decoded = JSON.parse(atob(search));
     expect(decoded).toMatchObject({
       type: "one-way",
@@ -147,6 +148,7 @@ describe("Google Flights booking option parser", () => {
         {
           origin: ["HKG"],
           dest: ["TPE"],
+          routing: "JX",
           dates: {
             departureDate: "2026-06-02",
           },

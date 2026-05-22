@@ -193,7 +193,7 @@ function buildItaMatrixSearchUrl(
 ): string {
   const matrixSlices =
     tripType === "round-trip" && slices[0] && slices[1]
-      ? [matrixSearchSlice(slices[0], slices[1].departureDate)]
+      ? [matrixSearchSlice(slices[0], slices[1])]
       : slices.map((slice) => matrixSearchSlice(slice));
   const payload = {
     type: tripType,
@@ -209,12 +209,12 @@ function buildItaMatrixSearchUrl(
       adults: "1",
     },
   };
-  return `https://matrix.itasoftware.com/search?search=${encodeURIComponent(encodeBase64(JSON.stringify(payload)))}`;
+  return `https://matrix.itasoftware.com/flights?search=${encodeURIComponent(encodeBase64(JSON.stringify(payload)))}`;
 }
 
 function matrixSearchSlice(
   slice: GoogleFlightsMatrixSearch["slices"][number],
-  returnDate = "",
+  returnSlice?: GoogleFlightsMatrixSearch["slices"][number],
 ): Record<string, unknown> {
   const dates: Record<string, unknown> = {
     searchDateType: "specific",
@@ -226,16 +226,23 @@ function matrixSearchSlice(
     returnDateModifier: "0",
     returnDatePreferredTimes: [],
   };
-  if (returnDate) dates.returnDate = returnDate;
+  if (returnSlice?.departureDate) dates.returnDate = returnSlice.departureDate;
   return {
     origin: [slice.origin],
     dest: [slice.destination],
-    routing: "",
+    routing: carrierRouting(slice),
     ext: "",
-    routingRet: "",
+    routingRet: returnSlice ? carrierRouting(returnSlice) : "",
     extRet: "",
     dates,
   };
+}
+
+function carrierRouting(slice: GoogleFlightsMatrixSearch["slices"][number]): string {
+  return slice.segments
+    .map((segment) => segment.carrier)
+    .filter(isString)
+    .join(" ");
 }
 
 function decodeBase64UrlText(value: string): string {
