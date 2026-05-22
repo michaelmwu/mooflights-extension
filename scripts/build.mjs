@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import esbuild from "esbuild";
 
@@ -84,6 +84,8 @@ async function copyStaticFiles() {
     await copyFile(resolve(root, from), target);
   }
 
+  await cp(resolve(root, "src/assets"), resolve(dist, "assets"), { recursive: true, force: true });
+
   await writeFile(
     resolve(dist, "OPEN_SOURCE_NOTICE.txt"),
     [
@@ -94,6 +96,8 @@ async function copyStaticFiles() {
       "",
       "Bundled airport coordinate data is derived from OurAirports public-domain data.",
       "Source: https://ourairports.com/data/",
+      "Bundled carrier icons are local copies of Seats.aero 64px carrier assets.",
+      "Source: https://seats.aero/static/carriers64/",
       "",
       "See README.md, LICENSE, and the repository docs for development and contribution details.",
       "",

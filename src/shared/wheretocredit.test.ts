@@ -3,12 +3,22 @@ import {
   buildValidatedWhereToCreditUrl,
   estimateEarnings,
   inspectWhereToCreditSegments,
+  uniqueMileageProgramOptions,
   uniqueMileagePrograms,
 } from "./wheretocredit";
 
 describe("Where to Credit earnings estimates", () => {
   it("lists mileage programs available in the local snapshot", () => {
     expect(uniqueMileagePrograms()).toEqual(expect.arrayContaining(["Air Canada Aeroplan", "British Airways Club"]));
+    expect(uniqueMileageProgramOptions()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          program: "Air Canada Aeroplan",
+          carrierCodes: ["AC"],
+          label: "Air Canada Aeroplan (AC)",
+        }),
+      ]),
+    );
   });
 
   it("estimates distance-percent earnings", () => {

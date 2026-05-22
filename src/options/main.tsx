@@ -11,7 +11,7 @@ import {
 import { LOCAL_PROVIDERS, providerConfidence } from "../shared/providers";
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from "../shared/storage";
 import type { ExtensionSettings } from "../shared/types";
-import { uniqueMileagePrograms } from "../shared/wheretocredit";
+import { type MileageProgramOption, uniqueMileageProgramOptions } from "../shared/wheretocredit";
 import "./options.css";
 
 function Options(): React.ReactElement {
@@ -21,7 +21,7 @@ function Options(): React.ReactElement {
   const countries = useMemo(() => uniqueAirportCountries(), []);
   const continents = useMemo(() => uniqueAirportValues("continent"), []);
   const regions = useMemo(() => uniqueAirportRegions(), []);
-  const mileagePrograms = useMemo(() => uniqueMileagePrograms(), []);
+  const mileagePrograms = useMemo(() => uniqueMileageProgramOptions(), []);
   const visibleMileagePrograms = useMemo(
     () => filteredMileagePrograms(mileagePrograms, settings.preferredFrequentFlyerPrograms, programSearch),
     [mileagePrograms, settings.preferredFrequentFlyerPrograms, programSearch],
@@ -116,13 +116,20 @@ function Options(): React.ReactElement {
         <fieldset className="program-list">
           <legend>Preferred frequent flyer programs</legend>
           {visibleMileagePrograms.map((program) => (
-            <label className="program-row" key={program}>
+            <label className="program-row" key={program.program}>
               <input
                 type="checkbox"
-                checked={settings.preferredFrequentFlyerPrograms.includes(program)}
-                onChange={() => togglePreferredProgram(program)}
+                checked={settings.preferredFrequentFlyerPrograms.includes(program.program)}
+                onChange={() => togglePreferredProgram(program.program)}
               />
-              <span>{program}</span>
+              {program.carrierCodes[0] ? (
+                <img
+                  src={chrome.runtime.getURL(`assets/carriers64/light/${program.carrierCodes[0]}.png`)}
+                  alt=""
+                  aria-hidden="true"
+                />
+              ) : null}
+              <span>{program.label}</span>
             </label>
           ))}
         </fieldset>
@@ -342,19 +349,28 @@ function categoryLabel(category: string): string {
   return category;
 }
 
-function filteredMileagePrograms(programs: string[], selectedPrograms: string[], search: string): string[] {
+function filteredMileagePrograms(
+  programs: MileageProgramOption[],
+  selectedPrograms: string[],
+  search: string,
+): MileageProgramOption[] {
   const selectedRanks = new Map(selectedPrograms.map((program, index) => [program, index]));
   const query = search.trim().toLowerCase();
   return programs
-    .filter((program) => !query || program.toLowerCase().includes(query))
+    .filter(
+      (program) =>
+        !query ||
+        program.label.toLowerCase().includes(query) ||
+        program.carrierCodes.some((carrierCode) => carrierCode.toLowerCase().includes(query)),
+    )
     .sort((left, right) => {
-      const leftSelected = selectedRanks.has(left);
-      const rightSelected = selectedRanks.has(right);
+      const leftSelected = selectedRanks.has(left.program);
+      const rightSelected = selectedRanks.has(right.program);
       if (leftSelected !== rightSelected) return leftSelected ? -1 : 1;
       if (leftSelected && rightSelected) {
-        return (selectedRanks.get(left) ?? 0) - (selectedRanks.get(right) ?? 0);
+        return (selectedRanks.get(left.program) ?? 0) - (selectedRanks.get(right.program) ?? 0);
       }
-      return left.localeCompare(right);
+      return left.label.localeCompare(right.label);
     })
     .slice(0, query ? 30 : 14);
 }

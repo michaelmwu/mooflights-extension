@@ -27,6 +27,12 @@ type CompactMileageEarningData = {
   airlines: Record<string, CompactAirline>;
 };
 
+export type MileageProgramOption = {
+  program: string;
+  carrierCodes: string[];
+  label: string;
+};
+
 export type EarningsEstimate = {
   segment: ItinerarySegment;
   airlineName: string;
@@ -51,6 +57,58 @@ export type WhereToCreditSegmentInsight = {
 // licensed datasets, or curated Mu Travel reference data. Where to Credit URLs
 // are outbound lookup destinations, not the source copied into this file.
 const DATA = mileageEarningData as CompactMileageEarningData;
+
+const PROGRAM_OWNER_CARRIER_CODES: Record<string, string[]> = {
+  "ANA Mileage Club": ["NH"],
+  "Aegean Miles+Bonus": ["A3"],
+  "Aer Lingus AerClub": ["EI"],
+  "Aerolíneas Argentinas AerolíneasPlus": ["AR"],
+  "Aeromexico Club Premier": ["AM"],
+  "Air Canada Aeroplan": ["AC"],
+  "Air China PhoenixMiles": ["CA"],
+  "Air Europa Suma": ["UX"],
+  "Air India Maharaja Club": ["AI"],
+  "Alaska/Hawaiian Atmos Rewards": ["AS", "HA"],
+  "American Airlines AAdvantage": ["AA"],
+  "Asiana Club": ["OZ"],
+  "Avianca LifeMiles": ["AV"],
+  "Bangkok Airways FlyerBonus": ["PG"],
+  "British Airways Club": ["BA"],
+  "Cathay Marco Polo Club / Asia Miles": ["CX"],
+  "Copa Airlines ConnectMiles": ["CM"],
+  "Delta SkyMiles": ["DL"],
+  "Egyptair Plus": ["MS"],
+  "Emirates Skywards": ["EK"],
+  "Ethiopian ShebaMiles": ["ET"],
+  "Etihad Guest": ["EY"],
+  "Eva Air Infinity MileageLands": ["BR"],
+  "Finnair Plus": ["AY"],
+  "Flying Blue": ["AF", "KL"],
+  "Garuda Indonesia GarudaMiles": ["GA"],
+  "Hainan Fortune Wings Club": ["HU"],
+  "Iberia Plus": ["IB"],
+  "Japan Airlines Mileage Bank": ["JL"],
+  "JetBlue TrueBlue": ["B6"],
+  "Korean Air Skypass": ["KE"],
+  "LATAM Pass": ["LA"],
+  "MEA Cedar Miles": ["ME"],
+  "Malaysia Airlines Enrich": ["MH"],
+  "Miles&More": ["LH"],
+  "Qatar Airways Privilege Club": ["QR"],
+  "Royal Air Maroc Safar Flyer": ["AT"],
+  "Royal Jordanian Royal Club": ["RJ"],
+  "SAS EuroBonus": ["SK"],
+  "Saudia Alfursan": ["SV"],
+  "Singapore Airlines KrisFlyer": ["SQ"],
+  "SriLankan FlySmiLes": ["UL"],
+  "TAP Miles&Go": ["TP"],
+  "Thai Royal Orchid Plus": ["TG"],
+  "Turkish Airlines Miles&Smiles": ["TK"],
+  "United MileagePlus": ["UA"],
+  "Vietnam Airlines Lotusmiles": ["VN"],
+  "Virgin Atlantic Flying Club": ["VS"],
+  "Xiamen Airlines Egret Club": ["MF"],
+};
 
 export function buildValidatedWhereToCreditUrl(itinerary: NormalizedItinerary): string {
   const insights = inspectWhereToCreditSegments(itinerary);
@@ -84,6 +142,17 @@ export function uniqueMileagePrograms(): string[] {
     }
   }
   return Array.from(programs).sort((left, right) => left.localeCompare(right));
+}
+
+export function uniqueMileageProgramOptions(): MileageProgramOption[] {
+  return uniqueMileagePrograms().map((program) => {
+    const carrierCodes = PROGRAM_OWNER_CARRIER_CODES[program] || [];
+    return {
+      program,
+      carrierCodes,
+      label: carrierCodes.length > 0 ? `${program} (${carrierCodes.join("/")})` : program,
+    };
+  });
 }
 
 function inspectWhereToCreditSegment(segment: ItinerarySegment): WhereToCreditSegmentInsight | null {

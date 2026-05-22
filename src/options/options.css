@@ -161,8 +161,6 @@ button.secondary {
 
 .program-list {
   display: grid;
-  max-height: 360px;
-  overflow: auto;
   gap: 0;
   margin-top: 12px;
   border: 1px solid #cbd5e1;
@@ -181,7 +179,7 @@ button.secondary {
 
 .program-row {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto 28px 1fr;
   align-items: center;
   gap: 10px;
   min-height: 42px;
@@ -202,6 +200,12 @@ button.secondary {
   min-height: 18px;
   width: 18px;
   padding: 0;
+}
+
+.program-row img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
 }
 
 .selected-summary {
