@@ -443,7 +443,7 @@ function installResultTableColumns(): void {
       const header = document.createElement("th");
       header.className = "mat-mdc-header-cell mdc-data-table__header-cell mu-mileage-column";
       header.setAttribute("role", "columnheader");
-      header.textContent = "Miles";
+      header.textContent = "Miles Earning";
       row.appendChild(header);
     }
 
