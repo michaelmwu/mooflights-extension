@@ -19,6 +19,26 @@ export type GoogleFlightsCountryResult = {
   error?: string;
 };
 
+export type GoogleFlightsFlightSegment = {
+  origin: string;
+  destination: string;
+  departureDate: string;
+  carrier?: string;
+  flightNumber?: string;
+};
+
+export type GoogleFlightsMatrixSearch = {
+  tripType: "one-way" | "round-trip" | "multi-city";
+  slices: Array<{
+    origin: string;
+    destination: string;
+    departureDate: string;
+    segments: GoogleFlightsFlightSegment[];
+  }>;
+  carriers: string[];
+  matrixUrl: string;
+};
+
 export function googleFlightsCountryUrl(baseUrl: string, country: string): string {
   const url = new URL(baseUrl);
   url.searchParams.set("gl", country);
@@ -47,6 +67,22 @@ export function parseGoogleFlightsCountryInput(value: string): string[] {
   return normalizeGoogleFlightsCountryCodes(value.split(/[,\s]+/), []);
 }
 
+export function parseGoogleFlightsMatrixSearch(url: string): GoogleFlightsMatrixSearch | null {
+  const tfs = new URL(url).searchParams.get("tfs");
+  if (!tfs) return null;
+  const segments = parseGoogleFlightsTfsSegments(tfs);
+  if (segments.length === 0) return null;
+  const slices = groupGoogleFlightsSegments(segments);
+  if (slices.length === 0) return null;
+  const tripType = googleFlightsTripType(slices);
+  return {
+    tripType,
+    slices,
+    carriers: Array.from(new Set(segments.map((segment) => segment.carrier).filter(isString))).sort(),
+    matrixUrl: buildItaMatrixSearchUrl(tripType, slices),
+  };
+}
+
 export function parseGoogleFlightsBookingOptions(
   root: ParentNode,
   country: string,
@@ -65,6 +101,162 @@ export function parseGoogleFlightsBookingOptions(
     direct: options.find((option) => option.isDirect),
     status: options.length > 0 ? "ready" : "empty",
   };
+}
+
+function parseGoogleFlightsTfsSegments(tfs: string): GoogleFlightsFlightSegment[] {
+  const decoded = decodeBase64UrlText(tfs);
+  if (!decoded) return [];
+  const segments: GoogleFlightsFlightSegment[] = [];
+  const pattern =
+    /(\d{4}-\d{2}-\d{2})[\s\S]{0,24}?([A-Z]{3})[\s\S]{0,24}?(\d{4}-\d{2}-\d{2})[\s\S]{0,24}?([A-Z]{3})[\s\S]{0,12}?([A-Z0-9]{2})([\s\S]{0,8})/g;
+  let match = pattern.exec(decoded);
+  while (match) {
+    const [, sliceDate, origin, segmentDate, destination, carrier, flightTail] = match;
+    const flightNumber = parseTfsFlightNumber(flightTail);
+    segments.push({
+      origin,
+      destination,
+      departureDate: segmentDate || sliceDate,
+      carrier,
+      flightNumber,
+    });
+    match = pattern.exec(decoded);
+  }
+  return dedupeGoogleFlightsSegments(segments);
+}
+
+function parseTfsFlightNumber(value: string): string | undefined {
+  for (let index = 0; index < value.length; index += 1) {
+    const length = value.charCodeAt(index);
+    if (length < 1 || length > 4) continue;
+    const candidate = value.slice(index + 1, index + 1 + length);
+    if (/^\d{1,4}$/.test(candidate)) return candidate;
+  }
+  return value.match(/\d{2,4}/)?.[0];
+}
+
+function dedupeGoogleFlightsSegments(segments: GoogleFlightsFlightSegment[]): GoogleFlightsFlightSegment[] {
+  const seen = new Set<string>();
+  return segments.filter((segment) => {
+    const key = [
+      segment.origin,
+      segment.destination,
+      segment.departureDate,
+      segment.carrier || "",
+      segment.flightNumber || "",
+    ].join(":");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function groupGoogleFlightsSegments(segments: GoogleFlightsFlightSegment[]): GoogleFlightsMatrixSearch["slices"] {
+  const slices: GoogleFlightsMatrixSearch["slices"] = [];
+  for (const segment of segments) {
+    const current = slices.at(-1);
+    const currentOrigin = current?.segments[0]?.origin;
+    const currentDestination = current?.segments.at(-1)?.destination;
+    const isConnection = current && currentDestination === segment.origin && segment.destination !== currentOrigin;
+    if (current && isConnection) {
+      current.destination = segment.destination;
+      current.segments.push(segment);
+      continue;
+    }
+    slices.push({
+      origin: segment.origin,
+      destination: segment.destination,
+      departureDate: segment.departureDate,
+      segments: [segment],
+    });
+  }
+  return slices;
+}
+
+function googleFlightsTripType(slices: GoogleFlightsMatrixSearch["slices"]): GoogleFlightsMatrixSearch["tripType"] {
+  if (slices.length === 1) return "one-way";
+  const [first, second] = slices;
+  if (
+    slices.length === 2 &&
+    first?.origin === second?.destination &&
+    first?.destination === second?.origin &&
+    first.departureDate !== second.departureDate
+  ) {
+    return "round-trip";
+  }
+  return "multi-city";
+}
+
+function buildItaMatrixSearchUrl(
+  tripType: GoogleFlightsMatrixSearch["tripType"],
+  slices: GoogleFlightsMatrixSearch["slices"],
+): string {
+  const matrixSlices =
+    tripType === "round-trip" && slices[0] && slices[1]
+      ? [matrixSearchSlice(slices[0], slices[1].departureDate)]
+      : slices.map((slice) => matrixSearchSlice(slice));
+  const payload = {
+    type: tripType,
+    slices: matrixSlices,
+    options: {
+      cabin: "COACH",
+      stops: "-1",
+      extraStops: "1",
+      allowAirportChanges: "true",
+      showOnlyAvailable: "true",
+    },
+    pax: {
+      adults: "1",
+    },
+  };
+  return `https://matrix.itasoftware.com/search?search=${encodeURIComponent(encodeBase64(JSON.stringify(payload)))}`;
+}
+
+function matrixSearchSlice(
+  slice: GoogleFlightsMatrixSearch["slices"][number],
+  returnDate = "",
+): Record<string, unknown> {
+  const dates: Record<string, unknown> = {
+    searchDateType: "specific",
+    departureDate: slice.departureDate,
+    departureDateType: "depart",
+    departureDateModifier: "0",
+    departureDatePreferredTimes: [],
+    returnDateType: "depart",
+    returnDateModifier: "0",
+    returnDatePreferredTimes: [],
+  };
+  if (returnDate) dates.returnDate = returnDate;
+  return {
+    origin: [slice.origin],
+    dest: [slice.destination],
+    routing: "",
+    ext: "",
+    routingRet: "",
+    extRet: "",
+    dates,
+  };
+}
+
+function decodeBase64UrlText(value: string): string {
+  try {
+    const base64 = value
+      .replace(/-/g, "+")
+      .replace(/_/g, "/")
+      .padEnd(Math.ceil(value.length / 4) * 4, "=");
+    const binary = globalThis.atob(base64);
+    return Array.from(binary, (character) => character).join("");
+  } catch {
+    return "";
+  }
+}
+
+function encodeBase64(value: string): string {
+  return globalThis.btoa(value);
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
 }
 
 function parseBookingOption(row: Element): GoogleFlightsBookingOption | null {

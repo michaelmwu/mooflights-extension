@@ -3,6 +3,7 @@ import {
   normalizeGoogleFlightsCountryCodes,
   parseGoogleFlightsBookingOptions,
   parseGoogleFlightsCountryInput,
+  parseGoogleFlightsMatrixSearch,
 } from "./googleFlightsBooking";
 
 describe("Google Flights booking option parser", () => {
@@ -79,5 +80,49 @@ describe("Google Flights booking option parser", () => {
   it("normalizes country code defaults for Google Flights comparisons", () => {
     expect(normalizeGoogleFlightsCountryCodes(["us", "JP", "jp", "bad", 123])).toEqual(["US", "JP"]);
     expect(parseGoogleFlightsCountryInput("us, jp MY")).toEqual(["US", "JP", "MY"]);
+  });
+
+  it("builds an ITA Matrix search from Google Flights tfs data", () => {
+    const result = parseGoogleFlightsMatrixSearch(
+      "https://www.google.com/travel/flights/booking?tfs=CBwQAhpOEgoyMDI2LTA2LTAyIh8KA0hLRxIKMjAyNi0wNi0wMhoDVFBFKgJKWDIDMjM0KABACkgTUABYF2oHCAESA0hLR3IMCAMSCC9tLzBmdGt4QAFIAXABggELCP___________wGYAQI&curr=USD&gl=JP",
+    );
+
+    expect(result).toMatchObject({
+      tripType: "one-way",
+      carriers: ["JX"],
+      slices: [
+        {
+          origin: "HKG",
+          destination: "TPE",
+          departureDate: "2026-06-02",
+          segments: [
+            {
+              origin: "HKG",
+              destination: "TPE",
+              carrier: "JX",
+              flightNumber: "234",
+            },
+          ],
+        },
+      ],
+    });
+
+    const search = new URL(result?.matrixUrl || "").searchParams.get("search") || "";
+    const decoded = JSON.parse(atob(search));
+    expect(decoded).toMatchObject({
+      type: "one-way",
+      slices: [
+        {
+          origin: ["HKG"],
+          dest: ["TPE"],
+          dates: {
+            departureDate: "2026-06-02",
+          },
+        },
+      ],
+      options: {
+        cabin: "COACH",
+      },
+    });
   });
 });

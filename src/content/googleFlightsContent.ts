@@ -1,9 +1,12 @@
 import {
   DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES,
   type GoogleFlightsCountryResult,
+  type GoogleFlightsMatrixSearch,
   parseGoogleFlightsBookingOptions,
   parseGoogleFlightsCountryInput,
+  parseGoogleFlightsMatrixSearch,
 } from "../shared/googleFlightsBooking";
+import { mileageCarrierName } from "../shared/mileageCarriers";
 import { loadSettings } from "../shared/storage";
 
 type CompareState = {
@@ -89,6 +92,7 @@ function render(): void {
   const shadow = getShadowRoot();
   if (!shadow) return;
   const baseline = state.baseline || parseCurrentBookingPage();
+  const matrixSearch = parseGoogleFlightsMatrixSearch(window.location.href);
 
   shadow.innerHTML = `
     <style>${styles()}</style>
@@ -98,6 +102,7 @@ function render(): void {
         <span>Country price check</span>
       </header>
       ${renderBaseline(baseline)}
+      ${renderMilesEstimatePrompt(matrixSearch)}
       <label class="country-input">
         Countries
         <input type="text" value="${escapeHtml(state.countryInput)}" data-role="country-input" spellcheck="false" />
@@ -106,6 +111,7 @@ function render(): void {
         <button type="button" ${state.comparing ? "disabled" : ""} data-action="compare-countries">
           ${state.comparing ? "Checking..." : "Compare countries"}
         </button>
+        ${matrixSearch ? '<button type="button" class="secondary" data-action="open-matrix">Search Matrix</button>' : ""}
         <button type="button" class="secondary" data-action="open-options">Options</button>
       </div>
       ${state.error ? `<p class="error">${escapeHtml(state.error)}</p>` : ""}
@@ -120,6 +126,10 @@ function render(): void {
   shadow.querySelector('[data-action="compare-countries"]')?.addEventListener("click", () => {
     void compareCountries();
   });
+  shadow.querySelector('[data-action="open-matrix"]')?.addEventListener("click", () => {
+    if (!matrixSearch) return;
+    window.open(matrixSearch.matrixUrl, "_blank", "noopener,noreferrer");
+  });
   shadow.querySelector('[data-action="open-options"]')?.addEventListener("click", () => {
     void chrome.runtime.openOptionsPage();
   });
@@ -130,6 +140,21 @@ function renderBaseline(result: GoogleFlightsCountryResult): string {
     <dl>
       <div><dt>This page</dt><dd>${escapeHtml(countryDisplayName(result.country))}</dd></div>
     </dl>
+  `;
+}
+
+function renderMilesEstimatePrompt(matrixSearch: GoogleFlightsMatrixSearch | null): string {
+  if (!matrixSearch) return "";
+  const earningCarriers = matrixSearch.carriers
+    .map((carrier) => ({ carrier, name: mileageCarrierName(carrier) }))
+    .filter((carrier): carrier is { carrier: string; name: string } => Boolean(carrier.name));
+  if (earningCarriers.length === 0) return "";
+  const carrierLabels = earningCarriers.map((carrier) => `${carrier.name} (${carrier.carrier})`).join(", ");
+  return `
+    <div class="mileage-prompt">
+      <strong>Miles earning</strong>
+      <span>Booking class is unknown on Google Flights. Search ITA Matrix to improve estimates for ${escapeHtml(carrierLabels)}.</span>
+    </div>
   `;
 }
 
@@ -263,6 +288,17 @@ function styles(): string {
     }
     dt { color: #64748b; font-weight: 650; }
     dd { margin: 0; text-align: right; }
+    .mileage-prompt {
+      display: grid;
+      gap: 3px;
+      margin: 10px 12px 0;
+      border: 1px solid #d7dde8;
+      border-left: 4px solid #0f766e;
+      border-radius: 6px;
+      padding: 8px;
+    }
+    .mileage-prompt strong { color: #172033; }
+    .mileage-prompt span { color: #64748b; }
     .country-input {
       display: grid;
       gap: 6px;
