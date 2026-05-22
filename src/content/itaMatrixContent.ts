@@ -9,7 +9,7 @@ import {
   uniqueAirportValues,
 } from "../shared/airports";
 import { fetchRemoteProviderMetadata } from "../shared/backendClient";
-import { parseItineraryJson } from "../shared/itinerary";
+import { flattenSegments, parseItaBookingDetails, parseItineraryJson } from "../shared/itinerary";
 import { rankProviderLinks, summarizeItinerary } from "../shared/providers";
 import { loadSettings, saveSettings } from "../shared/storage";
 import type { ExtensionSettings, ItinerarySegment, NormalizedItinerary, RankedProviderLink } from "../shared/types";
@@ -86,8 +86,6 @@ function render(): void {
 
       ${isItineraryPage() ? renderItineraryPanel() : ""}
       ${isItineraryPage() ? renderLinksPanel() : ""}
-      ${isFlightsPage() ? renderFlightResultsHelper() : ""}
-
       ${isSearchPage() ? renderAirportHelper(settings) : ""}
 
       <footer>
@@ -128,15 +126,6 @@ function renderLinksPanel(): string {
       <summary>Links</summary>
       ${state.itinerary ? renderWhereToCreditLinks(state.itinerary) : ""}
       <div class="links">${renderLinks(state.links)}</div>
-    </details>
-  `;
-}
-
-function renderFlightResultsHelper(): string {
-  return `
-    <details open>
-      <summary>Search results</summary>
-      <p class="muted">Expand a fare result to show estimated mileage earning by segment.</p>
     </details>
   `;
 }
@@ -363,6 +352,9 @@ function onBridgeMessage(event: MessageEvent): void {
   if (event.data.type === "capture-ita-json-result" && !event.data.ok && state.captureInFlight) {
     state.status = event.data.error || state.status;
   }
+  if (event.data.type === "alkali-booking-details") {
+    annotateBookingDetailsResult(event.data.data);
+  }
 }
 
 function installAutoCaptureObserver(): void {
@@ -399,6 +391,7 @@ function annotateFlightResultsSoon(): void {
 function annotateFlightResults(): void {
   if (!isFlightsPage()) return;
   installFlightResultStyles();
+  installResultTableColumns();
 
   for (const grid of document.querySelectorAll<HTMLElement>("matrix-itinerary-grid")) {
     const items = Array.from(grid.querySelectorAll<HTMLElement>("mat-list-item"));
@@ -415,6 +408,46 @@ function annotateFlightResults(): void {
       if (!target) return;
       target.appendChild(renderResultMileageLine(segment, estimate));
     });
+
+    const resultRow = resultRowForGrid(grid);
+    if (resultRow) updateResultRowMileage(resultRow, resultMileageSummary(itinerary));
+  }
+}
+
+function installResultTableColumns(): void {
+  for (const table of document.querySelectorAll<HTMLElement>("table")) {
+    const headerRows = Array.from(
+      table.querySelectorAll<HTMLTableRowElement>("tr[mat-header-row], tr.mat-mdc-header-row"),
+    );
+    for (const row of headerRows) {
+      if (row.querySelector(".mu-mileage-column")) continue;
+      const header = document.createElement("th");
+      header.className = "mat-mdc-header-cell mdc-data-table__header-cell mu-mileage-column";
+      header.setAttribute("role", "columnheader");
+      header.textContent = "Miles";
+      row.appendChild(header);
+    }
+
+    const resultRows = Array.from(
+      table.querySelectorAll<HTMLTableRowElement>("tr[mat-row].mat-mdc-row:not(.detail-row)"),
+    );
+    for (const row of resultRows) {
+      if (!row.querySelector(".mu-mileage-column")) {
+        const cell = document.createElement("td");
+        cell.className = "mat-mdc-cell mdc-data-table__cell mu-mileage-column";
+        cell.setAttribute("role", "cell");
+        cell.innerHTML = `<span class="mu-mileage-placeholder">Expand fare</span>`;
+        row.appendChild(cell);
+      }
+    }
+
+    const detailCells = Array.from(table.querySelectorAll<HTMLTableCellElement>("tr.detail-row > td[colspan]"));
+    for (const cell of detailCells) {
+      if (cell.dataset.muTravelColspanAdjusted === "true") continue;
+      const colspan = Number(cell.getAttribute("colspan") || 0);
+      if (Number.isFinite(colspan) && colspan > 0) cell.setAttribute("colspan", String(colspan + 1));
+      cell.dataset.muTravelColspanAdjusted = "true";
+    }
   }
 }
 
@@ -478,6 +511,79 @@ function resultSegmentsToItinerary(segments: ItinerarySegment[]): NormalizedItin
   };
 }
 
+function annotateBookingDetailsResult(value: unknown): void {
+  if (!isFlightsPage()) return;
+  try {
+    const itinerary = parseItaBookingDetails(value);
+    const row = findResultRowForItinerary(itinerary);
+    if (row) updateResultRowMileage(row, resultMileageSummary(itinerary));
+  } catch {
+    // Ignore non-bookingDetails responses; the visible DOM annotator remains the fallback.
+  }
+}
+
+function findResultRowForItinerary(itinerary: NormalizedItinerary): HTMLTableRowElement | null {
+  const flightNumbers = flattenSegments(itinerary)
+    .map((segment) => segment.flightNumber)
+    .filter((flightNumber): flightNumber is string => Boolean(flightNumber));
+  if (flightNumbers.length === 0) return null;
+
+  for (const grid of document.querySelectorAll<HTMLElement>("matrix-itinerary-grid")) {
+    const text = grid.textContent || "";
+    if (!flightNumbers.every((flightNumber) => text.includes(flightNumber))) continue;
+    return resultRowForGrid(grid);
+  }
+  return null;
+}
+
+function resultRowForGrid(grid: HTMLElement): HTMLTableRowElement | null {
+  const detailRow = grid.closest<HTMLTableRowElement>("tr.detail-row");
+  const previousRow = detailRow?.previousElementSibling;
+  return previousRow instanceof HTMLTableRowElement ? previousRow : null;
+}
+
+function resultMileageSummary(itinerary: NormalizedItinerary): { label: string; title: string; status: string } {
+  const estimates = estimateEarnings(itinerary);
+  const total = estimates.reduce((sum, estimate) => sum + (estimate.estimatedMiles || 0), 0);
+  if (total > 0) {
+    const programs = Array.from(new Set(estimates.map((estimate) => estimate.program).filter(Boolean)));
+    return {
+      label: `~${total.toLocaleString()}`,
+      title: programs.length === 1 ? `${programs[0]} estimated redeemable miles` : "Estimated redeemable miles",
+      status: "ready",
+    };
+  }
+
+  const flownMiles = flattenSegments(itinerary).reduce(
+    (sum, segment) => sum + (airportDistanceMiles(segment.origin, segment.destination) || 0),
+    0,
+  );
+  if (flownMiles > 0) {
+    return {
+      label: `${Math.round(flownMiles).toLocaleString()} flown`,
+      title: "No earning data matched; showing approximate flown miles.",
+      status: "fallback",
+    };
+  }
+
+  return {
+    label: "No data",
+    title: "No mileage estimate available for this result.",
+    status: "missing",
+  };
+}
+
+function updateResultRowMileage(
+  row: HTMLTableRowElement,
+  summary: { label: string; title: string; status: string },
+): void {
+  const cell = row.querySelector<HTMLElement>(".mu-mileage-column");
+  if (!cell) return;
+  cell.textContent = summary.label;
+  cell.title = summary.title;
+  cell.dataset.status = summary.status;
+}
+
 function renderResultMileageLine(segment: ItinerarySegment, estimate: EarningsEstimate | null): HTMLElement {
   const line = document.createElement("div");
   line.className = "info-line mu-mileage-earnings";
@@ -499,6 +605,24 @@ function installFlightResultStyles(): void {
   const style = document.createElement("style");
   style.id = "mu-travel-flight-result-styles";
   style.textContent = `
+    .mu-mileage-column {
+      min-width: 92px;
+      max-width: 120px;
+      white-space: nowrap;
+      color: #0f766e;
+      font-weight: 650;
+      text-align: right;
+    }
+    .mu-mileage-column[data-status="fallback"] {
+      color: #92400e;
+    }
+    .mu-mileage-column[data-status="missing"] {
+      color: #64748b;
+    }
+    .mu-mileage-placeholder {
+      color: #64748b;
+      font-weight: 500;
+    }
     .mu-mileage-earnings {
       color: #0f766e;
       font-weight: 600;
