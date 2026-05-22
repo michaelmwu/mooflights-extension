@@ -62,9 +62,19 @@ describe("provider ranking", () => {
     expect(urls.get("travellink")).toContain("https://www.travellink.com/travel/?");
     expect(urls.get("expedia")).toContain("trip=roundtrip");
     expect(urls.get("expedia")).toContain("leg1=from%3AJFK%2Cto%3ALHR%2Cdeparture%3A8%2F10%2F2026TANYT");
+    const trip = new URL(urls.get("trip-com") || "");
+    expect(trip.searchParams.get("flighttype")).toBe("D");
+    expect(trip.searchParams.get("dcity")).toBe("JFK");
+    expect(trip.searchParams.get("acity")).toBe("LHR");
+    expect(trip.searchParams.get("ddate")).toBe("2026-08-10");
+    expect(trip.searchParams.get("rdate")).toBe("2026-08-20");
+    expect(trip.searchParams.get("class")).toBe("C");
+    expect(trip.searchParams.get("criteriatoken")).toContain("tripType:RT|cabinClass:Business");
     expect(urls.get("priceline")).toBe(
       "https://www.priceline.com/m/fly/search/JFK-LHR-20260810/LHR-JFK-20260820?adults=1&cabin-class=BUS",
     );
+    const travelGo = new URL(urls.get("travelgo") || "");
+    expect(travelGo.searchParams.get("para")).toBe("1*JFK*LHR*2026-08-10*2026-08-20*C*1*0*0");
     expect(urls.get("cheapoair")).toContain("https://www.cheapoair.com/default.aspx?");
     expect(urls.get("cheapoair")).toContain("tt=RoundTrip");
     expect(urls.get("cheapoair")).toContain("carr1=AA");
@@ -110,6 +120,29 @@ describe("provider ranking", () => {
     expect(cheapOair.searchParams.get("Slice2")).toBe("3,4");
     expect(cheapOair.searchParams.get("carr1")).toBe("NX");
     expect(cheapOair.searchParams.get("dd4")).toBe("20260625");
+  });
+
+  it("builds Trip.com and TravelGo one-way search fallbacks", () => {
+    const itinerary = parseItaBookingDetails(oneWayFixture());
+    const links = rankProviderLinks(itinerary, DEFAULT_SETTINGS);
+    const urls = new Map(links.map((link) => [link.provider.id, link.url]));
+
+    expect(itinerary.tripType).toBe("one-way");
+
+    const trip = new URL(urls.get("trip-com") || "");
+    expect(trip.origin + trip.pathname).toBe("https://www.trip.com/flights/showfarefirst/");
+    expect(trip.searchParams.get("flighttype")).toBe("S");
+    expect(trip.searchParams.get("dcity")).toBe("HKG");
+    expect(trip.searchParams.get("acity")).toBe("TPE");
+    expect(trip.searchParams.get("ddate")).toBe("2026-06-02");
+    expect(trip.searchParams.get("quantity")).toBe("1");
+    expect(trip.searchParams.get("class")).toBe("Y");
+    expect(trip.searchParams.get("flightclass")).toBe("I");
+    expect(trip.searchParams.get("criteriatoken")).toContain("tripType:OW|cabinClass:Economy");
+
+    const travelGo = new URL(urls.get("travelgo") || "");
+    expect(travelGo.origin + travelGo.pathname).toBe("https://www.travelgo.com/en-us/iflight/book1.html");
+    expect(travelGo.searchParams.get("para")).toBe("0*HKG*TPE*2026-06-02**Y*1*0*0");
   });
 });
 
@@ -191,6 +224,42 @@ function multiCityFixture(): unknown {
                   departure: "2026-06-25T12:30+08:00",
                   arrival: "2026-06-25T18:00+09:00",
                   duration: 270,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  };
+}
+
+function oneWayFixture(): unknown {
+  return {
+    displayTotal: "TWD4443.00",
+    passengerCount: 1,
+    itinerary: {
+      distance: { value: 501 },
+      slices: [
+        {
+          origin: { code: "HKG" },
+          destination: { code: "TPE" },
+          departure: "2026-06-02T12:00+08:00",
+          arrival: "2026-06-02T13:50+08:00",
+          segments: [
+            {
+              origin: { code: "HKG" },
+              destination: { code: "TPE" },
+              carrier: { code: "CX" },
+              flight: { number: 402 },
+              bookingInfos: [{ bookingCode: "I", cabin: "COACH" }],
+              legs: [
+                {
+                  origin: { code: "HKG" },
+                  destination: { code: "TPE" },
+                  departure: "2026-06-02T12:00+08:00",
+                  arrival: "2026-06-02T13:50+08:00",
+                  duration: 110,
                 },
               ],
             },

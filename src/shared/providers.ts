@@ -137,6 +137,24 @@ export const LOCAL_PROVIDERS: LinkProvider[] = [
     supportedTripTypes: ["one-way", "round-trip", "multi-city"],
     buildUrl: cheapOairUrl,
   },
+  {
+    id: "trip-com",
+    label: "Trip.com",
+    category: "ota",
+    reliabilityScore: 57,
+    knownIssues: "Search fallback; omits Trip.com session and shopping tokens.",
+    supportedTripTypes: ["one-way", "round-trip"],
+    buildUrl: tripComUrl,
+  },
+  {
+    id: "travelgo",
+    label: "LY.com / TravelGo",
+    category: "ota",
+    reliabilityScore: 54,
+    knownIssues: "TravelGo search fallback; verify date, cabin, and fare after opening.",
+    supportedTripTypes: ["one-way", "round-trip"],
+    buildUrl: travelGoUrl,
+  },
 ];
 
 export function rankProviderLinks(
@@ -321,6 +339,78 @@ function cheapOairUrl(itinerary: NormalizedItinerary): string {
   }
 
   return segmentNumber > 0 ? `https://www.cheapoair.com/default.aspx?${params.toString()}` : "";
+}
+
+function tripComUrl(itinerary: NormalizedItinerary): string {
+  const slices = routeSlices(itinerary);
+  const slice = slices[0];
+  if (!slice) return "";
+
+  const passengerCount = itinerary.passengerCount || 1;
+  const cabinClass = tripComCabinClass(itinerary);
+  const firstSegment = itinerary.slices[0]?.segments[0];
+  const isRoundTrip = itinerary.tripType === "round-trip";
+  const params = new URLSearchParams({
+    flighttype: isRoundTrip ? "D" : "S",
+    dcity: slice.origin,
+    acity: slice.destination,
+    ddate: slice.date,
+    quantity: String(passengerCount),
+    childqty: "0",
+    babyqty: "0",
+    curr: itinerary.currency || "USD",
+    class: cabinClass.code,
+    channel: "EnglishSite",
+    country: "US",
+    locale: "en-US",
+  });
+  if (isRoundTrip && slices[1]?.date) params.set("rdate", slices[1].date);
+  if (firstSegment?.bookingClass) params.set("flightclass", firstSegment.bookingClass);
+  params.set(
+    "criteriatoken",
+    [
+      `tripType:${isRoundTrip ? "RT" : "OW"}`,
+      `cabinClass:${cabinClass.token}`,
+      `adult:${passengerCount}`,
+      "child:0",
+      "infant:0",
+      "channel:EnglishSite",
+      `currency:${itinerary.currency || "USD"}`,
+      `date_1:${slice.date}`,
+      `aCity_1:${slice.destination}`,
+      `dCity_1:${slice.origin}`,
+      ...(isRoundTrip && slices[1]?.date
+        ? [`date_2:${slices[1].date}`, `aCity_2:${slice.origin}`, `dCity_2:${slice.destination}`]
+        : []),
+      "issuer:TRIP",
+      "list:true",
+    ].join("|"),
+  );
+
+  return `https://www.trip.com/flights/showfarefirst/?${params.toString()}`;
+}
+
+function travelGoUrl(itinerary: NormalizedItinerary): string {
+  const slices = routeSlices(itinerary);
+  const slice = slices[0];
+  if (!slice) return "";
+  const returnDate = itinerary.tripType === "round-trip" ? slices[1]?.date || "" : "";
+  const params = new URLSearchParams({
+    para: [
+      itinerary.tripType === "round-trip" ? "1" : "0",
+      slice.origin,
+      slice.destination,
+      slice.date,
+      returnDate,
+      travelGoCabin(itinerary),
+      String(itinerary.passengerCount || 1),
+      "0",
+      "0",
+    ].join("*"),
+    orgAirCode: "",
+    DesAirCode: "",
+  });
+  return `https://www.travelgo.com/en-us/iflight/book1.html?${params.toString()}`;
 }
 
 function odigeoUrl(itinerary: NormalizedItinerary, host: string): string {
@@ -532,6 +622,20 @@ function cheapOairTripType(tripType: NormalizedItinerary["tripType"]): string {
   if (tripType === "round-trip") return "RoundTrip";
   if (tripType === "multi-city") return "MultiCity";
   return "OneWay";
+}
+
+function tripComCabinClass(itinerary: NormalizedItinerary): { code: string; token: string } {
+  const cabin = lowestCabin(itinerary);
+  if (cabin === "business") return { code: "C", token: "Business" };
+  if (cabin === "first") return { code: "F", token: "First" };
+  if (cabin === "premium-economy") return { code: "S", token: "PremiumEconomy" };
+  return { code: "Y", token: "Economy" };
+}
+
+function travelGoCabin(itinerary: NormalizedItinerary): string {
+  const cabin = lowestCabin(itinerary);
+  if (cabin === "business" || cabin === "first") return "C";
+  return "Y";
 }
 
 function odigeoCabin(itinerary: NormalizedItinerary): string {

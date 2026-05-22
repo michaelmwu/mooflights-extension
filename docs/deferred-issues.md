@@ -48,8 +48,9 @@ When a user opens a provider page and grants host permission, inspect the page f
 
 The extension includes local fallback links for high-confidence providers plus lower-confidence Powertools-style
 search links for Momondo, Skyscanner, Expedia Group sites, eDreams/Opodo/Travellink, Priceline, and CheapOair.
-Follow-up work: live-verify current URL formats, demote or hide providers with poor match rates through backend
-metadata, and add provider fixtures for newly verified formats.
+Trip.com and LY.com/TravelGo one-way/round-trip search fallbacks are also included without private session or
+shopping tokens. Follow-up work: live-verify current URL formats, demote or hide providers with poor match rates
+through backend metadata, and add provider fixtures for newly verified formats.
 
 ## Affiliate Routing
 
