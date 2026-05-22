@@ -935,7 +935,7 @@ function renderLinks(links: RankedProviderLink[]): string {
       const confidence = providerConfidenceCopy(link);
       const issue = link.provider.knownIssues ? `<small>${escapeHtml(link.provider.knownIssues)}</small>` : "";
       return `
-        <a href="${escapeHtml(link.url)}" target="_blank" rel="noreferrer" class="provider ${link.confidence}">
+        <a href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer" class="provider ${link.confidence}">
           <span>${escapeHtml(link.provider.label)}</span>
           <em class="confidence"><i aria-hidden="true"></i>${escapeHtml(confidence.label)}</em>
           ${issue}
@@ -982,7 +982,7 @@ function renderWhereToCreditLinks(itinerary: NormalizedItinerary): string {
           ? visibleEstimates
               .map(
                 (estimate) => `
-                  <a href="${escapeHtml(estimate.url)}" target="_blank" rel="noreferrer" class="earning">
+                  <a href="${escapeHtml(estimate.url)}" target="_blank" rel="noopener noreferrer" class="earning">
                     <span>${escapeHtml(`${estimate.segment.origin}-${estimate.segment.destination} ${estimate.segment.fareCarrier || estimate.segment.carrier} ${estimate.bookingClass}`)}</span>
                     <em>${escapeHtml(estimate.program)}</em>
                     <small>${typeof estimate.estimatedMiles === "number" ? `${estimate.estimatedMiles.toLocaleString()} miles · ` : ""}${escapeHtml(estimate.formula)}</small>
@@ -1005,7 +1005,7 @@ function renderWhereToCreditLinks(itinerary: NormalizedItinerary): string {
           (insight) => `
             <div class="earning notice">
               <span>${escapeHtml(insight.label)}</span>
-              ${insight.url ? `<a href="${escapeHtml(insight.url)}" target="_blank" rel="noreferrer">Open airline page</a>` : ""}
+              ${insight.url ? `<a href="${escapeHtml(insight.url)}" target="_blank" rel="noopener noreferrer">Open airline page</a>` : ""}
               <small>${escapeHtml(insight.message)}</small>
             </div>
           `,
