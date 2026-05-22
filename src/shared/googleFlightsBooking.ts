@@ -279,17 +279,23 @@ function providerLabel(row: Element): { provider: string; isDirect: boolean } | 
     normalizedText(
       Array.from(labelElement?.childNodes || []).find((node) => node.nodeType === Node.TEXT_NODE)?.textContent || "",
     ) || normalizedText(labelElement?.textContent || "");
-  if (!rawLabel || !/^Book with\b/i.test(rawLabel)) return null;
+  if (!rawLabel) return null;
 
   const isDirect = Array.from(row.querySelectorAll(".EA71Tc")).some((element) =>
     /^Airline$/i.test(normalizedText(element.textContent || "")),
   );
-  const provider = rawLabel
-    .replace(/^Book with\s+/i, "")
-    .replace(/\s*Airline$/i, "")
-    .trim();
+  const provider = cleanProviderLabel(rawLabel);
 
   return provider ? { provider, isDirect } : null;
+}
+
+function cleanProviderLabel(value: string): string {
+  return value
+    .replace(/^(?:Book with|Reserve with|Reservar con|Réserver avec|Buchen bei|Prenota con|Reservar com)\s+/i, "")
+    .replace(/^(?:透過|通过)\s*/i, "")
+    .replace(/\s*(?:で予約|予約|預訂|预订)$/i, "")
+    .replace(/\s*Airline$/i, "")
+    .trim();
 }
 
 function providerPrice(row: Element): { price: number; currency: string; priceText: string } | null {
@@ -321,9 +327,9 @@ function parsePriceText(
 }
 
 function parsePriceAmount(value: string): { price: number; currency: string; priceText: string } | null {
-  const amount = value.match(/([0-9][0-9,.]*)/);
+  const amount = value.match(/([0-9][0-9.,\s'’]*[0-9]|[0-9])/);
   if (!amount) return null;
-  const price = Number(amount[1].replaceAll(",", ""));
+  const price = parseLocalizedNumber(amount[1]);
   if (!Number.isFinite(price)) return null;
 
   const currency = currencyFromText(value);
@@ -339,12 +345,45 @@ function parsePriceAmount(value: string): { price: number; currency: string; pri
 
 function priceTextFromValue(value: string): string {
   const trimmed = value.trim();
-  if (/^(?:[A-Z]{2,3}\$|[A-Z]{3}|[$€£¥￥₩₹฿₫₱₪₦₺])\s?[0-9][0-9,.]*(?:\s?[A-Z]{3})?$/i.test(trimmed)) {
+  if (currencyFromText(trimmed) && /[0-9]/.test(trimmed) && trimmed.length <= 40) {
     return trimmed;
   }
-  const usd = trimmed.match(/([0-9][0-9,.]*)\s+US dollars?\b/i);
-  if (usd) return `$${Number(usd[1].replaceAll(",", "")).toLocaleString()}`;
+  const usd = trimmed.match(/([0-9][0-9.,\s'’]*[0-9]|[0-9])\s+US dollars?\b/i);
+  const price = usd ? parseLocalizedNumber(usd[1]) : undefined;
+  if (typeof price === "number" && Number.isFinite(price)) return `$${price.toLocaleString()}`;
   return "";
+}
+
+function parseLocalizedNumber(value: string): number {
+  const compact = value.replace(/[\s'’]/g, "");
+  if (!compact) return Number.NaN;
+  const lastComma = compact.lastIndexOf(",");
+  const lastDot = compact.lastIndexOf(".");
+
+  if (lastComma !== -1 && lastDot !== -1) {
+    const decimalSeparator = lastComma > lastDot ? "," : ".";
+    const groupSeparator = decimalSeparator === "," ? "." : ",";
+    const normalized = compact.replaceAll(groupSeparator, "").replace(decimalSeparator, ".");
+    return Number(normalized);
+  }
+
+  if (lastComma !== -1) return parseSingleSeparatorNumber(compact, ",");
+  if (lastDot !== -1) return parseSingleSeparatorNumber(compact, ".");
+  return Number(compact);
+}
+
+function parseSingleSeparatorNumber(value: string, separator: "," | "."): number {
+  const parts = value.split(separator);
+  const last = parts.at(-1) || "";
+  if (parts.length > 2) {
+    if (last.length === 3) return Number(parts.join(""));
+    return Number(`${parts.slice(0, -1).join("")}.${last}`);
+  }
+
+  const [head, tail = ""] = parts;
+  if (tail.length === 3 && head.length <= 3) return Number(`${head}${tail}`);
+  if (!tail) return Number(head);
+  return Number(`${head}.${tail}`);
 }
 
 function currencyFromText(value: string): string {

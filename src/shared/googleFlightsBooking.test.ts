@@ -77,6 +77,38 @@ describe("Google Flights booking option parser", () => {
     ]);
   });
 
+  it("parses localized booking labels and locale-formatted prices", () => {
+    document.body.innerHTML = `
+      <div class="gN1nAc">
+        <div class="ogfYpf">Reservar con Mytrip</div>
+        <span aria-label="1.234 euros" role="text">1.234 €</span>
+      </div>
+      <div class="gN1nAc">
+        <div class="ogfYpf">Agoda で予約</div>
+        <span aria-label="1.234,56 euros" role="text">1.234,56 €</span>
+      </div>
+    `;
+
+    const result = parseGoogleFlightsBookingOptions(document, "DE", "https://www.google.com/travel/flights/booking");
+
+    expect(result.options).toEqual([
+      {
+        provider: "Mytrip",
+        price: 1234,
+        currency: "EUR",
+        priceText: "1.234 €",
+        isDirect: false,
+      },
+      {
+        provider: "Agoda",
+        price: 1234.56,
+        currency: "EUR",
+        priceText: "1.234,56 €",
+        isDirect: false,
+      },
+    ]);
+  });
+
   it("normalizes country code defaults for Google Flights comparisons", () => {
     expect(normalizeGoogleFlightsCountryCodes(["us", "JP", "jp", "bad", 123])).toEqual(["US", "JP"]);
     expect(parseGoogleFlightsCountryInput("us, jp MY")).toEqual(["US", "JP", "MY"]);

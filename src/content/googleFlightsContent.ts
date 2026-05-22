@@ -171,7 +171,7 @@ function render(): void {
     window.open(matrixSearch.matrixUrl, "_blank", "noopener,noreferrer");
   });
   shadow.querySelector('[data-action="open-options"]')?.addEventListener("click", () => {
-    void chrome.runtime.openOptionsPage();
+    void chrome.runtime.sendMessage({ command: "openOptionsPage" });
   });
 }
 

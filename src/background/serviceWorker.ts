@@ -86,7 +86,9 @@ function shouldRetrySparseResult(result: GoogleFlightsCountryResult, baselineOpt
 }
 
 function isSparseResult(result: GoogleFlightsCountryResult, baselineOptionCount: number): boolean {
-  return baselineOptionCount > 3 && result.status !== "error" && result.options.length <= 3;
+  return (
+    baselineOptionCount > 3 && result.status !== "error" && result.options.length > 0 && result.options.length <= 3
+  );
 }
 
 async function parseGoogleFlightsTab(tabId: number, country: string, url: string): Promise<GoogleFlightsCountryResult> {
