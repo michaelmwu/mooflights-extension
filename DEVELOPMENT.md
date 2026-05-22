@@ -61,10 +61,19 @@ bun run package
 
 This writes `artifacts/mu-travel-flights.zip`.
 
+Before cutting a release, keep `package.json` and `src/manifest.json` versions in sync:
+
+```sh
+bun run release:verify
+```
+
 ## GitHub Workflows
 
 - `CI`: runs on pull requests and pushes to `main`; installs with Bun, runs Biome, typecheck, tests, and production build.
-- `Package Extension`: runs manually or on `v*` tags; verifies the repo, builds `artifacts/mu-travel-flights.zip`, uploads the package artifact, and attaches it to the matching GitHub release for tag builds.
+- `Release Extension Package`: runs manually or on `v*` tags; verifies the repo, checks the release tag matches the extension version, builds `artifacts/mu-travel-flights.zip`, uploads the package artifact, and attaches it to a GitHub release. Manual runs can omit `release_tag` to build only, or provide an existing `vX.Y.Z` tag to create/update a draft release.
+
+The release workflow intentionally does not publish to the Chrome Web Store yet. Until Mu Travel has an approved
+developer account and store automation credentials, store submission remains manual and outside GitHub Actions.
 
 Neither workflow needs backend secrets. The extension build must not read `.env`.
 

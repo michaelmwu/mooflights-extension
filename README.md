@@ -4,11 +4,10 @@ Offline-first Chrome/Arc extension for ITA Matrix power users.
 
 The first MVP helps with:
 
-- Capturing ITA Matrix itinerary JSON.
-- Opening prefilled Where to Credit links.
-- Ranking curated booking links by local confidence.
-- Filtering and inserting airport codes.
-- Keeping settings local by default.
+- Show estimated mileage earning in the ITA companion panel and first-page search results.
+- Open prefilled Where to Credit links for fare-class lookup.
+- Rank curated booking links by local confidence.
+- Filter and insert airport codes on ITA search pages.
 
 The extension is AGPL-3.0-only open-source software owned by Mu Travel LLC. The optional hosted Mu Travel backend is separate closed-source infrastructure.
 

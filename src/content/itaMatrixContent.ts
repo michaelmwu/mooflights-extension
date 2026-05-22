@@ -129,7 +129,8 @@ function renderItineraryPanel(): string {
       ${
         state.itinerary
           ? `<p class="summary">${escapeHtml(summarizeItinerary(state.itinerary))}</p>
-             <p class="muted">${escapeHtml(state.itinerary.tripType)} · ${state.itinerary.passengerCount || 1} passenger(s) · ${escapeHtml(state.itinerary.currency || "")} ${state.itinerary.totalPrice ?? ""}</p>`
+             <p class="muted">${escapeHtml(state.itinerary.tripType)} · ${state.itinerary.passengerCount || 1} passenger(s) · ${escapeHtml(state.itinerary.currency || "")} ${state.itinerary.totalPrice ?? ""}</p>
+             ${renderMileageCredit(state.itinerary)}`
           : `<p class="muted">Open an ITA result. The extension will auto-load ITA JSON when Share & Export is visible.</p>`
       }
       <details class="advanced" ${state.error ? "open" : ""}>
@@ -148,7 +149,6 @@ function renderLinksPanel(): string {
   return `
     <details ${state.itinerary ? "open" : ""}>
       <summary>Links</summary>
-      ${state.itinerary ? renderWhereToCreditLinks(state.itinerary) : ""}
       <div class="links">${renderLinks(state.links)}</div>
     </details>
   `;
@@ -961,7 +961,7 @@ function providerConfidenceCopy(link: RankedProviderLink): { label: string } {
   };
 }
 
-function renderWhereToCreditLinks(itinerary: NormalizedItinerary): string {
+function renderMileageCredit(itinerary: NormalizedItinerary): string {
   const preferredProgramList = state.settings?.preferredFrequentFlyerPrograms || [];
   const estimates = estimateEarnings(itinerary, preferredProgramList);
   const preferredPrograms = new Set(preferredProgramList);

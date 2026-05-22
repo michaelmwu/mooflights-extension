@@ -1,7 +1,22 @@
-name: Package Extension
+name: Release Extension Package
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Optional existing vX.Y.Z tag to create/update a GitHub release. Leave blank to package only."
+        required: false
+        type: string
+      draft:
+        description: "Create a draft GitHub release when release_tag is set."
+        required: true
+        default: true
+        type: boolean
+      prerelease:
+        description: "Mark the GitHub release as a prerelease when release_tag is set."
+        required: true
+        default: false
+        type: boolean
   push:
     tags:
       - "v*"
@@ -9,15 +24,23 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-extension-package-${{ inputs.release_tag || github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   package:
-    name: Build package
+    name: Build release package
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.release_tag }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -33,6 +56,9 @@ jobs:
           bun run typecheck
           bun run test
 
+      - name: Verify release version
+        run: node scripts/verify-release-version.mjs "${RELEASE_TAG}"
+
       - name: Package extension
         run: bun run package
 
@@ -44,17 +70,47 @@ jobs:
           if-no-files-found: error
 
       - name: Attach package to GitHub release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: env.RELEASE_TAG != ''
         env:
           GH_TOKEN: ${{ github.token }}
+          DRAFT_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.draft || 'false' }}
+          PRERELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || 'false' }}
         run: |
-          if gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
-            gh release upload "${GITHUB_REF_NAME}" artifacts/mu-travel-flights.zip \
+          release_notes="Mu Travel Flights extension package for ${RELEASE_TAG}. Chrome Web Store publishing is intentionally manual for now."
+          if gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            edit_args=(
+              "${RELEASE_TAG}"
+              --repo "${GITHUB_REPOSITORY}"
+              --title "${RELEASE_TAG}"
+              --notes "${release_notes}"
+            )
+            if [ "${DRAFT_RELEASE}" = "true" ]; then
+              edit_args+=(--draft)
+            else
+              edit_args+=(--draft=false)
+            fi
+            if [ "${PRERELEASE}" = "true" ]; then
+              edit_args+=(--prerelease)
+            else
+              edit_args+=(--prerelease=false)
+            fi
+            gh release edit "${edit_args[@]}"
+            gh release upload "${RELEASE_TAG}" artifacts/mu-travel-flights.zip \
               --repo "${GITHUB_REPOSITORY}" \
               --clobber
           else
-            gh release create "${GITHUB_REF_NAME}" artifacts/mu-travel-flights.zip \
-              --repo "${GITHUB_REPOSITORY}" \
-              --title "${GITHUB_REF_NAME}" \
-              --notes "Mu Travel Flights extension package for ${GITHUB_REF_NAME}."
+            args=(
+              "${RELEASE_TAG}"
+              artifacts/mu-travel-flights.zip
+              --repo "${GITHUB_REPOSITORY}"
+              --title "${RELEASE_TAG}"
+              --notes "${release_notes}"
+            )
+            if [ "${DRAFT_RELEASE}" = "true" ]; then
+              args+=(--draft)
+            fi
+            if [ "${PRERELEASE}" = "true" ]; then
+              args+=(--prerelease)
+            fi
+            gh release create "${args[@]}"
           fi

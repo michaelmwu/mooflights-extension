@@ -17,6 +17,7 @@
     "import:airports": "node scripts/import-airports.mjs",
     "lint": "biome lint .",
     "package": "bun run build && node scripts/package-extension.mjs",
+    "release:verify": "node scripts/verify-release-version.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
