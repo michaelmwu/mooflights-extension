@@ -35,5 +35,8 @@ async function fetchProviderMetadata(baseUrl: string): Promise<RemoteProviderMet
 }
 
 function openOptionsPage(): void {
-  void chrome.runtime.openOptionsPage().catch(() => undefined);
+  chrome.runtime.openOptionsPage(() => {
+    if (!chrome.runtime.lastError) return;
+    void chrome.tabs.create({ url: chrome.runtime.getURL("options/index.html") });
+  });
 }
