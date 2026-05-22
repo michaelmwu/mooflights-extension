@@ -110,7 +110,6 @@ function render(): void {
       ${isSearchPage() ? renderAirportHelper(settings) : ""}
 
       <footer>
-        <label class="inline"><input type="checkbox" data-setting="affiliateOptOut" ${settings.affiliateOptOut ? "checked" : ""}> Affiliate opt-out</label>
         <button type="button" class="link-button" data-action="options">Options</button>
       </footer>
     </section>
@@ -190,10 +189,6 @@ function bind(root: ShadowRoot): void {
   root.querySelector<HTMLInputElement>('input[data-setting="exclusions"]')?.addEventListener("change", (event) => {
     const target = event.currentTarget as HTMLInputElement;
     void updateAirportSetting("exclusions", target.value);
-  });
-  root.querySelector<HTMLInputElement>('input[data-setting="affiliateOptOut"]')?.addEventListener("change", (event) => {
-    const target = event.currentTarget as HTMLInputElement;
-    void updateTopLevelSetting("affiliateOptOut", target.checked);
   });
 }
 
@@ -304,16 +299,6 @@ async function updateAirportSetting(key: string, value: string): Promise<void> {
   state.settings = next;
   state.airportPreview = airportCodes(next.airportHelper).slice(0, 120);
   await saveSettings(next);
-  render();
-}
-
-async function updateTopLevelSetting<K extends keyof ExtensionSettings>(
-  key: K,
-  value: ExtensionSettings[K],
-): Promise<void> {
-  if (!state.settings) return;
-  state.settings = { ...state.settings, [key]: value };
-  await saveSettings(state.settings);
   render();
 }
 

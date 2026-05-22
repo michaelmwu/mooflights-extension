@@ -29,10 +29,6 @@ function Popup(): React.ReactElement {
             <dd>{settings.backend.enabled ? "Enabled" : "Local only"}</dd>
           </div>
           <div>
-            <dt>Affiliate links</dt>
-            <dd>{settings.affiliateOptOut ? "Opted out" : "Allowed when configured"}</dd>
-          </div>
-          <div>
             <dt>Preferred links</dt>
             <dd>{preferredProviderSummary(settings.preferredProviderIds)}</dd>
           </div>
