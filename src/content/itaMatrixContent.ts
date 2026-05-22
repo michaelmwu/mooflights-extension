@@ -594,9 +594,28 @@ function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSumm
       return right.miles - left.miles || left.program.localeCompare(right.program);
     });
 
-  if (programs.length > 0) {
-    const visible = programs.slice(0, 2);
-    const remaining = programs.length - visible.length;
+  const hasPreferredPrograms = preferredProgramRanks.size > 0;
+  const visiblePrograms = hasPreferredPrograms ? programs.filter((program) => program.preferred) : programs;
+
+  if (programs.length > 0 && visiblePrograms.length === 0) {
+    const best = programs[0];
+    return {
+      entries: [
+        {
+          value: "No preferred",
+          program: "earning match",
+          calculation: best ? `best local row: ${best.program} ~${best.miles.toLocaleString()}` : undefined,
+        },
+      ],
+      title:
+        "No preferred program matched the local top earning rows. The extension is hiding non-preferred programs to avoid orphan-mile suggestions.",
+      status: "fallback",
+    };
+  }
+
+  if (visiblePrograms.length > 0) {
+    const visible = visiblePrograms.slice(0, 2);
+    const remaining = visiblePrograms.length - visible.length;
     const entries: ResultMileageEntry[] = visible.map((program) => ({
       value: `~${program.miles.toLocaleString()}`,
       program: program.program,
@@ -611,7 +630,7 @@ function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSumm
     }
     return {
       entries,
-      title: programs
+      title: visiblePrograms
         .map(
           (program) =>
             `${program.program}: ~${program.miles.toLocaleString()} miles (${program.formulas
@@ -921,6 +940,10 @@ function providerConfidenceCopy(link: RankedProviderLink): { label: string } {
 
 function renderWhereToCreditLinks(itinerary: NormalizedItinerary): string {
   const estimates = estimateEarnings(itinerary);
+  const preferredPrograms = new Set(state.settings?.preferredFrequentFlyerPrograms || []);
+  const visibleEstimates =
+    preferredPrograms.size > 0 ? estimates.filter((estimate) => preferredPrograms.has(estimate.program)) : estimates;
+  const hiddenEstimateCount = estimates.length - visibleEstimates.length;
   const insights = inspectWhereToCreditSegments(itinerary);
   const estimatedKeys = new Set(estimates.map((estimate) => creditSegmentKey(estimate.segment, estimate.bookingClass)));
   const notices = insights.filter(
@@ -931,8 +954,8 @@ function renderWhereToCreditLinks(itinerary: NormalizedItinerary): string {
     <div class="segment-links">
       <strong>Miles credit</strong>
       ${
-        estimates.length
-          ? estimates
+        visibleEstimates.length
+          ? visibleEstimates
               .map(
                 (estimate) => `
                   <a href="${escapeHtml(estimate.url)}" target="_blank" rel="noreferrer" class="earning">
@@ -943,6 +966,14 @@ function renderWhereToCreditLinks(itinerary: NormalizedItinerary): string {
                 `,
               )
               .join("")
+          : ""
+      }
+      ${
+        hiddenEstimateCount > 0 && visibleEstimates.length === 0
+          ? `<div class="earning notice">
+              <span>No preferred program match</span>
+              <small>Local top earning rows exist, but they are not in your preferred programs.</small>
+            </div>`
           : ""
       }
       ${notices
