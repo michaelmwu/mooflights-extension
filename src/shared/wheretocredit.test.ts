@@ -1,7 +1,16 @@
 import type { NormalizedItinerary } from "./types";
-import { buildValidatedWhereToCreditUrl, estimateEarnings, inspectWhereToCreditSegments } from "./wheretocredit";
+import {
+  buildValidatedWhereToCreditUrl,
+  estimateEarnings,
+  inspectWhereToCreditSegments,
+  uniqueMileagePrograms,
+} from "./wheretocredit";
 
 describe("Where to Credit earnings estimates", () => {
+  it("lists mileage programs available in the local snapshot", () => {
+    expect(uniqueMileagePrograms()).toEqual(expect.arrayContaining(["Air Canada Aeroplan", "British Airways Club"]));
+  });
+
   it("estimates distance-percent earnings", () => {
     const itinerary: NormalizedItinerary = {
       source: "ita-matrix",

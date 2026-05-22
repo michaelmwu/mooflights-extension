@@ -34,9 +34,9 @@ pipeline, but the extension repo still needs deterministic scripts to reproduce 
 
 ## Preferred Frequent-Flyer Programs
 
-Let users rank the frequent-flyer programs they actually use, then prefer those programs in miles-credit guidance instead
-of always showing the absolute highest earning option. This requires expanding the bundled/backend mileage earning snapshot
-beyond top-program fields.
+The local options page can store preferred frequent-flyer programs and use them to highlight/sort matching local mileage
+rows. Expand the bundled/backend mileage earning snapshot beyond top-program fields so the extension can calculate
+earnings for arbitrary user-selected programs, not only programs that are already present as local top earners.
 
 ## Opened OTA Page Checks
 

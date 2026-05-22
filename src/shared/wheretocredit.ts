@@ -75,6 +75,17 @@ export function estimateEarnings(itinerary: NormalizedItinerary): EarningsEstima
     .filter((estimate): estimate is EarningsEstimate => Boolean(estimate));
 }
 
+export function uniqueMileagePrograms(): string[] {
+  const programs = new Set<string>();
+  for (const airline of Object.values(DATA.airlines)) {
+    for (const bookingClass of Object.values(airline.booking_classes)) {
+      if (bookingClass.top_program) programs.add(bookingClass.top_program);
+      if (bookingClass.top_qualifying_program) programs.add(bookingClass.top_qualifying_program);
+    }
+  }
+  return Array.from(programs).sort((left, right) => left.localeCompare(right));
+}
+
 function inspectWhereToCreditSegment(segment: ItinerarySegment): WhereToCreditSegmentInsight | null {
   const carrier = normalizeCarrier(segment.fareCarrier || segment.carrier);
   const bookingClass = normalizeBookingClass(segment.bookingClass);

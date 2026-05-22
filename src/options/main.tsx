@@ -11,14 +11,17 @@ import {
 import { LOCAL_PROVIDERS, providerConfidence } from "../shared/providers";
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from "../shared/storage";
 import type { ExtensionSettings } from "../shared/types";
+import { uniqueMileagePrograms } from "../shared/wheretocredit";
 import "./options.css";
 
 function Options(): React.ReactElement {
   const [settings, setSettings] = useState<ExtensionSettings>(DEFAULT_SETTINGS);
+  const [programSearch, setProgramSearch] = useState("");
   const [saved, setSaved] = useState(false);
   const countries = useMemo(() => uniqueAirportCountries(), []);
   const continents = useMemo(() => uniqueAirportValues("continent"), []);
   const regions = useMemo(() => uniqueAirportRegions(), []);
+  const mileagePrograms = useMemo(() => uniqueMileagePrograms(), []);
 
   useEffect(() => {
     void loadSettings().then(setSettings);
@@ -35,6 +38,23 @@ function Options(): React.ReactElement {
     const values = new Set(settings[key]);
     values.has(providerId) ? values.delete(providerId) : values.add(providerId);
     void persist({ ...settings, [key]: Array.from(values) });
+  }
+
+  function addPreferredProgram(): void {
+    const program = normalizeProgramSearch(programSearch, mileagePrograms);
+    if (!program || settings.preferredFrequentFlyerPrograms.includes(program)) return;
+    setProgramSearch("");
+    void persist({
+      ...settings,
+      preferredFrequentFlyerPrograms: [...settings.preferredFrequentFlyerPrograms, program],
+    });
+  }
+
+  function removePreferredProgram(program: string): void {
+    void persist({
+      ...settings,
+      preferredFrequentFlyerPrograms: settings.preferredFrequentFlyerPrograms.filter((value) => value !== program),
+    });
   }
 
   return (
@@ -83,6 +103,50 @@ function Options(): React.ReactElement {
             );
           })}
         </div>
+      </section>
+
+      <section>
+        <h2>Frequent Flyer Programs</h2>
+        <p className="note">Preferred programs are highlighted first when local mileage data has a matching row.</p>
+        <div className="program-picker">
+          <label>
+            Program
+            <input
+              type="search"
+              list="mileage-program-options"
+              value={programSearch}
+              placeholder="Search program"
+              onChange={(event) => setProgramSearch(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                addPreferredProgram();
+              }}
+            />
+            <datalist id="mileage-program-options">
+              {mileagePrograms.map((program) => (
+                <option key={program} value={program} />
+              ))}
+            </datalist>
+          </label>
+          <button type="button" className="secondary" onClick={addPreferredProgram}>
+            Add
+          </button>
+        </div>
+        {settings.preferredFrequentFlyerPrograms.length > 0 ? (
+          <div className="program-list">
+            {settings.preferredFrequentFlyerPrograms.map((program) => (
+              <span className="program-chip" key={program}>
+                {program}
+                <button type="button" aria-label={`Remove ${program}`} onClick={() => removePreferredProgram(program)}>
+                  Remove
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="note">No preferred programs selected.</p>
+        )}
       </section>
 
       <section>
@@ -287,6 +351,12 @@ function categoryLabel(category: string): string {
   if (category === "ota") return "booking site";
   if (category === "airline") return "airline";
   return category;
+}
+
+function normalizeProgramSearch(value: string, programs: string[]): string {
+  const query = value.trim().toLowerCase();
+  if (!query) return "";
+  return programs.find((program) => program.toLowerCase() === query) || "";
 }
 
 createRoot(document.getElementById("root") as HTMLElement).render(<Options />);

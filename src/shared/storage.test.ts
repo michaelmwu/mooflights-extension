@@ -24,6 +24,7 @@ describe("settings", () => {
       mergeSettings({
         hiddenProviderIds: null,
         preferredProviderIds: "kayak",
+        preferredFrequentFlyerPrograms: ["Air Canada Aeroplan", 123, "British Airways Club"],
         affiliateOptOut: "yes",
         debugMode: 1,
         airportHelper: {
@@ -41,6 +42,7 @@ describe("settings", () => {
       }),
     ).toEqual({
       ...DEFAULT_SETTINGS,
+      preferredFrequentFlyerPrograms: ["Air Canada Aeroplan", "British Airways Club"],
       airportHelper: {
         ...DEFAULT_SETTINGS.airportHelper,
         countries: ["US"],

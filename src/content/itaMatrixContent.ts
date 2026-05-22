@@ -32,6 +32,18 @@ type PanelState = {
   locationKey: string;
 };
 
+type ResultMileageSummary = {
+  entries: ResultMileageEntry[];
+  title: string;
+  status: "ready" | "fallback" | "missing";
+};
+
+type ResultMileageEntry = {
+  value: string;
+  program: string;
+  preferred?: boolean;
+};
+
 const PANEL_ID = "mu-travel-flights-panel";
 const BRIDGE_ID = "mu-travel-flights-page-bridge";
 const MESSAGE_SOURCE = "mu-travel-flights";
@@ -542,14 +554,52 @@ function resultRowForGrid(grid: HTMLElement): HTMLTableRowElement | null {
   return previousRow instanceof HTMLTableRowElement ? previousRow : null;
 }
 
-function resultMileageSummary(itinerary: NormalizedItinerary): { label: string; title: string; status: string } {
+function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSummary {
   const estimates = estimateEarnings(itinerary);
-  const total = estimates.reduce((sum, estimate) => sum + (estimate.estimatedMiles || 0), 0);
-  if (total > 0) {
-    const programs = Array.from(new Set(estimates.map((estimate) => estimate.program).filter(Boolean)));
+  const preferredPrograms = new Set(state.settings?.preferredFrequentFlyerPrograms || []);
+  const byProgram = new Map<string, { miles: number; formulas: string[] }>();
+  for (const estimate of estimates) {
+    if (typeof estimate.estimatedMiles !== "number" || estimate.estimatedMiles <= 0) continue;
+    const program = estimate.program || "Best available program";
+    const current = byProgram.get(program) || { miles: 0, formulas: [] };
+    current.miles += estimate.estimatedMiles;
+    current.formulas.push(`${estimate.segment.origin}-${estimate.segment.destination}: ${estimate.formula}`);
+    byProgram.set(program, current);
+  }
+
+  const programs = Array.from(byProgram.entries())
+    .map(([program, value]) => ({
+      program,
+      miles: value.miles,
+      formulas: value.formulas,
+      preferred: preferredPrograms.has(program),
+    }))
+    .sort((left, right) => {
+      if (left.preferred !== right.preferred) return left.preferred ? -1 : 1;
+      return right.miles - left.miles || left.program.localeCompare(right.program);
+    });
+
+  if (programs.length > 0) {
+    const visible = programs.slice(0, 2);
+    const remaining = programs.length - visible.length;
+    const entries: ResultMileageEntry[] = visible.map((program) => ({
+      value: `~${program.miles.toLocaleString()}`,
+      program: program.program,
+      preferred: program.preferred,
+    }));
+    if (remaining > 0) {
+      entries.push({
+        value: `+${remaining}`,
+        program: "more programs",
+      });
+    }
     return {
-      label: `~${total.toLocaleString()}`,
-      title: programs.length === 1 ? `${programs[0]} estimated redeemable miles` : "Estimated redeemable miles",
+      entries,
+      title: programs
+        .map(
+          (program) => `${program.program}: ~${program.miles.toLocaleString()} miles (${program.formulas.join("; ")})`,
+        )
+        .join("\n"),
       status: "ready",
     };
   }
@@ -560,26 +610,42 @@ function resultMileageSummary(itinerary: NormalizedItinerary): { label: string; 
   );
   if (flownMiles > 0) {
     return {
-      label: `${Math.round(flownMiles).toLocaleString()} flown`,
+      entries: [
+        {
+          value: `${Math.round(flownMiles).toLocaleString()}`,
+          program: "flown miles",
+        },
+      ],
       title: "No earning data matched; showing approximate flown miles.",
       status: "fallback",
     };
   }
 
   return {
-    label: "No data",
+    entries: [
+      {
+        value: "No data",
+        program: "expand fare",
+      },
+    ],
     title: "No mileage estimate available for this result.",
     status: "missing",
   };
 }
 
-function updateResultRowMileage(
-  row: HTMLTableRowElement,
-  summary: { label: string; title: string; status: string },
-): void {
+function updateResultRowMileage(row: HTMLTableRowElement, summary: ResultMileageSummary): void {
   const cell = row.querySelector<HTMLElement>(".mu-mileage-column");
   if (!cell) return;
-  cell.textContent = summary.label;
+  cell.innerHTML = summary.entries
+    .map(
+      (entry) => `
+        <span class="mu-mileage-program ${entry.preferred ? "preferred" : ""}">
+          <strong>${escapeHtml(entry.value)}</strong>
+          <span>${escapeHtml(entry.program)}${entry.preferred ? `<em>Preferred</em>` : ""}</span>
+        </span>
+      `,
+    )
+    .join("");
   cell.title = summary.title;
   cell.dataset.status = summary.status;
 }
@@ -606,12 +672,13 @@ function installFlightResultStyles(): void {
   style.id = "mu-travel-flight-result-styles";
   style.textContent = `
     .mu-mileage-column {
-      min-width: 92px;
-      max-width: 120px;
-      white-space: nowrap;
+      min-width: 160px;
+      max-width: 220px;
+      white-space: normal;
       color: #0f766e;
-      font-weight: 650;
-      text-align: right;
+      text-align: left;
+      line-height: 1.2;
+      vertical-align: middle;
     }
     .mu-mileage-column[data-status="fallback"] {
       color: #92400e;
@@ -622,6 +689,36 @@ function installFlightResultStyles(): void {
     .mu-mileage-placeholder {
       color: #64748b;
       font-weight: 500;
+    }
+    .mu-mileage-program {
+      display: grid;
+      gap: 1px;
+    }
+    .mu-mileage-program + .mu-mileage-program {
+      margin-top: 5px;
+    }
+    .mu-mileage-program strong {
+      color: inherit;
+      font-size: 12px;
+      font-weight: 750;
+    }
+    .mu-mileage-program span {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: center;
+      color: #334155;
+      font-size: 11px;
+      font-weight: 550;
+    }
+    .mu-mileage-program em {
+      border-radius: 999px;
+      background: #d1fae5;
+      color: #047857;
+      padding: 1px 5px;
+      font-size: 10px;
+      font-style: normal;
+      font-weight: 700;
     }
     .mu-mileage-earnings {
       color: #0f766e;

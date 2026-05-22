@@ -61,6 +61,7 @@ export type RankedProviderLink = {
 export type ExtensionSettings = {
   hiddenProviderIds: string[];
   preferredProviderIds: string[];
+  preferredFrequentFlyerPrograms: string[];
   affiliateOptOut: boolean;
   debugMode: boolean;
   airportHelper: {

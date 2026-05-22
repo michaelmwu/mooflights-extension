@@ -3,6 +3,7 @@ import type { ExtensionSettings } from "./types";
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   hiddenProviderIds: [],
   preferredProviderIds: ["where-to-credit", "google-flights", "kayak"],
+  preferredFrequentFlyerPrograms: [],
   affiliateOptOut: false,
   debugMode: false,
   airportHelper: {
@@ -43,6 +44,10 @@ export function mergeSettings(value: unknown): ExtensionSettings {
   return {
     hiddenProviderIds: stringArray(candidate.hiddenProviderIds, DEFAULT_SETTINGS.hiddenProviderIds),
     preferredProviderIds: stringArray(candidate.preferredProviderIds, DEFAULT_SETTINGS.preferredProviderIds),
+    preferredFrequentFlyerPrograms: stringArray(
+      candidate.preferredFrequentFlyerPrograms,
+      DEFAULT_SETTINGS.preferredFrequentFlyerPrograms,
+    ),
     affiliateOptOut: booleanValue(candidate.affiliateOptOut, DEFAULT_SETTINGS.affiliateOptOut),
     debugMode: booleanValue(candidate.debugMode, DEFAULT_SETTINGS.debugMode),
     airportHelper: {

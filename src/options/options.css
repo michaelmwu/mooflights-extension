@@ -147,6 +147,52 @@ select {
   font: inherit;
 }
 
+button.secondary {
+  min-height: 36px;
+  align-self: end;
+  border: 1px solid #94a3b8;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #334155;
+  padding: 7px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.program-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.program-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.program-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #f8fafc;
+  padding: 5px 6px 5px 10px;
+}
+
+.program-chip button {
+  border: 0;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #334155;
+  padding: 3px 7px;
+  font: inherit;
+  cursor: pointer;
+}
+
 .dev-panel {
   border-color: #f59e0b;
   background: #fffbeb;
@@ -171,6 +217,7 @@ select {
 
 @media (max-width: 720px) {
   .grid,
+  .program-picker,
   .provider {
     grid-template-columns: 1fr;
   }
