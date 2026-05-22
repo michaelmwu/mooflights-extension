@@ -15,6 +15,7 @@ type CompareState = {
   results: GoogleFlightsCountryResult[];
   error: string;
   countryInput: string;
+  pageKey: string;
 };
 
 type CompareResponse = {
@@ -25,6 +26,7 @@ type CompareResponse = {
 
 const PANEL_ID = "mu-travel-google-flights-panel";
 const BOOKING_PATH_RE = /^\/travel\/flights\/booking/;
+const RESULT_CACHE_TTL_MS = 60 * 60 * 1000;
 
 const state: CompareState = {
   comparing: false,
@@ -32,7 +34,16 @@ const state: CompareState = {
   results: [],
   error: "",
   countryInput: DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES.join(", "),
+  pageKey: "",
 };
+
+const resultCache = new Map<
+  string,
+  {
+    results: GoogleFlightsCountryResult[];
+    cachedAt: number;
+  }
+>();
 
 chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
   const payload = message as { command?: string };
@@ -41,12 +52,9 @@ chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) =
   return false;
 });
 
-if (isBookingPage()) {
-  void init();
-}
+void init();
 
 async function init(): Promise<void> {
-  installPanel();
   try {
     const settings = await loadSettings();
     state.countryInput = settings.googleFlights.countryCodes.join(", ");
@@ -75,17 +83,49 @@ function installPanel(): void {
 
 function installObserver(): void {
   let timer: number | undefined;
-  const observer = new MutationObserver(() => {
+  const schedule = () => {
     window.clearTimeout(timer);
     timer = window.setTimeout(scheduleRender, 250);
-  });
+  };
+  const observer = new MutationObserver(schedule);
   observer.observe(document.documentElement, { childList: true, subtree: true });
+  window.setInterval(schedule, 1000);
 }
 
 function scheduleRender(): void {
+  const pageKey = currentBookingPageKey();
+  if (!pageKey) {
+    removePanel();
+    state.pageKey = "";
+    state.baseline = null;
+    state.results = [];
+    state.error = "";
+    state.comparing = false;
+    return;
+  }
+
+  installPanel();
+  if (state.pageKey !== pageKey) {
+    state.pageKey = pageKey;
+    state.error = "";
+    const cached = resultCache.get(pageKey);
+    state.results = cached && Date.now() - cached.cachedAt <= RESULT_CACHE_TTL_MS ? cached.results : [];
+  }
+
   if (state.comparing) return;
   state.baseline = parseCurrentBookingPage();
   render();
+}
+
+function currentBookingPageKey(): string {
+  if (!isBookingPage()) return "";
+  const url = new URL(window.location.href);
+  const params = new URLSearchParams();
+  for (const key of ["tfs", "tfu", "curr", "gl"]) {
+    const value = url.searchParams.get(key);
+    if (value) params.set(key, value);
+  }
+  return `${url.pathname}?${params.toString()}`;
 }
 
 function render(): void {
@@ -230,6 +270,12 @@ async function compareCountries(): Promise<void> {
     })) as CompareResponse;
     if (!response?.ok) throw new Error(response?.error || "Country comparison failed.");
     state.results = [state.baseline, ...(response.results || [])];
+    if (state.pageKey) {
+      resultCache.set(state.pageKey, {
+        results: state.results,
+        cachedAt: Date.now(),
+      });
+    }
   } catch (error) {
     state.error = error instanceof Error ? error.message : "Country comparison failed.";
   } finally {
@@ -246,6 +292,10 @@ function getShadowRoot(): ShadowRoot | null {
     document.documentElement.appendChild(host);
   }
   return host.shadowRoot || host.attachShadow({ mode: "open" });
+}
+
+function removePanel(): void {
+  document.getElementById(PANEL_ID)?.remove();
 }
 
 function styles(): string {
