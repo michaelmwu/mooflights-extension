@@ -22,6 +22,10 @@ function Options(): React.ReactElement {
   const continents = useMemo(() => uniqueAirportValues("continent"), []);
   const regions = useMemo(() => uniqueAirportRegions(), []);
   const mileagePrograms = useMemo(() => uniqueMileagePrograms(), []);
+  const visibleMileagePrograms = useMemo(
+    () => filteredMileagePrograms(mileagePrograms, settings.preferredFrequentFlyerPrograms, programSearch),
+    [mileagePrograms, settings.preferredFrequentFlyerPrograms, programSearch],
+  );
 
   useEffect(() => {
     void loadSettings().then(setSettings);
@@ -40,20 +44,12 @@ function Options(): React.ReactElement {
     void persist({ ...settings, [key]: Array.from(values) });
   }
 
-  function addPreferredProgram(): void {
-    const program = normalizeProgramSearch(programSearch, mileagePrograms);
-    if (!program || settings.preferredFrequentFlyerPrograms.includes(program)) return;
-    setProgramSearch("");
+  function togglePreferredProgram(program: string): void {
+    const values = new Set(settings.preferredFrequentFlyerPrograms);
+    values.has(program) ? values.delete(program) : values.add(program);
     void persist({
       ...settings,
-      preferredFrequentFlyerPrograms: [...settings.preferredFrequentFlyerPrograms, program],
-    });
-  }
-
-  function removePreferredProgram(program: string): void {
-    void persist({
-      ...settings,
-      preferredFrequentFlyerPrograms: settings.preferredFrequentFlyerPrograms.filter((value) => value !== program),
+      preferredFrequentFlyerPrograms: Array.from(values),
     });
   }
 
@@ -108,45 +104,38 @@ function Options(): React.ReactElement {
       <section>
         <h2>Frequent Flyer Programs</h2>
         <p className="note">Preferred programs are highlighted first when local mileage data has a matching row.</p>
-        <div className="program-picker">
-          <label>
-            Program
-            <input
-              type="search"
-              list="mileage-program-options"
-              value={programSearch}
-              placeholder="Search program"
-              onChange={(event) => setProgramSearch(event.currentTarget.value)}
-              onKeyDown={(event) => {
-                if (event.key !== "Enter") return;
-                event.preventDefault();
-                addPreferredProgram();
-              }}
-            />
-            <datalist id="mileage-program-options">
-              {mileagePrograms.map((program) => (
-                <option key={program} value={program} />
-              ))}
-            </datalist>
-          </label>
-          <button type="button" className="secondary" onClick={addPreferredProgram}>
-            Add
-          </button>
-        </div>
-        {settings.preferredFrequentFlyerPrograms.length > 0 ? (
-          <div className="program-list">
-            {settings.preferredFrequentFlyerPrograms.map((program) => (
-              <span className="program-chip" key={program}>
-                {program}
-                <button type="button" aria-label={`Remove ${program}`} onClick={() => removePreferredProgram(program)}>
-                  Remove
-                </button>
-              </span>
-            ))}
+        <label>
+          Search
+          <input
+            type="search"
+            value={programSearch}
+            placeholder="Search programs"
+            onChange={(event) => setProgramSearch(event.currentTarget.value)}
+          />
+        </label>
+        <fieldset className="program-list">
+          <legend>Preferred frequent flyer programs</legend>
+          {visibleMileagePrograms.map((program) => (
+            <label className="program-row" key={program}>
+              <input
+                type="checkbox"
+                checked={settings.preferredFrequentFlyerPrograms.includes(program)}
+                onChange={() => togglePreferredProgram(program)}
+              />
+              <span>{program}</span>
+            </label>
+          ))}
+        </fieldset>
+        {visibleMileagePrograms.length === 0 ? (
+          <p className="note">No matching programs.</p>
+        ) : settings.preferredFrequentFlyerPrograms.length > 0 ? (
+          <div className="selected-summary">
+            {settings.preferredFrequentFlyerPrograms.length} selected
+            <button type="button" onClick={() => void persist({ ...settings, preferredFrequentFlyerPrograms: [] })}>
+              Clear
+            </button>
           </div>
-        ) : (
-          <p className="note">No preferred programs selected.</p>
-        )}
+        ) : null}
       </section>
 
       <section>
@@ -353,10 +342,18 @@ function categoryLabel(category: string): string {
   return category;
 }
 
-function normalizeProgramSearch(value: string, programs: string[]): string {
-  const query = value.trim().toLowerCase();
-  if (!query) return "";
-  return programs.find((program) => program.toLowerCase() === query) || "";
+function filteredMileagePrograms(programs: string[], selectedPrograms: string[], search: string): string[] {
+  const selected = new Set(selectedPrograms);
+  const query = search.trim().toLowerCase();
+  return programs
+    .filter((program) => !query || program.toLowerCase().includes(query))
+    .sort((left, right) => {
+      const leftSelected = selected.has(left);
+      const rightSelected = selected.has(right);
+      if (leftSelected !== rightSelected) return leftSelected ? -1 : 1;
+      return left.localeCompare(right);
+    })
+    .slice(0, query ? 30 : 14);
 }
 
 createRoot(document.getElementById("root") as HTMLElement).render(<Options />);

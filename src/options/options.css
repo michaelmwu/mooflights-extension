@@ -159,31 +159,60 @@ button.secondary {
   cursor: pointer;
 }
 
-.program-picker {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: end;
-}
-
 .program-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  display: grid;
+  max-height: 360px;
+  overflow: auto;
+  gap: 0;
   margin-top: 12px;
-}
-
-.program-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
   border: 1px solid #cbd5e1;
-  border-radius: 999px;
-  background: #f8fafc;
-  padding: 5px 6px 5px 10px;
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 0;
 }
 
-.program-chip button {
+.program-list legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.program-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 9px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  cursor: pointer;
+}
+
+.program-row:last-child {
+  border-bottom: 0;
+}
+
+.program-row:hover {
+  background: #f8fafc;
+}
+
+.program-row input {
+  min-height: 18px;
+  width: 18px;
+  padding: 0;
+}
+
+.selected-summary {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 10px;
+  color: #64748b;
+}
+
+.selected-summary button {
   border: 0;
   border-radius: 999px;
   background: #e2e8f0;
@@ -217,7 +246,6 @@ button.secondary {
 
 @media (max-width: 720px) {
   .grid,
-  .program-picker,
   .provider {
     grid-template-columns: 1fr;
   }
