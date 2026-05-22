@@ -12,6 +12,12 @@ The first MVP helps with:
 
 The extension is AGPL-3.0-only open-source software owned by Mu Travel LLC. The optional hosted Mu Travel backend is separate closed-source infrastructure.
 
+## Google Flights Country Comparison
+
+On Google Flights booking pages, the extension can compare booking offers across your selected country markets while keeping the displayed currency fixed. This helps surface cases where the same itinerary is cheaper from another country page, while still showing the direct airline price for comparison.
+
+![Mu Travel Google Flights country comparison panel](./docs/assets/google-flights-country-comparison.png)
+
 ## Quickstart
 
 ```sh
