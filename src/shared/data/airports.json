@@ -1,0 +1,182 @@
+[
+  {
+    "code": "JFK",
+    "name": "John F. Kennedy International Airport",
+    "city": "New York",
+    "country": "United States",
+    "continent": "North America",
+    "alliance": ["Oneworld", "SkyTeam", "Star Alliance"],
+    "airlines": ["American Airlines", "Delta Air Lines", "JetBlue", "United Airlines"]
+  },
+  {
+    "code": "LGA",
+    "name": "LaGuardia Airport",
+    "city": "New York",
+    "country": "United States",
+    "continent": "North America",
+    "alliance": ["Oneworld", "SkyTeam", "Star Alliance"],
+    "airlines": ["American Airlines", "Delta Air Lines", "United Airlines"]
+  },
+  {
+    "code": "EWR",
+    "name": "Newark Liberty International Airport",
+    "city": "Newark",
+    "country": "United States",
+    "continent": "North America",
+    "alliance": ["Oneworld", "Star Alliance"],
+    "airlines": ["American Airlines", "United Airlines"]
+  },
+  {
+    "code": "LAX",
+    "name": "Los Angeles International Airport",
+    "city": "Los Angeles",
+    "country": "United States",
+    "continent": "North America",
+    "alliance": ["Oneworld", "SkyTeam", "Star Alliance"],
+    "airlines": ["American Airlines", "Delta Air Lines", "United Airlines"]
+  },
+  {
+    "code": "SFO",
+    "name": "San Francisco International Airport",
+    "city": "San Francisco",
+    "country": "United States",
+    "continent": "North America",
+    "alliance": ["Oneworld", "Star Alliance"],
+    "airlines": ["Alaska Airlines", "United Airlines"]
+  },
+  {
+    "code": "SEA",
+    "name": "Seattle-Tacoma International Airport",
+    "city": "Seattle",
+    "country": "United States",
+    "continent": "North America",
+    "alliance": ["Oneworld", "SkyTeam"],
+    "airlines": ["Alaska Airlines", "Delta Air Lines"]
+  },
+  {
+    "code": "ORD",
+    "name": "Chicago O'Hare International Airport",
+    "city": "Chicago",
+    "country": "United States",
+    "continent": "North America",
+    "alliance": ["Oneworld", "Star Alliance"],
+    "airlines": ["American Airlines", "United Airlines"]
+  },
+  {
+    "code": "DFW",
+    "name": "Dallas Fort Worth International Airport",
+    "city": "Dallas",
+    "country": "United States",
+    "continent": "North America",
+    "alliance": ["Oneworld"],
+    "airlines": ["American Airlines"]
+  },
+  {
+    "code": "ATL",
+    "name": "Hartsfield-Jackson Atlanta International Airport",
+    "city": "Atlanta",
+    "country": "United States",
+    "continent": "North America",
+    "alliance": ["SkyTeam"],
+    "airlines": ["Delta Air Lines"]
+  },
+  {
+    "code": "LHR",
+    "name": "Heathrow Airport",
+    "city": "London",
+    "country": "United Kingdom",
+    "continent": "Europe",
+    "alliance": ["Oneworld", "Star Alliance", "SkyTeam"],
+    "airlines": ["British Airways", "Virgin Atlantic", "United Airlines"]
+  },
+  {
+    "code": "CDG",
+    "name": "Charles de Gaulle Airport",
+    "city": "Paris",
+    "country": "France",
+    "continent": "Europe",
+    "alliance": ["SkyTeam", "Star Alliance"],
+    "airlines": ["Air France", "Lufthansa"]
+  },
+  {
+    "code": "FRA",
+    "name": "Frankfurt Airport",
+    "city": "Frankfurt",
+    "country": "Germany",
+    "continent": "Europe",
+    "alliance": ["Star Alliance"],
+    "airlines": ["Lufthansa", "United Airlines"]
+  },
+  {
+    "code": "AMS",
+    "name": "Amsterdam Airport Schiphol",
+    "city": "Amsterdam",
+    "country": "Netherlands",
+    "continent": "Europe",
+    "alliance": ["SkyTeam"],
+    "airlines": ["KLM", "Delta Air Lines"]
+  },
+  {
+    "code": "MAD",
+    "name": "Adolfo Suarez Madrid-Barajas Airport",
+    "city": "Madrid",
+    "country": "Spain",
+    "continent": "Europe",
+    "alliance": ["Oneworld", "SkyTeam"],
+    "airlines": ["Iberia", "Air Europa"]
+  },
+  {
+    "code": "HND",
+    "name": "Tokyo Haneda Airport",
+    "city": "Tokyo",
+    "country": "Japan",
+    "continent": "Asia",
+    "alliance": ["Oneworld", "Star Alliance"],
+    "airlines": ["All Nippon Airways", "Japan Airlines"]
+  },
+  {
+    "code": "NRT",
+    "name": "Narita International Airport",
+    "city": "Tokyo",
+    "country": "Japan",
+    "continent": "Asia",
+    "alliance": ["Oneworld", "Star Alliance", "SkyTeam"],
+    "airlines": ["All Nippon Airways", "Japan Airlines", "Korean Air"]
+  },
+  {
+    "code": "SIN",
+    "name": "Singapore Changi Airport",
+    "city": "Singapore",
+    "country": "Singapore",
+    "continent": "Asia",
+    "alliance": ["Star Alliance", "Oneworld"],
+    "airlines": ["Singapore Airlines", "Qatar Airways"]
+  },
+  {
+    "code": "HKG",
+    "name": "Hong Kong International Airport",
+    "city": "Hong Kong",
+    "country": "Hong Kong",
+    "continent": "Asia",
+    "alliance": ["Oneworld"],
+    "airlines": ["Cathay Pacific"]
+  },
+  {
+    "code": "SYD",
+    "name": "Sydney Airport",
+    "city": "Sydney",
+    "country": "Australia",
+    "continent": "Oceania",
+    "alliance": ["Oneworld", "Star Alliance"],
+    "airlines": ["Qantas", "United Airlines"]
+  },
+  {
+    "code": "DXB",
+    "name": "Dubai International Airport",
+    "city": "Dubai",
+    "country": "United Arab Emirates",
+    "continent": "Asia",
+    "alliance": ["None"],
+    "airlines": ["Emirates"]
+  }
+]

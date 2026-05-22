@@ -1,0 +1,137 @@
+{
+  "displayTotal": "USD 1,234.56",
+  "passengerCount": 1,
+  "itinerary": {
+    "distance": {
+      "value": 6910
+    },
+    "slices": [
+      {
+        "origin": {
+          "code": "JFK"
+        },
+        "destination": {
+          "code": "LHR"
+        },
+        "departure": "2026-08-10T18:30:00",
+        "arrival": "2026-08-11T06:40:00",
+        "segments": [
+          {
+            "origin": {
+              "code": "JFK"
+            },
+            "destination": {
+              "code": "LHR"
+            },
+            "carrier": {
+              "code": "AA"
+            },
+            "flight": {
+              "number": "100"
+            },
+            "duration": 430,
+            "bookingInfos": [
+              {
+                "bookingCode": "I",
+                "cabin": "BUSINESS"
+              }
+            ],
+            "legs": [
+              {
+                "origin": {
+                  "code": "JFK"
+                },
+                "destination": {
+                  "code": "LHR"
+                },
+                "departure": "2026-08-10T18:30:00",
+                "arrival": "2026-08-11T06:40:00"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "origin": {
+          "code": "LHR"
+        },
+        "destination": {
+          "code": "JFK"
+        },
+        "departure": "2026-08-20T12:15:00",
+        "arrival": "2026-08-20T15:10:00",
+        "segments": [
+          {
+            "origin": {
+              "code": "LHR"
+            },
+            "destination": {
+              "code": "JFK"
+            },
+            "carrier": {
+              "code": "BA"
+            },
+            "flight": {
+              "number": "117"
+            },
+            "duration": 475,
+            "bookingInfos": [
+              {
+                "bookingCode": "R",
+                "cabin": "BUSINESS"
+              }
+            ],
+            "legs": [
+              {
+                "origin": {
+                  "code": "LHR"
+                },
+                "destination": {
+                  "code": "JFK"
+                },
+                "departure": "2026-08-20T12:15:00",
+                "arrival": "2026-08-20T15:10:00"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "tickets": [
+    {
+      "pricings": [
+        {
+          "fares": [
+            {
+              "carrier": "AA",
+              "code": "INN0C7S4",
+              "bookingInfos": [
+                {
+                  "bookingCode": "I",
+                  "segment": {
+                    "origin": "JFK",
+                    "destination": "LHR"
+                  }
+                }
+              ]
+            },
+            {
+              "carrier": "BA",
+              "code": "RNN0C7S4",
+              "bookingInfos": [
+                {
+                  "bookingCode": "R",
+                  "segment": {
+                    "origin": "LHR",
+                    "destination": "JFK"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

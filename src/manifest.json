@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Mu Travel Flights",
+  "version": "0.1.0",
+  "description": "Offline-first ITA Matrix companion for miles crediting, booking links, and airport-code workflows.",
+  "action": {
+    "default_popup": "popup/index.html",
+    "default_title": "Mu Travel Flights"
+  },
+  "background": {
+    "service_worker": "background/serviceWorker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://matrix.itasoftware.com/*"],
+      "js": ["content/itaMatrixContent.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "host_permissions": ["https://matrix.itasoftware.com/*"],
+  "permissions": ["storage", "clipboardRead", "clipboardWrite"],
+  "options_page": "options/index.html"
+}
