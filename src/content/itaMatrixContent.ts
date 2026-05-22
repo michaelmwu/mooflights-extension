@@ -72,6 +72,10 @@ const state: PanelState = {
   locationKey: currentLocationKey(),
 };
 
+const AIRPORT_REGION_OPTIONS = uniqueAirportRegions();
+const AIRPORT_COUNTRY_OPTIONS = uniqueAirportCountries();
+const AIRPORT_CONTINENT_OPTIONS = uniqueAirportValues("continent");
+
 void init();
 
 async function init(): Promise<void> {
@@ -586,7 +590,7 @@ function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSumm
   const preferredProgramRanks = new Map(preferredPrograms.map((program, index) => [program, index]));
   const byProgram = new Map<string, { miles: number; formulas: MileageFormula[] }>();
   for (const estimate of estimates) {
-    if (typeof estimate.estimatedMiles !== "number" || estimate.estimatedMiles <= 0) continue;
+    if (typeof estimate.estimatedMiles !== "number" || estimate.estimatedMiles < 0) continue;
     const program = estimate.program || "Best available program";
     const current = byProgram.get(program) || { miles: 0, formulas: [] };
     current.miles += estimate.estimatedMiles;
@@ -869,8 +873,6 @@ function isFlightsPage(): boolean {
 }
 
 function renderAirportHelper(settings: ExtensionSettings): string {
-  const regions = uniqueAirportRegions();
-  const countries = uniqueAirportCountries();
   const countryDatalistId = "mu-travel-country-options";
   return `
     <details>
@@ -879,16 +881,16 @@ function renderAirportHelper(settings: ExtensionSettings): string {
         ${selectHtml(
           "region",
           "Region",
-          ["", ...regions.map((region) => region.id)],
+          ["", ...AIRPORT_REGION_OPTIONS.map((region) => region.id)],
           settings.airportHelper.region,
-          new Map(regions.map((region) => [region.id, region.label])),
+          new Map(AIRPORT_REGION_OPTIONS.map((region) => [region.id, region.label])),
         )}
-        ${selectHtml("continent", "Continent", ["", ...uniqueAirportValues("continent")], settings.airportHelper.continent)}
+        ${selectHtml("continent", "Continent", ["", ...AIRPORT_CONTINENT_OPTIONS], settings.airportHelper.continent)}
         <label>
           Country
           <input type="search" data-setting="country" list="${countryDatalistId}" value="${escapeHtml(countrySearchValue(settings.airportHelper.countries[0] || ""))}" placeholder="Search country">
           <datalist id="${countryDatalistId}">
-            ${countries.map((country) => `<option value="${escapeHtml(country.searchValue)}"></option>`).join("")}
+            ${AIRPORT_COUNTRY_OPTIONS.map((country) => `<option value="${escapeHtml(country.searchValue)}"></option>`).join("")}
           </datalist>
         </label>
       </div>
