@@ -48,7 +48,7 @@ async function captureJson(requestId: string): Promise<void> {
     window.clearTimeout(timeoutId);
     restoreWriteText(clipboard, originalWriteText);
     postResult({ requestId, ok: true, data });
-    return Promise.resolve();
+    return originalWriteText(data);
   };
 
   try {

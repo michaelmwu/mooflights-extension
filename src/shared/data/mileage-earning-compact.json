@@ -16,100 +16,100 @@
       "booking_classes": {
         "B": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 85,
           "top_redeemable_value": "85%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
         "G": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 0,
           "top_redeemable_value": null,
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
         "H": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 75,
           "top_redeemable_value": "75%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
         "N": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 0,
           "top_redeemable_value": null,
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
         "P": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
         "Q": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 0,
           "top_redeemable_value": null,
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
         "R": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
         "T": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 25,
           "top_redeemable_value": "25%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
         "V": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
         "W": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 25,
           "top_redeemable_value": "25%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
         "Y": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         }
@@ -433,7 +433,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 20,
           "top_qualifying_value": "20%"
         },
@@ -460,7 +460,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 10,
           "top_qualifying_value": "10%"
         },
@@ -469,7 +469,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 20,
           "top_qualifying_value": "20%"
         },
@@ -478,7 +478,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 20,
           "top_qualifying_value": "20%"
         },
@@ -487,7 +487,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 20,
           "top_qualifying_value": "20%"
         },
@@ -496,7 +496,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 20,
           "top_qualifying_value": "20%"
         },
@@ -505,7 +505,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 10,
           "top_qualifying_value": "10%"
         },
@@ -514,7 +514,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 10,
           "top_qualifying_value": "10%"
         },
@@ -523,7 +523,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 20,
           "top_qualifying_value": "20%"
         },
@@ -532,7 +532,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 20,
           "top_qualifying_value": "20%"
         },
@@ -559,7 +559,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 150,
           "top_redeemable_value": "150%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 30,
           "top_qualifying_value": "30%"
         }
@@ -2094,7 +2094,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 50,
           "top_qualifying_value": "50%"
         },
@@ -2103,7 +2103,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 50,
           "top_qualifying_value": "50%"
         },
@@ -2981,7 +2981,7 @@
         },
         "F": {
           "cabin": "Business Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 125,
           "top_redeemable_value": "125%",
           "top_qualifying_program": "Singapore Airlines KrisFlyer",
@@ -3436,7 +3436,7 @@
         },
         "L": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50%",
           "top_qualifying_program": "Air China PhoenixMiles",
@@ -3508,7 +3508,7 @@
         },
         "T": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50%",
           "top_qualifying_program": "Air China PhoenixMiles",
@@ -3526,7 +3526,7 @@
         },
         "V": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
           "top_qualifying_program": "Air China PhoenixMiles",
@@ -6296,7 +6296,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 20,
           "top_qualifying_value": "20%"
         },
@@ -6305,7 +6305,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 150,
           "top_redeemable_value": "150%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 30,
           "top_qualifying_value": "30%"
         },
@@ -6314,7 +6314,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 125,
           "top_redeemable_value": "125%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 25,
           "top_qualifying_value": "25%"
         },
@@ -6350,7 +6350,7 @@
           "top_program": "ANA Mileage Club",
           "top_redeemable_percent": 125,
           "top_redeemable_value": "125%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 15,
           "top_qualifying_value": "15%"
         },
@@ -6359,7 +6359,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 150,
           "top_redeemable_value": "150%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 30,
           "top_qualifying_value": "30%"
         },
@@ -6368,7 +6368,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 10,
           "top_qualifying_value": "10%"
         },
@@ -6377,7 +6377,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 10,
           "top_qualifying_value": "10%"
         },
@@ -6386,7 +6386,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 20,
           "top_qualifying_value": "20%"
         },
@@ -6413,7 +6413,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 125,
           "top_redeemable_value": "125%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 25,
           "top_qualifying_value": "25%"
         },
@@ -6422,7 +6422,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 75,
           "top_redeemable_value": "75%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 15,
           "top_qualifying_value": "15%"
         },
@@ -6440,7 +6440,7 @@
           "top_program": "ANA Mileage Club",
           "top_redeemable_percent": 70,
           "top_redeemable_value": "70%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 10,
           "top_qualifying_value": "10%"
         },
@@ -6449,7 +6449,7 @@
           "top_program": "ANA Mileage Club",
           "top_redeemable_percent": 70,
           "top_redeemable_value": "70%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 10,
           "top_qualifying_value": "10%"
         },
@@ -6458,7 +6458,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 75,
           "top_redeemable_value": "75%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 15,
           "top_qualifying_value": "15%"
         },
@@ -6467,7 +6467,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 75,
           "top_redeemable_value": "75%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 15,
           "top_qualifying_value": "15%"
         },
@@ -6485,7 +6485,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 20,
           "top_qualifying_value": "20%"
         },
@@ -6494,7 +6494,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 125,
           "top_redeemable_value": "125%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 25,
           "top_qualifying_value": "25%"
         }
@@ -6697,7 +6697,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 20,
           "top_qualifying_value": "20%"
         },
@@ -6706,7 +6706,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 20,
           "top_qualifying_value": "20%"
         },
@@ -6724,7 +6724,7 @@
           "top_program": "Miles&More",
           "top_redeemable_percent": 150,
           "top_redeemable_value": "150% 750 Miles",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 10,
           "top_qualifying_value": "10%"
         },
@@ -6733,7 +6733,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 10,
           "top_qualifying_value": "10%"
         },
@@ -6742,7 +6742,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 75,
           "top_redeemable_value": "75%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 15,
           "top_qualifying_value": "15%"
         },
@@ -6751,7 +6751,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 20,
           "top_qualifying_value": "20%"
         },
@@ -6778,7 +6778,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 75,
           "top_redeemable_value": "75%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 15,
           "top_qualifying_value": "15%"
         },
@@ -6787,7 +6787,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 75,
           "top_redeemable_value": "75%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 15,
           "top_qualifying_value": "15%"
         },
@@ -6796,7 +6796,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 20,
           "top_qualifying_value": "20%"
         },
@@ -6805,7 +6805,7 @@
           "top_program": "Miles&More",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100% 500 Miles",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 10,
           "top_qualifying_value": "10%"
         },
@@ -6814,7 +6814,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 10,
           "top_qualifying_value": "10%"
         },
@@ -6823,7 +6823,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 20,
           "top_qualifying_value": "20%"
         },
@@ -6832,7 +6832,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 10,
           "top_qualifying_value": "10%"
         },
@@ -6850,7 +6850,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 75,
           "top_redeemable_value": "75%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 15,
           "top_qualifying_value": "15%"
         },
@@ -6859,7 +6859,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 10,
           "top_qualifying_value": "10%"
         },
@@ -6877,7 +6877,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 75,
           "top_redeemable_value": "75%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 15,
           "top_qualifying_value": "15%"
         },
@@ -6886,7 +6886,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 20,
           "top_qualifying_value": "20%"
         }
@@ -6974,7 +6974,7 @@
           "top_program": "TAP Miles&Go",
           "top_redeemable_percent": 115,
           "top_redeemable_value": "115%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -12790,7 +12790,7 @@
           "top_program": "Flying Blue",
           "top_redeemable_percent": 125,
           "top_redeemable_value": "125% 625 Miles",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -12799,7 +12799,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 25,
           "top_redeemable_value": "25%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -12808,7 +12808,7 @@
           "top_program": "Flying Blue",
           "top_redeemable_percent": 150,
           "top_redeemable_value": "150% 750 Miles",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -12817,7 +12817,7 @@
           "top_program": "Flying Blue",
           "top_redeemable_percent": 150,
           "top_redeemable_value": "150% 750 Miles",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -12826,7 +12826,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 25,
           "top_redeemable_value": "25%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -12835,7 +12835,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 25,
           "top_redeemable_value": "25%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -12844,7 +12844,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 75,
           "top_redeemable_value": "75%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -12853,7 +12853,7 @@
           "top_program": "Flying Blue",
           "top_redeemable_percent": 150,
           "top_redeemable_value": "150% 750 Miles",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -12862,7 +12862,7 @@
           "top_program": "Flying Blue",
           "top_redeemable_percent": 150,
           "top_redeemable_value": "150% 750 Miles",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -12871,7 +12871,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -12880,7 +12880,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -12889,7 +12889,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 25,
           "top_redeemable_value": "25%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -12898,7 +12898,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 25,
           "top_redeemable_value": "25%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -12907,7 +12907,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 25,
           "top_redeemable_value": "25%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -12916,7 +12916,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 25,
           "top_redeemable_value": "25%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -12925,7 +12925,7 @@
           "top_program": "Flying Blue",
           "top_redeemable_percent": 150,
           "top_redeemable_value": "150% 750 Miles",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -12934,7 +12934,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -12943,7 +12943,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 75,
           "top_redeemable_value": "75%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -12952,7 +12952,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -12961,7 +12961,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -12970,7 +12970,7 @@
           "top_program": "Flying Blue",
           "top_redeemable_percent": 125,
           "top_redeemable_value": "125% 625 Miles",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -12979,7 +12979,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 25,
           "top_redeemable_value": "25%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -12988,7 +12988,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         }
@@ -14656,7 +14656,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 10,
           "top_qualifying_value": "10%"
         },
@@ -15106,118 +15106,118 @@
       "booking_classes": {
         "A": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 0,
           "top_redeemable_value": null,
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
         "C": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 0,
           "top_redeemable_value": null,
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
         "D": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 25,
           "top_redeemable_value": "25%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
         "F": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 0,
           "top_redeemable_value": null,
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
         "H": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 75,
           "top_redeemable_value": "75%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
         "K": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 25,
           "top_redeemable_value": "25%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
         "L": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 75,
           "top_redeemable_value": "75%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
         "M": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 0,
           "top_redeemable_value": null,
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
         "R": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 125,
           "top_redeemable_value": "125%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
         "T": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 25,
           "top_redeemable_value": "25%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
         "U": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 0,
           "top_redeemable_value": null,
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
         "V": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 75,
           "top_redeemable_value": "75%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
         "Y": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 125,
           "top_redeemable_value": "125%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         }
@@ -21320,7 +21320,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 20,
           "top_qualifying_value": "20%"
         },
@@ -21329,7 +21329,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 20,
           "top_qualifying_value": "20%"
         },
@@ -21338,7 +21338,7 @@
           "top_program": "Singapore Airlines KrisFlyer",
           "top_redeemable_percent": 200,
           "top_redeemable_value": "200%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 25,
           "top_qualifying_value": "25%"
         },
@@ -21347,7 +21347,7 @@
           "top_program": "Singapore Airlines KrisFlyer",
           "top_redeemable_percent": 200,
           "top_redeemable_value": "200%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 25,
           "top_qualifying_value": "25%"
         },
@@ -21356,7 +21356,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 10,
           "top_qualifying_value": "10%"
         },
@@ -21365,7 +21365,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 10,
           "top_qualifying_value": "10%"
         },
@@ -21374,7 +21374,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 10,
           "top_qualifying_value": "10%"
         },
@@ -21383,7 +21383,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 20,
           "top_qualifying_value": "20%"
         },
@@ -21392,7 +21392,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 10,
           "top_qualifying_value": "10%"
         },
@@ -21401,7 +21401,7 @@
           "top_program": "Singapore Airlines KrisFlyer",
           "top_redeemable_percent": 200,
           "top_redeemable_value": "200%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 30,
           "top_qualifying_value": "30%"
         },
@@ -21410,7 +21410,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 20,
           "top_qualifying_value": "20%"
         },
@@ -21419,7 +21419,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 20,
           "top_qualifying_value": "20%"
         },
@@ -21428,7 +21428,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 25,
           "top_redeemable_value": "25%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 5,
           "top_qualifying_value": "5%"
         },
@@ -21437,7 +21437,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "75%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 10,
           "top_qualifying_value": "10%"
         },
@@ -21446,7 +21446,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "75%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 10,
           "top_qualifying_value": "10%"
         },
@@ -21455,7 +21455,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "75%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 10,
           "top_qualifying_value": "10%"
         },
@@ -21464,7 +21464,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 10,
           "top_qualifying_value": "10%"
         },
@@ -21473,7 +21473,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "75%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 10,
           "top_qualifying_value": "10%"
         },
@@ -21482,7 +21482,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 10,
           "top_qualifying_value": "10%"
         },
@@ -21491,7 +21491,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 10,
           "top_qualifying_value": "10%"
         },
@@ -21500,7 +21500,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 10,
           "top_qualifying_value": "10%"
         },
@@ -21509,7 +21509,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "75%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 10,
           "top_qualifying_value": "10%"
         },
@@ -21518,7 +21518,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 20,
           "top_qualifying_value": "20%"
         },
@@ -21527,7 +21527,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 20,
           "top_qualifying_value": "20%"
         }
@@ -21736,7 +21736,7 @@
         },
         "L": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50%",
           "top_qualifying_program": "Air China PhoenixMiles",
@@ -21781,7 +21781,7 @@
         },
         "T": {
           "cabin": "Economy Class",
-          "top_program": "Air Canada Aeroplan 2026",
+          "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50%",
           "top_qualifying_program": "Air China PhoenixMiles",
@@ -23000,7 +23000,7 @@
           "top_program": "Miles&More",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100% 500 Miles",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -23437,7 +23437,7 @@
           "top_program": "Etihad Guest",
           "top_redeemable_percent": 25,
           "top_redeemable_value": "25%",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -23655,7 +23655,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 0,
           "top_redeemable_value": null,
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -23664,7 +23664,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 75,
           "top_redeemable_value": "75% 375 Miles",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -23673,7 +23673,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50% 250 Miles",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -23682,7 +23682,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 0,
           "top_redeemable_value": null,
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -23691,7 +23691,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 0,
           "top_redeemable_value": null,
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -23700,7 +23700,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50% 250 Miles",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -23709,7 +23709,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 0,
           "top_redeemable_value": null,
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -23718,7 +23718,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 0,
           "top_redeemable_value": null,
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -23727,7 +23727,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 50,
           "top_redeemable_value": "50% 250 Miles",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -23736,7 +23736,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 0,
           "top_redeemable_value": null,
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -23745,7 +23745,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 0,
           "top_redeemable_value": null,
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -23754,7 +23754,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 0,
           "top_redeemable_value": null,
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -23763,7 +23763,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 75,
           "top_redeemable_value": "75% 375 Miles",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -23772,7 +23772,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 0,
           "top_redeemable_value": null,
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -23781,7 +23781,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 0,
           "top_redeemable_value": null,
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -23790,7 +23790,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 0,
           "top_redeemable_value": null,
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -23799,7 +23799,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 75,
           "top_redeemable_value": "75% 375 Miles",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -23808,7 +23808,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 0,
           "top_redeemable_value": null,
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -23817,7 +23817,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 100,
           "top_redeemable_value": "100% 500 Miles",
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         },
@@ -23826,7 +23826,7 @@
           "top_program": "Air Canada Aeroplan",
           "top_redeemable_percent": 0,
           "top_redeemable_value": null,
-          "top_qualifying_program": "Air Canada Aeroplan 2026",
+          "top_qualifying_program": "Air Canada Aeroplan",
           "top_qualifying_percent": 0,
           "top_qualifying_value": "0%"
         }
