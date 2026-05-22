@@ -1,5 +1,6 @@
 import type {
   ExtensionSettings,
+  ItinerarySegment,
   LinkProvider,
   NormalizedItinerary,
   RankedProviderLink,
@@ -29,7 +30,7 @@ export const LOCAL_PROVIDERS: LinkProvider[] = [
     label: "Kayak",
     category: "meta",
     reliabilityScore: 88,
-    supportedTripTypes: ["one-way", "round-trip"],
+    supportedTripTypes: ["one-way", "round-trip", "multi-city"],
     buildUrl: kayakUrl,
   },
   {
@@ -38,7 +39,7 @@ export const LOCAL_PROVIDERS: LinkProvider[] = [
     category: "ota",
     reliabilityScore: 78,
     knownIssues: "Search page link; verify price and flight details before booking.",
-    supportedTripTypes: ["one-way", "round-trip"],
+    supportedTripTypes: ["one-way", "round-trip", "multi-city"],
     buildUrl: expediaSearchUrl,
   },
 ];
@@ -151,6 +152,8 @@ function kayakUrl(itinerary: NormalizedItinerary): string {
 }
 
 function expediaSearchUrl(itinerary: NormalizedItinerary): string {
+  if (itinerary.tripType === "multi-city") return expediaMultiCityDetailsUrl(itinerary);
+
   const slices = routeSlices(itinerary);
   if (slices.length === 0) return "";
 
@@ -172,6 +175,45 @@ function expediaSearchUrl(itinerary: NormalizedItinerary): string {
   }
 
   return `https://www.expedia.com/Flights-Search?${params.toString()}`;
+}
+
+function expediaMultiCityDetailsUrl(itinerary: NormalizedItinerary): string {
+  const slices = itinerary.slices.filter((slice) => slice.segments.length > 0);
+  if (slices.length === 0) return "";
+
+  const params = new URLSearchParams();
+  params.set("action", "dl");
+  params.set("trip", "MultipleDestination");
+  params.set("cabinClass", expediaCabin(itinerary));
+  params.set("adults", String(itinerary.passengerCount || 1));
+
+  for (const [sliceIndex, slice] of slices.entries()) {
+    const firstSegment = slice.segments[0];
+    const departureDate = slice.departureDate || firstSegment?.departure?.slice(0, 10);
+    const origin = slice.origin || firstSegment?.origin;
+    const destination = slice.destination || slice.segments.at(-1)?.destination;
+    if (!origin || !destination || !departureDate) return "";
+
+    params.set(`legs[${sliceIndex}].departureAirport`, origin);
+    params.set(`legs[${sliceIndex}].arrivalAirport`, destination);
+    params.set(`legs[${sliceIndex}].departureDate`, departureDate);
+
+    for (const [segmentIndex, segment] of slice.segments.entries()) {
+      const segmentDate = segment.departure?.slice(0, 10) || departureDate;
+      const segmentValue = [
+        segmentDate,
+        expediaCabinForSegment(segment),
+        segment.origin,
+        segment.destination,
+        segment.carrier,
+        segment.flightNumber,
+      ];
+      if (segmentValue.some((part) => !part)) continue;
+      params.set(`legs[${sliceIndex}].segments[${segmentIndex}]`, segmentValue.join("-").toLowerCase());
+    }
+  }
+
+  return `https://www.expedia.com/Flight-Search-Details?${params.toString()}`;
 }
 
 function routeSlices(itinerary: NormalizedItinerary): Array<{ origin: string; destination: string; date: string }> {
@@ -207,6 +249,17 @@ function expediaCabin(itinerary: NormalizedItinerary): string {
   if (cabin === "business") return "business";
   if (cabin === "first") return "first";
   return "economy";
+}
+
+function expediaCabinForSegment(segment: ItinerarySegment): string {
+  return expediaDetailsCabinName(segment.cabin);
+}
+
+function expediaDetailsCabinName(cabin: string): string {
+  if (cabin === "premium-economy") return "premium";
+  if (cabin === "business") return "business";
+  if (cabin === "first") return "first";
+  return "coach";
 }
 
 function expediaLeg(slice: { origin: string; destination: string; date: string }): string {

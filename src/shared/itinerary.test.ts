@@ -125,6 +125,30 @@ describe("ITA itinerary parsing", () => {
       duration: 110,
     });
   });
+
+  it("normalizes numeric ITA flight numbers", () => {
+    const itinerary = parseItaBookingDetails({
+      itinerary: {
+        slices: [
+          {
+            origin: { code: "TPE" },
+            destination: { code: "MFM" },
+            segments: [
+              {
+                origin: { code: "TPE" },
+                destination: { code: "MFM" },
+                carrier: { code: "NX" },
+                flight: { number: 631 },
+                bookingInfos: [{ bookingCode: "R", cabin: "COACH" }],
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(itinerary.slices[0]?.segments[0]?.flightNumber).toBe("631");
+  });
 });
 
 function repeatedSlice(departure: string, flightNumber: string): unknown {

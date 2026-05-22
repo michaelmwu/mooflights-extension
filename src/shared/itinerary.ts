@@ -161,7 +161,7 @@ function normalizeSegments(
       distance: numberOrUndefined(leg?.distance?.value ?? segment?.distance?.value),
       carrier: stringOrUndefined(segment?.carrier?.code)?.toUpperCase() || "",
       carrierName: stringOrUndefined(segment?.carrier?.shortName || segment?.carrier?.name),
-      flightNumber: stringOrUndefined(segment?.flight?.number),
+      flightNumber: stringOrNumber(segment?.flight?.number),
       bookingClass,
       fareBasis: fare?.code,
       fareCarrier: fare?.carrier,
@@ -231,6 +231,12 @@ function airportCode(value: unknown): string {
 
 function stringOrUndefined(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function stringOrNumber(value: unknown): string | undefined {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return undefined;
 }
 
 function numberOrUndefined(value: unknown): number | undefined {
