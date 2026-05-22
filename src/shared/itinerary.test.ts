@@ -71,6 +71,32 @@ describe("ITA itinerary parsing", () => {
       fareBasis: "SECONDFARE",
     });
   });
+
+  it("keeps ITA carrier display names when present", () => {
+    const itinerary = parseItaBookingDetails({
+      itinerary: {
+        slices: [
+          {
+            origin: { code: "HKG" },
+            destination: { code: "BKK" },
+            segments: [
+              {
+                origin: { code: "HKG" },
+                destination: { code: "BKK" },
+                carrier: { code: "HX", shortName: "Hong Kong Airlines" },
+                bookingInfos: [{ bookingCode: "Y", cabin: "COACH" }],
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(itinerary.slices[0]?.segments[0]).toMatchObject({
+      carrier: "HX",
+      carrierName: "Hong Kong Airlines",
+    });
+  });
 });
 
 function repeatedSlice(departure: string, flightNumber: string): unknown {

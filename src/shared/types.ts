@@ -7,6 +7,7 @@ export type ItinerarySegment = {
   destination: string;
   distance?: number;
   carrier: string;
+  carrierName?: string;
   flightNumber?: string;
   bookingClass?: string;
   fareBasis?: string;

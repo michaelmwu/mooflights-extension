@@ -100,9 +100,41 @@ describe("Where to Credit earnings estimates", () => {
 
     expect(buildValidatedWhereToCreditUrl(itinerary)).toBe("");
     expect(insight).toMatchObject({
-      label: "HKG-BKK HB Y",
+      label: "HKG-BKK Greater Bay Airlines (HB) Y",
       status: "missing-airline",
+      message: "No earning data for Greater Bay Airlines (HB).",
     });
     expect(insight).not.toHaveProperty("url");
+  });
+
+  it("uses ITA carrier names in missing-data notices", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "one-way",
+      carriers: ["HX"],
+      fareBases: [],
+      slices: [
+        {
+          origin: "HKG",
+          destination: "BKK",
+          segments: [
+            {
+              origin: "HKG",
+              destination: "BKK",
+              carrier: "HX",
+              carrierName: "Hong Kong Airlines",
+              bookingClass: "Y",
+              cabin: "economy",
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(inspectWhereToCreditSegments(itinerary)[0]).toMatchObject({
+      label: "HKG-BKK Hong Kong Airlines (HX) Y",
+      message: "No earning data for Hong Kong Airlines (HX).",
+    });
   });
 });

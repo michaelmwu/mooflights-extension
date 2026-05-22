@@ -242,20 +242,20 @@ function providerReliabilityCopy(score: number): { tone: "high" | "medium" | "lo
     return {
       tone: "high",
       label: "Reliable",
-      help: "Usually opens the matching route and date. Verify fare and flight details before booking.",
+      help: "Usually opens the right route and date.",
     };
   }
   if (score >= 70) {
     return {
       tone: "medium",
       label: "Check details",
-      help: "Often opens the right search, but may need manual adjustment.",
+      help: "May need manual adjustment.",
     };
   }
   return {
     tone: "low",
     label: "Unreliable",
-    help: "May fail or require manual search. Use only as a fallback.",
+    help: "Use as a fallback.",
   };
 }
 

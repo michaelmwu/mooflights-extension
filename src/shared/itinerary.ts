@@ -160,6 +160,7 @@ function normalizeSegments(
       destination: airportCode(leg?.destination?.code || segment?.destination?.code),
       distance: numberOrUndefined(leg?.distance?.value ?? segment?.distance?.value),
       carrier: stringOrUndefined(segment?.carrier?.code)?.toUpperCase() || "",
+      carrierName: stringOrUndefined(segment?.carrier?.shortName || segment?.carrier?.name),
       flightNumber: stringOrUndefined(segment?.flight?.number),
       bookingClass,
       fareBasis: fare?.code,

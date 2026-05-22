@@ -405,9 +405,7 @@ function renderLinks(links: RankedProviderLink[]): string {
   return links
     .map((link) => {
       const confidence = providerConfidenceCopy(link);
-      const issue = link.provider.knownIssues
-        ? `<small>${escapeHtml(link.provider.knownIssues)}</small>`
-        : `<small>${escapeHtml(confidence.help)}</small>`;
+      const issue = link.provider.knownIssues ? `<small>${escapeHtml(link.provider.knownIssues)}</small>` : "";
       return `
         <a href="${escapeHtml(link.url)}" target="_blank" rel="noreferrer" class="provider ${link.confidence}">
           <span>${escapeHtml(link.provider.label)}</span>
@@ -419,22 +417,19 @@ function renderLinks(links: RankedProviderLink[]): string {
     .join("");
 }
 
-function providerConfidenceCopy(link: RankedProviderLink): { label: string; help: string } {
+function providerConfidenceCopy(link: RankedProviderLink): { label: string } {
   if (link.confidence === "high") {
     return {
       label: "Reliable",
-      help: "Usually opens the matching route and date. Always verify fare and flight details before booking.",
     };
   }
   if (link.confidence === "medium") {
     return {
       label: "Check details",
-      help: "Often opens the right search, but price or flight matching may need manual adjustment.",
     };
   }
   return {
     label: "Unreliable",
-    help: "May fail or require manual search. Use only as a fallback.",
   };
 }
 

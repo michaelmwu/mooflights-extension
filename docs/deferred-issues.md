@@ -23,6 +23,13 @@ Let users mark whether provider links reproduced the expected fare and submit fe
 Build a maintained database of airline direct booking/search URL formats. Prefer backend-delivered metadata for
 carrier-specific rules so the open extension does not bundle brittle commercial routing knowledge.
 
+Candidate seed sources:
+
+- OneTravel airline codes: useful for broad code/name/website seeding, but requires validation because some entries are
+  stale or missing newer carriers.
+- Wikipedia list of airline codes: import only rows with valid two-character IATA codes and real airline article links;
+  skip rows without IATA codes or links that point to index/list-style pages.
+
 ## Preferred Frequent-Flyer Programs
 
 Let users rank the frequent-flyer programs they actually use, then prefer those programs in miles-credit guidance instead

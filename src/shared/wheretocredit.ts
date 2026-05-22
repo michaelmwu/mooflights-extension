@@ -28,6 +28,11 @@ type CompactWhereToCredit = {
   airlines: Record<string, CompactAirline>;
 };
 
+const AIRLINE_NAME_FALLBACKS: Record<string, string> = {
+  HB: "Greater Bay Airlines",
+  HX: "Hong Kong Airlines",
+};
+
 export type EarningsEstimate = {
   segment: ItinerarySegment;
   airlineName: string;
@@ -77,14 +82,16 @@ function inspectWhereToCreditSegment(segment: ItinerarySegment): WhereToCreditSe
   const bookingClass = normalizeBookingClass(segment.bookingClass);
   if (!carrier) return null;
 
-  const label = `${segment.origin}-${segment.destination} ${carrier}${bookingClass ? ` ${bookingClass}` : ""}`;
+  const carrierName = displayAirlineName(carrier, segment);
+  const carrierLabel = `${carrierName} (${carrier})`;
+  const label = `${segment.origin}-${segment.destination} ${carrierLabel}${bookingClass ? ` ${bookingClass}` : ""}`;
   const airline = DATA.airlines[carrier];
   if (!airline) {
     return {
       segment,
       label,
       status: "missing-airline",
-      message: `No Where to Credit earning data is bundled for ${carrier}. This usually means no useful partner earning data is published; check the airline loyalty program directly.`,
+      message: `No earning data for ${carrierLabel}.`,
     };
   }
 
@@ -94,7 +101,7 @@ function inspectWhereToCreditSegment(segment: ItinerarySegment): WhereToCreditSe
       label,
       status: "missing-booking-class",
       url: airline.url,
-      message: `${airline.name} is in Where to Credit, but ITA did not expose a booking class for this segment.`,
+      message: `Missing booking class for ${airline.name} (${carrier}).`,
     };
   }
 
@@ -105,7 +112,7 @@ function inspectWhereToCreditSegment(segment: ItinerarySegment): WhereToCreditSe
       label,
       status: "airline-only",
       url: airline.url,
-      message: `${airline.name} is in Where to Credit, but booking class ${bookingClass} has no bundled earning rows. This may earn only with the airline's own program or not earn at all.`,
+      message: `No earning rows for ${airline.name} (${carrier}) ${bookingClass}.`,
     };
   }
 
@@ -116,6 +123,11 @@ function inspectWhereToCreditSegment(segment: ItinerarySegment): WhereToCreditSe
     url: booking.url,
     message: `${airline.name} booking class ${bookingClass} has earning data.`,
   };
+}
+
+function displayAirlineName(carrier: string, segment: ItinerarySegment): string {
+  const carrierName = segment.fareCarrier === carrier ? undefined : segment.carrierName;
+  return carrierName || AIRLINE_NAME_FALLBACKS[carrier] || carrier;
 }
 
 export function estimateSegmentEarnings(
