@@ -143,6 +143,10 @@ function extractJsonObjects(text: string): Array<Record<string, unknown>> {
       continue;
     }
     if (char !== "}") continue;
+    if (depth === 0) {
+      start = -1;
+      continue;
+    }
 
     depth--;
     if (depth !== 0 || start < 0) continue;

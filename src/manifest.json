@@ -19,6 +19,6 @@
     }
   ],
   "host_permissions": ["https://matrix.itasoftware.com/*"],
-  "permissions": ["storage", "clipboardWrite"],
+  "permissions": ["storage", "clipboardWrite", "permissions"],
   "options_page": "options/index.html"
 }

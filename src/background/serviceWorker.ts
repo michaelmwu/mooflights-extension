@@ -38,7 +38,7 @@ async function fetchProviderMetadata(baseUrl: string): Promise<RemoteProviderMet
 }
 
 async function hasHostPermission(origin: string): Promise<boolean> {
-  if (!chrome.permissions?.contains) return true;
+  if (!chrome.permissions?.contains) return false;
   return chrome.permissions.contains({ origins: [origin] });
 }
 

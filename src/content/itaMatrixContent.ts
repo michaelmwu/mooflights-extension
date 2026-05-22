@@ -576,6 +576,11 @@ function findResultRowForItinerary(itinerary: NormalizedItinerary): HTMLTableRow
     .filter((flightNumber): flightNumber is string => Boolean(flightNumber));
   if (flightNumbers.length === 0) return null;
 
+  const expandedRows = Array.from(document.querySelectorAll<HTMLTableRowElement>("tr.detail-row")).filter((row) =>
+    row.querySelector("matrix-itinerary-grid"),
+  );
+  if (expandedRows.length === 1) return resultRowForGrid(expandedRows[0]);
+
   for (const grid of document.querySelectorAll<HTMLElement>("matrix-itinerary-grid")) {
     const text = grid.textContent || "";
     if (!flightNumbers.every((flightNumber) => text.includes(flightNumber))) continue;
@@ -723,7 +728,10 @@ function renderResultMileageLine(segment: ItinerarySegment, estimate: EarningsEs
   const line = document.createElement("div");
   line.className = "info-line mu-mileage-earnings";
   if (estimate) {
-    const miles = estimate.estimatedMiles ? `~${estimate.estimatedMiles.toLocaleString()} miles` : estimate.formula;
+    const miles =
+      typeof estimate.estimatedMiles === "number"
+        ? `~${estimate.estimatedMiles.toLocaleString()} miles`
+        : estimate.formula;
     line.textContent = `Miles credit: ${miles} · ${estimate.program}`;
     line.title = estimate.formula;
     return line;

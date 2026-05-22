@@ -274,12 +274,7 @@ function DeveloperBackend(props: {
               backend: { ...props.settings.backend, baseUrl: event.currentTarget.value },
             })
           }
-          onBlur={(event) =>
-            void props.persist({
-              ...props.settings,
-              backend: { ...props.settings.backend, baseUrl: event.currentTarget.value },
-            })
-          }
+          onBlur={(event) => void persistBackend(props.settings.backend.enabled, event.currentTarget.value)}
         />
       </label>
       <div className="target-row">
@@ -294,7 +289,7 @@ function DeveloperBackend(props: {
 }
 
 async function requestBackendHostPermission(baseUrl: string): Promise<boolean> {
-  if (!chrome.permissions?.request) return true;
+  if (!chrome.permissions?.request) return false;
   const origin = hostPermissionOrigin(baseUrl);
   if (!origin) return false;
   return chrome.permissions.request({ origins: [origin] });
