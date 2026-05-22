@@ -23,6 +23,7 @@ export type GoogleFlightsFlightSegment = {
   origin: string;
   destination: string;
   departureDate: string;
+  sliceDate?: string;
   carrier?: string;
   flightNumber?: string;
 };
@@ -107,32 +108,25 @@ function parseGoogleFlightsTfsSegments(tfs: string): GoogleFlightsFlightSegment[
   const decoded = decodeBase64UrlText(tfs);
   if (!decoded) return [];
   const segments: GoogleFlightsFlightSegment[] = [];
-  const pattern =
-    /(\d{4}-\d{2}-\d{2})[\s\S]{0,24}?([A-Z]{3})[\s\S]{0,24}?(\d{4}-\d{2}-\d{2})[\s\S]{0,24}?([A-Z]{3})[\s\S]{0,12}?([A-Z0-9]{2})([\s\S]{0,8})/g;
+  // biome-ignore lint/complexity/useRegexLiterals: constructor keeps protobuf control markers out of a regex literal.
+  const pattern = new RegExp(
+    "(\\d{4}-\\d{2}-\\d{2})[\\s\\S]{0,24}?([A-Z]{3})[\\s\\S]{0,24}?(\\d{4}-\\d{2}-\\d{2})[\\s\\S]{0,24}?([A-Z]{3})[\\s\\S]{0,12}?([A-Z][A-Z0-9]|[0-9][A-Z])(?:[\\x20-\\x7E]{0,2})?[\\x01-\\x04](\\d{1,4})",
+    "g",
+  );
   let match = pattern.exec(decoded);
   while (match) {
-    const [, sliceDate, origin, segmentDate, destination, carrier, flightTail] = match;
-    const flightNumber = parseTfsFlightNumber(flightTail);
+    const [, sliceDate, origin, segmentDate, destination, carrier, flightNumber] = match;
     segments.push({
       origin,
       destination,
       departureDate: segmentDate || sliceDate,
+      sliceDate,
       carrier,
       flightNumber,
     });
     match = pattern.exec(decoded);
   }
   return dedupeGoogleFlightsSegments(segments);
-}
-
-function parseTfsFlightNumber(value: string): string | undefined {
-  for (let index = 0; index < value.length; index += 1) {
-    const length = value.charCodeAt(index);
-    if (length < 1 || length > 4) continue;
-    const candidate = value.slice(index + 1, index + 1 + length);
-    if (/^\d{1,4}$/.test(candidate)) return candidate;
-  }
-  return value.match(/\d{2,4}/)?.[0];
 }
 
 function dedupeGoogleFlightsSegments(segments: GoogleFlightsFlightSegment[]): GoogleFlightsFlightSegment[] {
@@ -142,6 +136,7 @@ function dedupeGoogleFlightsSegments(segments: GoogleFlightsFlightSegment[]): Go
       segment.origin,
       segment.destination,
       segment.departureDate,
+      segment.sliceDate || "",
       segment.carrier || "",
       segment.flightNumber || "",
     ].join(":");
@@ -157,7 +152,10 @@ function groupGoogleFlightsSegments(segments: GoogleFlightsFlightSegment[]): Goo
     const current = slices.at(-1);
     const currentOrigin = current?.segments[0]?.origin;
     const currentDestination = current?.segments.at(-1)?.destination;
-    const isConnection = current && currentDestination === segment.origin && segment.destination !== currentOrigin;
+    const currentSliceDate = current?.segments[0]?.sliceDate;
+    const sameSlice = currentSliceDate && segment.sliceDate ? currentSliceDate === segment.sliceDate : true;
+    const isConnection =
+      current && sameSlice && currentDestination === segment.origin && segment.destination !== currentOrigin;
     if (current && isConnection) {
       current.destination = segment.destination;
       current.segments.push(segment);
@@ -209,7 +207,11 @@ function buildItaMatrixSearchUrl(
       adults: "1",
     },
   };
-  return `https://matrix.itasoftware.com/flights?search=${encodeURIComponent(encodeBase64(JSON.stringify(payload)))}`;
+  const params = new URLSearchParams({
+    search: encodeBase64(JSON.stringify(payload)),
+    muTravelAutoOpen: "1",
+  });
+  return `https://matrix.itasoftware.com/flights?${params.toString()}`;
 }
 
 function matrixSearchSlice(
@@ -239,10 +241,18 @@ function matrixSearchSlice(
 }
 
 function carrierRouting(slice: GoogleFlightsMatrixSearch["slices"][number]): string {
+  const flightTokens = slice.segments.map(matrixFlightToken).filter(isString);
+  if (flightTokens.length === slice.segments.length && flightTokens.length > 0) {
+    return flightTokens.length === 1 ? `F:${flightTokens[0]}` : flightTokens.join(" ");
+  }
   return slice.segments
     .map((segment) => segment.carrier)
     .filter(isString)
     .join(" ");
+}
+
+function matrixFlightToken(segment: GoogleFlightsFlightSegment): string {
+  return segment.carrier && segment.flightNumber ? `${segment.carrier}${segment.flightNumber}` : "";
 }
 
 function decodeBase64UrlText(value: string): string {

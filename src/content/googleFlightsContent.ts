@@ -95,6 +95,7 @@ function installObserver(): void {
 function scheduleRender(): void {
   const pageKey = currentBookingPageKey();
   if (!pageKey) {
+    if (!state.pageKey && !document.getElementById(PANEL_ID)) return;
     removePanel();
     state.pageKey = "";
     state.baseline = null;
@@ -257,6 +258,9 @@ async function compareCountries(): Promise<void> {
   state.error = "";
   state.results = [];
   state.baseline = parseCurrentBookingPage();
+  const comparePageKey = state.pageKey;
+  const baseline = state.baseline;
+  const baseUrl = window.location.href;
   render();
 
   const currentCountry = currentCountryCode();
@@ -264,23 +268,27 @@ async function compareCountries(): Promise<void> {
   try {
     const response = (await chrome.runtime.sendMessage({
       command: "compareGoogleFlightsCountries",
-      baseUrl: window.location.href,
+      baseUrl,
       countries,
-      baselineOptionCount: state.baseline.options.length,
+      baselineOptionCount: baseline.options.length,
     })) as CompareResponse;
+    if (state.pageKey !== comparePageKey) return;
     if (!response?.ok) throw new Error(response?.error || "Country comparison failed.");
-    state.results = [state.baseline, ...(response.results || [])];
-    if (state.pageKey) {
-      resultCache.set(state.pageKey, {
+    state.results = [baseline, ...(response.results || [])];
+    if (comparePageKey) {
+      resultCache.set(comparePageKey, {
         results: state.results,
         cachedAt: Date.now(),
       });
     }
   } catch (error) {
+    if (state.pageKey !== comparePageKey) return;
     state.error = error instanceof Error ? error.message : "Country comparison failed.";
   } finally {
-    state.comparing = false;
-    render();
+    if (state.pageKey === comparePageKey) {
+      state.comparing = false;
+      render();
+    }
   }
 }
 

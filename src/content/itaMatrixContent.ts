@@ -31,6 +31,7 @@ type PanelState = {
   captureInFlight: boolean;
   activeCaptureId: string;
   locationKey: string;
+  showAllMileagePrograms: boolean;
 };
 
 type ResultMileageSummary = {
@@ -58,6 +59,9 @@ const MESSAGE_SOURCE = "mu-travel-flights";
 const AUTO_CAPTURE_DEBOUNCE_MS = 150;
 let autoCaptureCheckTimer: number | undefined;
 let flightResultAnnotationTimer: number | undefined;
+let autoOpenFirstResultTimer: number | undefined;
+let autoOpenFirstResultStartedAt = 0;
+let autoOpenFirstResultDone = false;
 
 const state: PanelState = {
   settings: null,
@@ -70,6 +74,7 @@ const state: PanelState = {
   captureInFlight: false,
   activeCaptureId: "",
   locationKey: currentLocationKey(),
+  showAllMileagePrograms: false,
 };
 
 const AIRPORT_REGION_OPTIONS = uniqueAirportRegions();
@@ -89,6 +94,7 @@ async function init(): Promise<void> {
   installFlightResultObserver();
   maybeAutoCapture();
   annotateFlightResultsSoon();
+  scheduleAutoOpenFirstFlightResult();
 }
 
 function render(): void {
@@ -175,6 +181,10 @@ function bind(root: ShadowRoot): void {
   });
   root.querySelector('[data-action="options"]')?.addEventListener("click", () => {
     void chrome.runtime.sendMessage({ command: "openOptionsPage" });
+  });
+  root.querySelector('[data-action="show-all-mileage"]')?.addEventListener("click", () => {
+    state.showAllMileagePrograms = true;
+    render();
   });
 
   root.querySelectorAll<HTMLSelectElement>("select[data-setting]").forEach((select) => {
@@ -411,7 +421,49 @@ function annotateFlightResultsSoon(): void {
   flightResultAnnotationTimer = window.setTimeout(() => {
     flightResultAnnotationTimer = undefined;
     annotateFlightResults();
+    scheduleAutoOpenFirstFlightResult();
   }, 150);
+}
+
+function scheduleAutoOpenFirstFlightResult(): void {
+  if (autoOpenFirstResultTimer) window.clearTimeout(autoOpenFirstResultTimer);
+  autoOpenFirstResultTimer = window.setTimeout(() => {
+    autoOpenFirstResultTimer = undefined;
+    maybeAutoOpenFirstFlightResult();
+  }, 250);
+}
+
+function maybeAutoOpenFirstFlightResult(): void {
+  if (!shouldAutoOpenFirstFlightResult()) {
+    autoOpenFirstResultDone = false;
+    autoOpenFirstResultStartedAt = 0;
+    return;
+  }
+
+  if (autoOpenFirstResultDone) return;
+  if (!autoOpenFirstResultStartedAt) autoOpenFirstResultStartedAt = Date.now();
+
+  const row = firstFlightResultRow();
+  if (row) {
+    autoOpenFirstResultDone = true;
+    row.click();
+    return;
+  }
+
+  if (Date.now() - autoOpenFirstResultStartedAt < 30_000) scheduleAutoOpenFirstFlightResult();
+}
+
+function shouldAutoOpenFirstFlightResult(): boolean {
+  if (!isFlightsPage()) return false;
+  return new URL(window.location.href).searchParams.get("muTravelAutoOpen") === "1";
+}
+
+function firstFlightResultRow(): HTMLElement | null {
+  return (
+    document.querySelector<HTMLElement>("tr[mat-row].mat-mdc-row:not(.detail-row)") ||
+    document.querySelector<HTMLElement>("tr[mat-row]:not(.detail-row)") ||
+    document.querySelector<HTMLElement>("mat-row:not(.detail-row)")
+  );
 }
 
 function annotateFlightResults(): void {
@@ -844,6 +896,7 @@ function resetForLocationChange(): void {
   state.links = [];
   state.error = "";
   state.status = "Ready";
+  state.showAllMileagePrograms = false;
   state.autoCaptureAttempted = false;
   state.captureInFlight = false;
   state.activeCaptureId = "";
@@ -966,7 +1019,9 @@ function renderMileageCredit(itinerary: NormalizedItinerary): string {
   const estimates = estimateEarnings(itinerary, preferredProgramList);
   const preferredPrograms = new Set(preferredProgramList);
   const visibleEstimates =
-    preferredPrograms.size > 0 ? estimates.filter((estimate) => preferredPrograms.has(estimate.program)) : estimates;
+    preferredPrograms.size > 0 && !state.showAllMileagePrograms
+      ? estimates.filter((estimate) => preferredPrograms.has(estimate.program))
+      : estimates;
   const hiddenEstimateCount = estimates.length - visibleEstimates.length;
   const insights = inspectWhereToCreditSegments(itinerary);
   const estimatedKeys = new Set(estimates.map((estimate) => creditSegmentKey(estimate.segment, estimate.bookingClass)));
@@ -997,6 +1052,7 @@ function renderMileageCredit(itinerary: NormalizedItinerary): string {
           ? `<div class="earning notice">
               <span>No preferred program match</span>
               <small>Local top earning rows exist, but they are not in your preferred programs.</small>
+              <button type="button" class="inline-button" data-action="show-all-mileage">Show all</button>
             </div>`
           : ""
       }
@@ -1118,6 +1174,7 @@ function styles(): string {
     .segment-links em { font-style: normal; color: #115e59; }
     .segment-links a { color: #0f766e; text-decoration: none; }
     .segment-links a:hover { text-decoration: underline; }
+    .segment-links .inline-button { width: fit-content; margin-top: 4px; border-color: #fed7aa; background: #ffffff; color: #9a3412; padding: 4px 7px; }
     .provider { display: grid; gap: 2px; padding: 8px; border: 1px solid #cbd5e1; border-left-width: 4px; border-radius: 6px; color: inherit; text-decoration: none; }
     .provider.high { border-left-color: #059669; }
     .provider.medium { border-left-color: #d97706; }

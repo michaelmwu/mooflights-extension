@@ -82,7 +82,7 @@ async function compareGoogleFlightsCountry(
 }
 
 function shouldRetrySparseResult(result: GoogleFlightsCountryResult, baselineOptionCount: number): boolean {
-  return isSparseResult(result, baselineOptionCount) && !result.refreshed;
+  return baselineOptionCount > 3 && result.status !== "error" && result.options.length <= 3 && !result.refreshed;
 }
 
 function isSparseResult(result: GoogleFlightsCountryResult, baselineOptionCount: number): boolean {

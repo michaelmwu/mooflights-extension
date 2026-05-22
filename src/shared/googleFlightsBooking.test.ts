@@ -141,6 +141,7 @@ describe("Google Flights booking option parser", () => {
 
     const search = new URL(result?.matrixUrl || "").searchParams.get("search") || "";
     expect(new URL(result?.matrixUrl || "").pathname).toBe("/flights");
+    expect(new URL(result?.matrixUrl || "").searchParams.get("muTravelAutoOpen")).toBe("1");
     const decoded = JSON.parse(atob(search));
     expect(decoded).toMatchObject({
       type: "one-way",
@@ -148,7 +149,7 @@ describe("Google Flights booking option parser", () => {
         {
           origin: ["HKG"],
           dest: ["TPE"],
-          routing: "JX",
+          routing: "F:JX234",
           dates: {
             departureDate: "2026-06-02",
           },
@@ -159,4 +160,65 @@ describe("Google Flights booking option parser", () => {
       },
     });
   });
+
+  it("keeps return-leg connections in their own Matrix slice", () => {
+    const result = parseGoogleFlightsMatrixSearch(
+      `https://www.google.com/travel/flights/booking?tfs=${encodeTfsText([
+        tfsSegment("2026-05-29", "HND", "ICN", "OZ", "1075"),
+        tfsSegment("2026-05-29", "ICN", "HKG", "OZ", "721"),
+        tfsSegment("2026-06-03", "HKG", "TPE", "CI", "922"),
+        tfsSegment("2026-06-03", "TPE", "HND", "CI", "220"),
+      ])}`,
+    );
+
+    expect(result).toMatchObject({
+      tripType: "round-trip",
+      slices: [
+        {
+          origin: "HND",
+          destination: "HKG",
+          departureDate: "2026-05-29",
+        },
+        {
+          origin: "HKG",
+          destination: "HND",
+          departureDate: "2026-06-03",
+        },
+      ],
+    });
+
+    const search = new URL(result?.matrixUrl || "").searchParams.get("search") || "";
+    const decoded = JSON.parse(atob(search));
+    expect(decoded).toMatchObject({
+      type: "round-trip",
+      slices: [
+        {
+          origin: ["HND"],
+          dest: ["HKG"],
+          routing: "OZ1075 OZ721",
+          routingRet: "CI922 CI220",
+          dates: {
+            departureDate: "2026-05-29",
+            returnDate: "2026-06-03",
+          },
+        },
+      ],
+    });
+  });
 });
+
+function tfsSegment(
+  sliceDate: string,
+  origin: string,
+  destination: string,
+  carrier: string,
+  flightNumber: string,
+): string {
+  return `${sliceDate} ${origin} ${sliceDate} ${destination} ${carrier}${String.fromCharCode(
+    flightNumber.length,
+  )}${flightNumber}`;
+}
+
+function encodeTfsText(parts: string[]): string {
+  return btoa(parts.join(" ")).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
