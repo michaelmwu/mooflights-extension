@@ -536,6 +536,12 @@ function parseDurationMinutes(value: string): number | undefined {
   return total > 0 ? total : undefined;
 }
 
+function normalize(value: string | null): string {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function resultSegmentsToItinerary(segments: ItinerarySegment[]): NormalizedItinerary {
   return {
     source: "ita-matrix",
