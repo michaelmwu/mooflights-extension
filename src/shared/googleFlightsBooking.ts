@@ -254,9 +254,8 @@ function buildItaMatrixSearchUrl(
   };
   const params = new URLSearchParams({
     search: encodeBase64(JSON.stringify(payload)),
-    muTravelAutoOpen: "1",
   });
-  return `https://matrix.itasoftware.com/flights?${params.toString()}`;
+  return `https://matrix.itasoftware.com/search?${params.toString()}`;
 }
 
 function matrixSearchSlice(
