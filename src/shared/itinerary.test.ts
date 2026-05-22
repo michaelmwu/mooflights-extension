@@ -97,6 +97,34 @@ describe("ITA itinerary parsing", () => {
       carrierName: "Hong Kong Airlines",
     });
   });
+
+  it("keeps ITA segment duration when present", () => {
+    const itinerary = parseItaBookingDetails({
+      itinerary: {
+        slices: [
+          {
+            origin: { code: "TPE" },
+            destination: { code: "MFM" },
+            segments: [
+              {
+                origin: { code: "TPE" },
+                destination: { code: "MFM" },
+                carrier: { code: "NX" },
+                duration: 110,
+                bookingInfos: [{ bookingCode: "R", cabin: "COACH" }],
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(itinerary.slices[0]?.segments[0]).toMatchObject({
+      origin: "TPE",
+      destination: "MFM",
+      duration: 110,
+    });
+  });
 });
 
 function repeatedSlice(departure: string, flightNumber: string): unknown {

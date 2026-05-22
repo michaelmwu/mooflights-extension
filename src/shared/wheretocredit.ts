@@ -56,6 +56,7 @@ export function buildValidatedWhereToCreditUrl(itinerary: NormalizedItinerary): 
   return (
     insights.find((insight) => insight.status === "earning-data")?.url ||
     insights.find((insight) => insight.status === "airline-only")?.url ||
+    insights.find((insight) => insight.status === "missing-booking-class")?.url ||
     ""
   );
 }
@@ -69,7 +70,7 @@ export function inspectWhereToCreditSegments(itinerary: NormalizedItinerary): Wh
 export function estimateEarnings(itinerary: NormalizedItinerary): EarningsEstimate[] {
   const segments = flattenSegments(itinerary);
   return segments
-    .map((segment, index) => estimateSegmentEarnings(segment, itinerary, segments.length, index))
+    .map((segment, index) => estimateSegmentEarnings(segment, itinerary, segments, index))
     .filter((estimate): estimate is EarningsEstimate => Boolean(estimate));
 }
 
@@ -129,9 +130,11 @@ function displayAirlineName(carrier: string, segment: ItinerarySegment): string 
 export function estimateSegmentEarnings(
   segment: ItinerarySegment,
   itinerary: NormalizedItinerary,
-  segmentCount = flattenSegments(itinerary).length,
+  segmentsOrCount: ItinerarySegment[] | number = flattenSegments(itinerary),
   segmentIndex = 0,
 ): EarningsEstimate | null {
+  const segments = Array.isArray(segmentsOrCount) ? segmentsOrCount : flattenSegments(itinerary);
+  const segmentCount = Array.isArray(segmentsOrCount) ? segmentsOrCount.length : segmentsOrCount;
   const carrier = normalizeCarrier(segment.fareCarrier || segment.carrier);
   const bookingClass = normalizeBookingClass(segment.bookingClass);
   if (!carrier || !bookingClass) return null;
@@ -140,7 +143,7 @@ export function estimateSegmentEarnings(
   const booking = airline?.booking_classes[bookingClass];
   if (!airline || !booking) return null;
 
-  const distance = segment.distance ?? inferSegmentDistance(itinerary, segmentCount);
+  const distance = segment.distance ?? inferSegmentDistance(itinerary, segments, segmentIndex, segmentCount);
   const fare = inferSegmentFare(itinerary, segmentCount, segmentIndex);
   const program = booking.top_program || "Best available program";
   const computed = computeMiles(booking.top_redeemable_percent, booking.top_redeemable_value, distance, fare);
@@ -196,9 +199,47 @@ function computeMiles(
   };
 }
 
-function inferSegmentDistance(itinerary: NormalizedItinerary, segmentCount: number): number | undefined {
+function inferSegmentDistance(
+  itinerary: NormalizedItinerary,
+  segments: ItinerarySegment[],
+  segmentIndex: number,
+  segmentCount: number,
+): number | undefined {
   if (!finiteNumber(itinerary.totalDistance)) return undefined;
-  return segmentCount <= 1 ? itinerary.totalDistance : undefined;
+  if (segmentCount <= 1) return itinerary.totalDistance;
+
+  const reciprocalRoundTripDistance = inferReciprocalRoundTripDistance(itinerary, segments, segmentIndex);
+  if (finiteNumber(reciprocalRoundTripDistance)) return reciprocalRoundTripDistance;
+
+  const durations = segments.map(segmentDurationMinutes);
+  const validDurations = durations.filter((duration): duration is number => finiteNumber(duration) && duration > 0);
+  if (validDurations.length !== segmentCount) return undefined;
+
+  const totalDuration = validDurations.reduce((sum, duration) => sum + duration, 0);
+  const duration = validDurations[segmentIndex];
+  if (!finiteNumber(totalDuration) || totalDuration <= 0 || !finiteNumber(duration)) return undefined;
+  return itinerary.totalDistance * (duration / totalDuration);
+}
+
+function inferReciprocalRoundTripDistance(
+  itinerary: NormalizedItinerary,
+  segments: ItinerarySegment[],
+  segmentIndex: number,
+): number | undefined {
+  if (itinerary.tripType !== "round-trip" || segments.length !== 2 || segmentIndex > 1) return undefined;
+
+  const [outbound, inbound] = segments;
+  if (
+    !outbound ||
+    !inbound ||
+    outbound.origin !== inbound.destination ||
+    outbound.destination !== inbound.origin ||
+    !finiteNumber(itinerary.totalDistance)
+  ) {
+    return undefined;
+  }
+
+  return itinerary.totalDistance / 2;
 }
 
 function inferSegmentFare(
@@ -246,6 +287,17 @@ function formatPercent(value: number): string {
 
 function formatCurrency(value: number): string {
   return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+function segmentDurationMinutes(segment: ItinerarySegment): number | undefined {
+  if (finiteNumber(segment.duration)) return segment.duration;
+  if (!segment.departure || !segment.arrival) return undefined;
+
+  const departure = Date.parse(segment.departure);
+  const arrival = Date.parse(segment.arrival);
+  if (!Number.isFinite(departure) || !Number.isFinite(arrival) || arrival < departure) return undefined;
+
+  return (arrival - departure) / 60_000;
 }
 
 function normalizeCarrier(value: unknown): string {

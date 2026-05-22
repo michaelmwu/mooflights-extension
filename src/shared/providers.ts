@@ -48,7 +48,12 @@ export function rankProviderLinks(
   settings: ExtensionSettings,
   remoteMetadata: RemoteProviderMetadata[] = [],
 ): RankedProviderLink[] {
-  const metadataById = new Map(remoteMetadata.map((metadata) => [metadata.providerId, metadata]));
+  const metadataById = new Map(
+    remoteMetadata
+      .map(normalizeRemoteProviderMetadata)
+      .filter((metadata): metadata is RemoteProviderMetadata => Boolean(metadata))
+      .map((metadata) => [metadata.providerId, metadata]),
+  );
   const hidden = new Set(settings.hiddenProviderIds);
   const preferred = new Set(settings.preferredProviderIds);
 
@@ -100,6 +105,26 @@ function confidence(score: number): RankedProviderLink["confidence"] {
   if (score >= 85) return "high";
   if (score >= 70) return "medium";
   return "low";
+}
+
+function normalizeRemoteProviderMetadata(metadata: unknown): RemoteProviderMetadata | null {
+  if (!metadata || typeof metadata !== "object") return null;
+  const rawMetadata = metadata as Record<string, unknown>;
+  const providerId = typeof rawMetadata.providerId === "string" ? rawMetadata.providerId : "";
+  if (!providerId) return null;
+
+  const normalized: RemoteProviderMetadata = { providerId };
+  if (
+    typeof rawMetadata.reliabilityScore === "number" &&
+    Number.isFinite(rawMetadata.reliabilityScore) &&
+    rawMetadata.reliabilityScore >= 0 &&
+    rawMetadata.reliabilityScore <= 100
+  ) {
+    normalized.reliabilityScore = rawMetadata.reliabilityScore;
+  }
+  if (typeof rawMetadata.knownIssues === "string") normalized.knownIssues = rawMetadata.knownIssues;
+  if (typeof rawMetadata.disabled === "boolean") normalized.disabled = rawMetadata.disabled;
+  return normalized;
 }
 
 function googleFlightsUrl(itinerary: NormalizedItinerary): string {

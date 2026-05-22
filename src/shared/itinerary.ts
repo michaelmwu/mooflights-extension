@@ -165,6 +165,7 @@ function normalizeSegments(
       bookingClass,
       fareBasis: fare?.code,
       fareCarrier: fare?.carrier,
+      duration: numberOrUndefined(leg?.duration ?? segment?.duration),
       cabin: normalizeCabin(bookingInfo?.cabin),
       departure: stringOrUndefined(leg?.departure),
       arrival: stringOrUndefined(leg?.arrival),

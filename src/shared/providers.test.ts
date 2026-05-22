@@ -26,6 +26,19 @@ describe("provider ranking", () => {
     expect(links.find((link) => link.provider.id === "google-flights")?.confidence).toBe("medium");
   });
 
+  it("ignores malformed remote reliability metadata", () => {
+    const itinerary = parseItaBookingDetails(fixture);
+    const links = rankProviderLinks(itinerary, DEFAULT_SETTINGS, [
+      { providerId: "google-flights", reliabilityScore: "90" } as never,
+      { providerId: "kayak", reliabilityScore: 72 },
+    ]);
+
+    expect(links.find((link) => link.provider.id === "google-flights")?.provider.reliabilityScore).toBe(96);
+    expect(links.find((link) => link.provider.id === "google-flights")?.confidence).toBe("high");
+    expect(links.find((link) => link.provider.id === "kayak")?.provider.reliabilityScore).toBe(72);
+    expect(links.find((link) => link.provider.id === "kayak")?.confidence).toBe("medium");
+  });
+
   it("builds reliable provider links from ITA itinerary details", () => {
     const itinerary = parseItaBookingDetails(fixture);
     const links = rankProviderLinks(itinerary, DEFAULT_SETTINGS);

@@ -72,6 +72,134 @@ describe("Where to Credit earnings estimates", () => {
     });
   });
 
+  it("splits itinerary distance by segment duration when segment distances are missing", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "one-way",
+      totalDistance: 1000,
+      totalPrice: 200,
+      carriers: ["AS"],
+      fareBases: [],
+      slices: [
+        {
+          origin: "AAA",
+          destination: "CCC",
+          segments: [
+            {
+              origin: "AAA",
+              destination: "BBB",
+              carrier: "AS",
+              bookingClass: "X",
+              duration: 30,
+              cabin: "economy",
+            },
+            {
+              origin: "BBB",
+              destination: "CCC",
+              carrier: "AS",
+              bookingClass: "X",
+              duration: 70,
+              cabin: "economy",
+            },
+          ],
+        },
+      ],
+    };
+
+    const estimates = estimateEarnings(itinerary);
+
+    expect(estimates.map((estimate) => estimate.estimatedMiles)).toEqual([90, 210]);
+    expect(estimates.map((estimate) => estimate.formula)).toEqual(["300 miles x 30%", "700 miles x 30%"]);
+  });
+
+  it("splits itinerary distance by parsed departure and arrival times when duration is missing", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "one-way",
+      totalDistance: 1000,
+      totalPrice: 200,
+      carriers: ["AS"],
+      fareBases: [],
+      slices: [
+        {
+          origin: "AAA",
+          destination: "CCC",
+          segments: [
+            {
+              origin: "AAA",
+              destination: "BBB",
+              carrier: "AS",
+              bookingClass: "X",
+              departure: "2026-01-01T10:00:00Z",
+              arrival: "2026-01-01T10:30:00Z",
+              cabin: "economy",
+            },
+            {
+              origin: "BBB",
+              destination: "CCC",
+              carrier: "AS",
+              bookingClass: "X",
+              departure: "2026-01-01T11:00:00Z",
+              arrival: "2026-01-01T12:10:00Z",
+              cabin: "economy",
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(estimateEarnings(itinerary).map((estimate) => estimate.estimatedMiles)).toEqual([90, 210]);
+  });
+
+  it("splits reciprocal round-trip distance evenly even when block times differ", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "round-trip",
+      totalDistance: 1000,
+      totalPrice: 200,
+      carriers: ["AS"],
+      fareBases: [],
+      slices: [
+        {
+          origin: "AAA",
+          destination: "BBB",
+          segments: [
+            {
+              origin: "AAA",
+              destination: "BBB",
+              carrier: "AS",
+              bookingClass: "X",
+              duration: 45,
+              cabin: "economy",
+            },
+          ],
+        },
+        {
+          origin: "BBB",
+          destination: "AAA",
+          segments: [
+            {
+              origin: "BBB",
+              destination: "AAA",
+              carrier: "AS",
+              bookingClass: "X",
+              duration: 55,
+              cabin: "economy",
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(estimateEarnings(itinerary).map((estimate) => estimate.formula)).toEqual([
+      "500 miles x 30%",
+      "500 miles x 30%",
+    ]);
+  });
+
   it("estimates revenue-based earnings from per-passenger fare", () => {
     const itinerary: NormalizedItinerary = {
       source: "ita-matrix",
@@ -214,5 +342,32 @@ describe("Where to Credit earnings estimates", () => {
       label: "HKG-BKK Hong Kong Airlines (HX) Y",
       message: "No earning data for Hong Kong Airlines (HX).",
     });
+  });
+
+  it("keeps airline-level Where to Credit fallback when booking class is missing", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "one-way",
+      carriers: ["AS"],
+      fareBases: [],
+      slices: [
+        {
+          origin: "HNL",
+          destination: "SJC",
+          segments: [
+            {
+              origin: "HNL",
+              destination: "SJC",
+              carrier: "AS",
+              carrierName: "Alaska",
+              cabin: "economy",
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(buildValidatedWhereToCreditUrl(itinerary)).toBe("https://wheretocredit.com/en/AS");
   });
 });
