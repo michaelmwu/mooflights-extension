@@ -169,6 +169,12 @@ button.secondary {
   padding: 0;
 }
 
+.program-list-scroll {
+  max-height: 360px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .program-list legend {
   position: absolute;
   width: 1px;

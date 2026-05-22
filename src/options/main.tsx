@@ -103,7 +103,7 @@ function Options(): React.ReactElement {
 
       <section>
         <h2>Frequent Flyer Programs</h2>
-        <p className="note">Preferred programs are highlighted first when local mileage data has a matching row.</p>
+        <p className="note">Preferred programs are highlighted first.</p>
         <label>
           Search
           <input
@@ -115,23 +115,25 @@ function Options(): React.ReactElement {
         </label>
         <fieldset className="program-list">
           <legend>Preferred frequent flyer programs</legend>
-          {visibleMileagePrograms.map((program) => (
-            <label className="program-row" key={program.program}>
-              <input
-                type="checkbox"
-                checked={settings.preferredFrequentFlyerPrograms.includes(program.program)}
-                onChange={() => togglePreferredProgram(program.program)}
-              />
-              {program.carrierCodes[0] ? (
-                <img
-                  src={chrome.runtime.getURL(`assets/carriers64/light/${program.carrierCodes[0]}.png`)}
-                  alt=""
-                  aria-hidden="true"
+          <div className="program-list-scroll">
+            {visibleMileagePrograms.map((program) => (
+              <label className="program-row" key={program.program}>
+                <input
+                  type="checkbox"
+                  checked={settings.preferredFrequentFlyerPrograms.includes(program.program)}
+                  onChange={() => togglePreferredProgram(program.program)}
                 />
-              ) : null}
-              <span>{program.label}</span>
-            </label>
-          ))}
+                {program.carrierCodes[0] ? (
+                  <img
+                    src={chrome.runtime.getURL(`assets/carriers64/light/${program.carrierCodes[0]}.png`)}
+                    alt=""
+                    aria-hidden="true"
+                  />
+                ) : null}
+                <span>{program.label}</span>
+              </label>
+            ))}
+          </div>
         </fieldset>
         {visibleMileagePrograms.length === 0 ? (
           <p className="note">No matching programs.</p>
