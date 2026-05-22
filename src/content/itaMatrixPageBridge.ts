@@ -48,6 +48,7 @@ async function captureJson(requestId: string): Promise<void> {
     window.clearTimeout(timeoutId);
     restoreWriteText(clipboard, originalWriteText);
     postResult({ requestId, ok: true, data });
+    dismissCopyConfirmationSoon();
     return originalWriteText(data);
   };
 
@@ -79,6 +80,25 @@ async function captureJson(requestId: string): Promise<void> {
       });
     }
   }
+}
+
+function dismissCopyConfirmationSoon(): void {
+  window.setTimeout(dismissCopyConfirmation, 0);
+  window.setTimeout(dismissCopyConfirmation, 100);
+  window.setTimeout(dismissCopyConfirmation, 300);
+}
+
+function dismissCopyConfirmation(): void {
+  const button = document.querySelector<HTMLButtonElement>(
+    [
+      "mat-snack-bar-container button",
+      ".mat-mdc-snack-bar-container button",
+      "simple-snack-bar button",
+      ".mat-mdc-snack-bar-action button",
+    ].join(", "),
+  );
+  if (!button || !/^ok$/i.test(normalize(button.textContent))) return;
+  button.click();
 }
 
 function restoreWriteText(clipboard: Clipboard, originalWriteText: Clipboard["writeText"]): void {
