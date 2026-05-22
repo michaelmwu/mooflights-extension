@@ -39,6 +39,15 @@ export const LOCAL_PROVIDERS: LinkProvider[] = [
     buildUrl: kayakUrl,
   },
   {
+    id: "momondo",
+    label: "Momondo",
+    category: "meta",
+    reliabilityScore: 82,
+    knownIssues: "Kayak-family search link; verify route, date, and fare before booking.",
+    supportedTripTypes: ["one-way", "round-trip", "multi-city"],
+    buildUrl: momondoUrl,
+  },
+  {
     id: "expedia",
     label: "Expedia",
     category: "ota",
@@ -46,6 +55,87 @@ export const LOCAL_PROVIDERS: LinkProvider[] = [
     knownIssues: "Search page link; verify price and flight details before booking.",
     supportedTripTypes: ["one-way", "round-trip", "multi-city"],
     buildUrl: expediaSearchUrl,
+  },
+  {
+    id: "travelocity",
+    label: "Travelocity",
+    category: "ota",
+    reliabilityScore: 74,
+    knownIssues: "Expedia Group fallback; verify price and flight details before booking.",
+    supportedTripTypes: ["one-way", "round-trip", "multi-city"],
+    buildUrl: (itinerary) => expediaSearchUrl(itinerary, "www.travelocity.com"),
+  },
+  {
+    id: "orbitz",
+    label: "Orbitz",
+    category: "ota",
+    reliabilityScore: 73,
+    knownIssues: "Expedia Group fallback; verify price and flight details before booking.",
+    supportedTripTypes: ["one-way", "round-trip", "multi-city"],
+    buildUrl: (itinerary) => expediaSearchUrl(itinerary, "www.orbitz.com"),
+  },
+  {
+    id: "cheaptickets",
+    label: "CheapTickets",
+    category: "ota",
+    reliabilityScore: 72,
+    knownIssues: "Expedia Group fallback; verify price and flight details before booking.",
+    supportedTripTypes: ["one-way", "round-trip", "multi-city"],
+    buildUrl: (itinerary) => expediaSearchUrl(itinerary, "www.cheaptickets.com"),
+  },
+  {
+    id: "edreams",
+    label: "eDreams",
+    category: "ota",
+    reliabilityScore: 69,
+    knownIssues: "Powertools-style OTA search link; may broaden or reprice the itinerary.",
+    supportedTripTypes: ["one-way", "round-trip", "multi-city"],
+    buildUrl: (itinerary) => odigeoUrl(itinerary, "www.edreams.com"),
+  },
+  {
+    id: "opodo",
+    label: "Opodo",
+    category: "ota",
+    reliabilityScore: 68,
+    knownIssues: "Powertools-style OTA search link; may broaden or reprice the itinerary.",
+    supportedTripTypes: ["one-way", "round-trip", "multi-city"],
+    buildUrl: (itinerary) => odigeoUrl(itinerary, "www.opodo.com"),
+  },
+  {
+    id: "travellink",
+    label: "Travellink",
+    category: "ota",
+    reliabilityScore: 67,
+    knownIssues: "Powertools-style OTA search link; may broaden or reprice the itinerary.",
+    supportedTripTypes: ["one-way", "round-trip", "multi-city"],
+    buildUrl: (itinerary) => odigeoUrl(itinerary, "www.travellink.com"),
+  },
+  {
+    id: "skyscanner",
+    label: "Skyscanner",
+    category: "meta",
+    reliabilityScore: 66,
+    knownIssues: "Older route search format; may fall back to a broader search page.",
+    supportedTripTypes: ["one-way", "round-trip", "multi-city"],
+    buildUrl: skyscannerUrl,
+  },
+  {
+    id: "priceline",
+    label: "Priceline",
+    category: "ota",
+    reliabilityScore: 62,
+    knownIssues: "Search fallback only; exact fare import requires private price-key data.",
+    supportedTripTypes: ["one-way", "round-trip", "multi-city"],
+    buildUrl: pricelineUrl,
+  },
+  {
+    id: "cheapoair",
+    label: "CheapOair",
+    category: "ota",
+    reliabilityScore: 58,
+    knownIssues: "Legacy OTA link; often needs manual verification after opening.",
+    supportedTripTypes: ["one-way", "round-trip", "multi-city"],
+    buildUrl: cheapOairUrl,
   },
 ];
 
@@ -156,8 +246,128 @@ function kayakUrl(itinerary: NormalizedItinerary): string {
     .join("/")}${pax}`;
 }
 
-function expediaSearchUrl(itinerary: NormalizedItinerary): string {
-  if (itinerary.tripType === "multi-city") return expediaMultiCityDetailsUrl(itinerary);
+function momondoUrl(itinerary: NormalizedItinerary): string {
+  const slices = routeSlices(itinerary);
+  if (slices.length === 0) return "";
+  const pax = itinerary.passengerCount && itinerary.passengerCount > 1 ? `/${itinerary.passengerCount}adults` : "";
+  return `https://www.momondo.com/flight-search/${slices
+    .map((slice) => `${slice.origin}-${slice.destination}/${slice.date}`)
+    .join("/")}${pax}/${kayakFamilyCabin(itinerary)}`;
+}
+
+function skyscannerUrl(itinerary: NormalizedItinerary): string {
+  const slices = routeSlices(itinerary);
+  if (slices.length === 0) return "";
+
+  const params = new URLSearchParams();
+  params.set("adults", String(itinerary.passengerCount || 1));
+  params.set("adultsv2", String(itinerary.passengerCount || 1));
+  params.set("children", "0");
+  params.set("childrenv2", "");
+  params.set("infants", "0");
+  params.set("cabinclass", skyscannerCabin(itinerary));
+  params.set("ref", "day-view");
+  params.set("market", "US");
+
+  return `https://www.skyscanner.com/transport/d/${slices
+    .map((slice) => `${slice.origin.toLowerCase()}/${slice.date}/${slice.destination.toLowerCase()}`)
+    .join("/")}?${params.toString()}#results`;
+}
+
+function pricelineUrl(itinerary: NormalizedItinerary): string {
+  const slices = routeSlices(itinerary);
+  if (slices.length === 0) return "";
+  const route = slices.map((slice) => `${slice.origin}-${slice.destination}-${dateCompact(slice.date)}`).join("/");
+  const params = new URLSearchParams();
+  params.set("adults", String(itinerary.passengerCount || 1));
+  params.set("cabin-class", pricelineCabin(itinerary));
+  return `https://www.priceline.com/m/fly/search/${route}?${params.toString()}`;
+}
+
+function cheapOairUrl(itinerary: NormalizedItinerary): string {
+  const slices = itinerary.slices.filter((slice) => slice.segments.length > 0);
+  if (slices.length === 0) return "";
+
+  const params = new URLSearchParams({
+    tabid: "1832",
+    ulang: "en",
+    ad: String(itinerary.passengerCount || 1),
+    ch: "0",
+    sr: "0",
+    is: "0",
+    il: "0",
+    pos: "US",
+    tt: cheapOairTripType(itinerary.tripType),
+  });
+  if (itinerary.totalPrice) params.set("dispr", String(itinerary.totalPrice));
+
+  let segmentNumber = 0;
+  for (const [sliceIndex, slice] of slices.entries()) {
+    const sliceSegments: number[] = [];
+    for (const segment of slice.segments) {
+      const departureDate = segment.departure?.slice(0, 10) || slice.departureDate;
+      if (!departureDate) continue;
+      segmentNumber += 1;
+      sliceSegments.push(segmentNumber);
+      params.set(`cbn${segmentNumber}`, cheapOairCabin(segment.cabin));
+      params.set(`carr${segmentNumber}`, segment.fareCarrier || segment.carrier);
+      params.set(`dd${segmentNumber}`, dateCompact(departureDate));
+      params.set(`og${segmentNumber}`, segment.origin);
+      params.set(`dt${segmentNumber}`, segment.destination);
+      if (segment.bookingClass) params.set(`fbc${segmentNumber}`, segment.bookingClass);
+      if (segment.flightNumber) params.set(`fnum${segmentNumber}`, segment.flightNumber);
+    }
+    if (sliceSegments.length > 0) params.set(`Slice${sliceIndex + 1}`, sliceSegments.join(","));
+  }
+
+  return segmentNumber > 0 ? `https://www.cheapoair.com/default.aspx?${params.toString()}` : "";
+}
+
+function odigeoUrl(itinerary: NormalizedItinerary, host: string): string {
+  const slices = routeSlices(itinerary);
+  if (slices.length === 0) return "";
+
+  const deeplink = [
+    "type=M",
+    ...slices.flatMap((slice, index) => [
+      `dep${index}=${slice.date}`,
+      `from${index}=${slice.origin}`,
+      `to${index}=${slice.destination}`,
+    ]),
+    `class=${odigeoCabin(itinerary)}`,
+    `adults=${itinerary.passengerCount || 1}`,
+    "children=0",
+    "infants=0",
+    "collectionmethod=false",
+    "airlinescodes=false",
+    "internalSearch=true",
+  ].join(";");
+  const segmentKeys = itinerary.slices
+    .map((slice, index) => {
+      const keys = slice.segments
+        .map((segment) => `${segment.carrier}${segment.flightNumber || ""}`)
+        .filter((key) => key.length > 2);
+      return keys.length > 0 ? `segmentKey${index}=0,${keys.join(",")}` : "";
+    })
+    .filter(Boolean)
+    .join("&");
+  const searchId = Math.floor(new Date(itinerary.capturedAt).getTime() || Date.now());
+  const query = [
+    "landingPageType=TEST_AB",
+    `searchId=${searchId}`,
+    `deeplink=${deeplink}`,
+    "fareItineraryKey=0,1A",
+    segmentKeys,
+    "searchMainProductTypeName=FLIGHT",
+  ]
+    .filter(Boolean)
+    .join("&");
+
+  return `https://${host}/travel/?${query}`;
+}
+
+function expediaSearchUrl(itinerary: NormalizedItinerary, host = "www.expedia.com"): string {
+  if (itinerary.tripType === "multi-city") return expediaMultiCityDetailsUrl(itinerary, host);
 
   const slices = routeSlices(itinerary);
   if (slices.length === 0) return "";
@@ -179,10 +389,10 @@ function expediaSearchUrl(itinerary: NormalizedItinerary): string {
     params.set("d2", expediaLooseDate(slices[1].date));
   }
 
-  return `https://www.expedia.com/Flights-Search?${params.toString()}`;
+  return `https://${host}/Flights-Search?${params.toString()}`;
 }
 
-function expediaMultiCityDetailsUrl(itinerary: NormalizedItinerary): string {
+function expediaMultiCityDetailsUrl(itinerary: NormalizedItinerary, host = "www.expedia.com"): string {
   const slices = itinerary.slices.filter((slice) => slice.segments.length > 0);
   if (slices.length === 0) return "";
 
@@ -218,7 +428,7 @@ function expediaMultiCityDetailsUrl(itinerary: NormalizedItinerary): string {
     }
   }
 
-  return `https://www.expedia.com/Flight-Search-Details?${params.toString()}`;
+  return `https://${host}/Flight-Search-Details?${params.toString()}`;
 }
 
 function routeSlices(itinerary: NormalizedItinerary): Array<{ origin: string; destination: string; date: string }> {
@@ -285,4 +495,53 @@ function expediaSlashedDate(date: string): string {
 function expediaLooseDate(date: string): string {
   const [year, month, day] = date.split("-");
   return `${year}-${Number(month)}-${Number(day)}`;
+}
+
+function kayakFamilyCabin(itinerary: NormalizedItinerary): string {
+  const cabin = lowestCabin(itinerary);
+  if (cabin === "premium-economy") return "premium";
+  if (cabin === "business") return "business";
+  if (cabin === "first") return "first";
+  return "economy";
+}
+
+function skyscannerCabin(itinerary: NormalizedItinerary): string {
+  const cabin = lowestCabin(itinerary);
+  if (cabin === "premium-economy") return "premiumeconomy";
+  if (cabin === "business") return "business";
+  if (cabin === "first") return "first";
+  return "economy";
+}
+
+function pricelineCabin(itinerary: NormalizedItinerary): string {
+  const cabin = lowestCabin(itinerary);
+  if (cabin === "premium-economy") return "PEC";
+  if (cabin === "business") return "BUS";
+  if (cabin === "first") return "FST";
+  return "ECO";
+}
+
+function cheapOairCabin(cabin: ItinerarySegment["cabin"]): string {
+  if (cabin === "premium-economy") return "PremiumEconomy";
+  if (cabin === "business") return "Business";
+  if (cabin === "first") return "First";
+  return "Economy";
+}
+
+function cheapOairTripType(tripType: NormalizedItinerary["tripType"]): string {
+  if (tripType === "round-trip") return "RoundTrip";
+  if (tripType === "multi-city") return "MultiCity";
+  return "OneWay";
+}
+
+function odigeoCabin(itinerary: NormalizedItinerary): string {
+  const cabin = lowestCabin(itinerary);
+  if (cabin === "premium-economy") return "PREMIUM_ECONOMY";
+  if (cabin === "business") return "BUSINESS";
+  if (cabin === "first") return "FIRST";
+  return "TOURIST";
+}
+
+function dateCompact(date: string): string {
+  return date.replaceAll("-", "");
 }

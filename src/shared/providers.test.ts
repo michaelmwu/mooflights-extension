@@ -45,12 +45,30 @@ describe("provider ranking", () => {
     const urls = new Map(links.map((link) => [link.provider.id, link.url]));
 
     expect(urls.get("kayak")).toBe("https://www.kayak.com/flights/JFK-LHR/2026-08-10/LHR-JFK/2026-08-20");
+    expect(urls.get("momondo")).toBe(
+      "https://www.momondo.com/flight-search/JFK-LHR/2026-08-10/LHR-JFK/2026-08-20/business",
+    );
     expect(urls.get("google-flights")).toContain("https://www.google.com/travel/flights?");
     expect(urls.has("ita-copy")).toBe(false);
-    expect(urls.has("skyscanner")).toBe(false);
+    expect(urls.get("skyscanner")).toContain("https://www.skyscanner.com/transport/d/jfk/2026-08-10/lhr");
+    expect(urls.get("skyscanner")).toContain("lhr/2026-08-20/jfk");
     expect(urls.get("expedia")).toContain("https://www.expedia.com/Flights-Search?");
+    expect(urls.get("travelocity")).toContain("https://www.travelocity.com/Flights-Search?");
+    expect(urls.get("orbitz")).toContain("https://www.orbitz.com/Flights-Search?");
+    expect(urls.get("cheaptickets")).toContain("https://www.cheaptickets.com/Flights-Search?");
+    expect(urls.get("edreams")).toContain("https://www.edreams.com/travel/?");
+    expect(urls.get("edreams")).toContain("from0=JFK");
+    expect(urls.get("opodo")).toContain("https://www.opodo.com/travel/?");
+    expect(urls.get("travellink")).toContain("https://www.travellink.com/travel/?");
     expect(urls.get("expedia")).toContain("trip=roundtrip");
     expect(urls.get("expedia")).toContain("leg1=from%3AJFK%2Cto%3ALHR%2Cdeparture%3A8%2F10%2F2026TANYT");
+    expect(urls.get("priceline")).toBe(
+      "https://www.priceline.com/m/fly/search/JFK-LHR-20260810/LHR-JFK-20260820?adults=1&cabin-class=BUS",
+    );
+    expect(urls.get("cheapoair")).toContain("https://www.cheapoair.com/default.aspx?");
+    expect(urls.get("cheapoair")).toContain("tt=RoundTrip");
+    expect(urls.get("cheapoair")).toContain("carr1=AA");
+    expect(urls.get("cheapoair")).toContain("carr2=BA");
     expect(urls.get("where-to-credit")).toMatch(/^https:\/\/wheretocredit\.com\/en\/[A-Z0-9]{2,3}\/[A-Z]$/);
   });
 
@@ -62,6 +80,13 @@ describe("provider ranking", () => {
     expect(itinerary.tripType).toBe("multi-city");
     expect(urls.has("google-flights")).toBe(false);
     expect(urls.get("kayak")).toBe("https://www.kayak.com/flights/TPE-ICN/2026-06-12/CJU-NRT/2026-06-24");
+    expect(urls.get("momondo")).toBe(
+      "https://www.momondo.com/flight-search/TPE-ICN/2026-06-12/CJU-NRT/2026-06-24/economy",
+    );
+    expect(urls.get("skyscanner")).toContain("tpe/2026-06-12/icn");
+    expect(urls.get("edreams")).toContain("dep1=2026-06-24");
+    expect(urls.get("opodo")).toContain("segmentKey1=0,ZH642,ZH651");
+    expect(urls.get("priceline")).toContain("TPE-ICN-20260612/CJU-NRT-20260624");
 
     const expedia = new URL(urls.get("expedia") || "");
     expect(expedia.origin + expedia.pathname).toBe("https://www.expedia.com/Flight-Search-Details");
@@ -75,6 +100,16 @@ describe("provider ranking", () => {
     expect(expedia.searchParams.get("legs[1].arrivalAirport")).toBe("NRT");
     expect(expedia.searchParams.get("legs[1].segments[0]")).toBe("2026-06-24-coach-cju-szx-zh-642");
     expect(expedia.searchParams.get("legs[1].segments[1]")).toBe("2026-06-25-coach-szx-nrt-zh-651");
+
+    const travelocity = new URL(urls.get("travelocity") || "");
+    expect(travelocity.origin + travelocity.pathname).toBe("https://www.travelocity.com/Flight-Search-Details");
+
+    const cheapOair = new URL(urls.get("cheapoair") || "");
+    expect(cheapOair.searchParams.get("tt")).toBe("MultiCity");
+    expect(cheapOair.searchParams.get("Slice1")).toBe("1,2");
+    expect(cheapOair.searchParams.get("Slice2")).toBe("3,4");
+    expect(cheapOair.searchParams.get("carr1")).toBe("NX");
+    expect(cheapOair.searchParams.get("dd4")).toBe("20260625");
   });
 });
 

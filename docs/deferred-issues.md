@@ -46,7 +46,10 @@ When a user opens a provider page and grants host permission, inspect the page f
 
 ## Verified OTA Deep Links
 
-Re-add OTA/provider links such as Skyscanner and Expedia only after their current URL formats are verified against live pages and covered by fixtures.
+The extension includes local fallback links for high-confidence providers plus lower-confidence Powertools-style
+search links for Momondo, Skyscanner, Expedia Group sites, eDreams/Opodo/Travellink, Priceline, and CheapOair.
+Follow-up work: live-verify current URL formats, demote or hide providers with poor match rates through backend
+metadata, and add provider fixtures for newly verified formats.
 
 ## Affiliate Routing
 
