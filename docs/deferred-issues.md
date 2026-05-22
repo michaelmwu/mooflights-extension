@@ -25,8 +25,7 @@ carrier-specific rules so the open extension does not bundle brittle commercial 
 
 Candidate seed sources:
 
-- OneTravel airline codes: useful for broad code/name/website seeding, but requires validation because some entries are
-  stale or missing newer carriers.
+- IATA current airline members: preferred source for active airline code/name data.
 - Wikipedia list of airline codes: import only rows with valid two-character IATA codes and real airline article links;
   skip rows without IATA codes or links that point to index/list-style pages.
 

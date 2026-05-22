@@ -23,8 +23,8 @@ The extension must keep working without the backend, but it should not bundle ev
 Candidate sources:
 
 - ITA Matrix itinerary JSON: best runtime source for the current itinerary carrier display name.
-- OneTravel airline codes: broad seed data, but stale entries must be filtered.
-- Wikipedia list of airline codes: keep only rows with valid two-character IATA codes and airline names that link to real
-  airline article pages, not index/list/disambiguation-style pages.
+- IATA current airline members: preferred source for active airline code/name data.
+- Wikipedia list of airline codes: supplemental source. Keep only rows with valid two-character IATA codes and airline
+  names that link to real airline article pages, not index/list/disambiguation-style pages.
 
 Generated airline snapshots should include source attribution and a `fetched_at` timestamp.
