@@ -1,10 +1,9 @@
-import whereToCreditData from "./data/wheretocredit-compact.json";
+import mileageEarningData from "./data/mileage-earning-compact.json";
 import { flattenSegments } from "./itinerary";
 import type { ItinerarySegment, NormalizedItinerary } from "./types";
 
 type CompactBookingClass = {
   cabin: string | null;
-  url: string;
   top_program: string | null;
   top_redeemable_percent: number | null;
   top_redeemable_value: string | null;
@@ -17,13 +16,12 @@ type CompactAirline = {
   iata: string;
   name: string;
   alliance: string | null;
-  url: string;
   booking_classes: Record<string, CompactBookingClass>;
 };
 
-type CompactWhereToCredit = {
+type CompactMileageEarningData = {
   provider: string;
-  source_url: string;
+  source_note: string;
   fetched_at: string;
   airlines: Record<string, CompactAirline>;
 };
@@ -53,7 +51,10 @@ export type WhereToCreditSegmentInsight = {
   url?: string;
 };
 
-const DATA = whereToCreditData as CompactWhereToCredit;
+// This generated snapshot must come from airline/program public earning charts,
+// licensed datasets, or curated Mu Travel reference data. Where to Credit URLs
+// are outbound lookup destinations, not the source copied into this file.
+const DATA = mileageEarningData as CompactMileageEarningData;
 
 export function buildValidatedWhereToCreditUrl(itinerary: NormalizedItinerary): string {
   const insights = inspectWhereToCreditSegments(itinerary);
@@ -100,7 +101,7 @@ function inspectWhereToCreditSegment(segment: ItinerarySegment): WhereToCreditSe
       segment,
       label,
       status: "missing-booking-class",
-      url: airline.url,
+      url: whereToCreditAirlineUrl(carrier),
       message: `Missing booking class for ${airline.name} (${carrier}).`,
     };
   }
@@ -111,7 +112,7 @@ function inspectWhereToCreditSegment(segment: ItinerarySegment): WhereToCreditSe
       segment,
       label,
       status: "airline-only",
-      url: airline.url,
+      url: whereToCreditAirlineUrl(carrier),
       message: `No earning rows for ${airline.name} (${carrier}) ${bookingClass}.`,
     };
   }
@@ -120,7 +121,7 @@ function inspectWhereToCreditSegment(segment: ItinerarySegment): WhereToCreditSe
     segment,
     label,
     status: "earning-data",
-    url: booking.url,
+    url: whereToCreditBookingUrl(carrier, bookingClass),
     message: `${airline.name} booking class ${bookingClass} has earning data.`,
   };
 }
@@ -153,7 +154,7 @@ export function estimateSegmentEarnings(
     segment,
     airlineName: airline.name,
     bookingClass,
-    url: booking.url,
+    url: whereToCreditBookingUrl(carrier, bookingClass),
     program,
     estimatedMiles: computed.estimatedMiles,
     formula: computed.formula,
@@ -216,6 +217,14 @@ function inferSegmentFare(
   const perPassengerTotal = itinerary.totalPrice / passengerCount;
   if (segmentCount <= 1) return perPassengerTotal;
   return perPassengerTotal / segmentCount;
+}
+
+function whereToCreditAirlineUrl(carrier: string): string {
+  return `https://wheretocredit.com/en/${encodeURIComponent(carrier)}`;
+}
+
+function whereToCreditBookingUrl(carrier: string, bookingClass: string): string {
+  return `${whereToCreditAirlineUrl(carrier)}/${encodeURIComponent(bookingClass)}`;
 }
 
 function finiteNumber(value: number | null | undefined): value is number {

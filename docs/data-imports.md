@@ -13,10 +13,16 @@ The extension must keep working without the backend, but it should not bundle ev
 
 ## Suggested Scripts
 
-- `bun run data:wheretocredit`: rebuild the compact Where to Credit snapshot from approved reference data.
+- `bun run data:earnings`: rebuild the compact mileage earning snapshot from approved reference data.
 - `bun run data:airlines`: rebuild public airline code/name fallbacks from approved sources.
 - `bun run data:verify`: validate generated snapshots, fail on duplicate codes, missing names, invalid URLs, and oversized
   output.
+
+## Mileage Earning Sources
+
+Do not copy Where to Credit page contents into the extension. Where to Credit can remain an outbound lookup target, but
+bundled earning-rate snapshots should be generated from airline/program public earning charts, licensed datasets, or
+curated Mu Travel reference data.
 
 ## Airline Code Sources
 

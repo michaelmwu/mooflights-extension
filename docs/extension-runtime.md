@@ -34,16 +34,18 @@ The extension targets Manifest V3 and currently requests:
 - `airports.ts`: airport filtering helpers.
 - `storage.ts`: settings defaults and persistence.
 - `backendClient.ts`: optional hosted metadata client with silent fallback.
-- `wheretocredit.ts`: compact offline earnings estimates from the bundled Where to Credit snapshot.
+- `wheretocredit.ts`: compact offline earnings estimates plus outbound Where to Credit link helpers.
 
-## Where to Credit Snapshot
+## Mileage Earning Snapshot
 
-The extension bundles a compact generated snapshot at `src/shared/data/wheretocredit-compact.json`.
+The extension bundles a compact generated snapshot at `src/shared/data/mileage-earning-compact.json`.
 
 It is used to show rough earning estimates such as:
 
 - distance x earning percentage
 - fare x revenue multiplier
-- fixed miles when Where to Credit reports a fixed value
+- fixed miles
 
-The extension does not scrape or hotlink Where to Credit at runtime. Snapshot refresh automation is tracked in GitHub issue #7.
+This snapshot should be generated only from approved airline/program public earning charts, licensed datasets, or curated
+Mu Travel reference data. Where to Credit should be treated as an outbound lookup destination, not as the source copied
+into the extension. Snapshot refresh automation is tracked in GitHub issue #7.

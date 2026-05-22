@@ -35,7 +35,7 @@ pipeline, but the extension repo still needs deterministic scripts to reproduce 
 ## Preferred Frequent-Flyer Programs
 
 Let users rank the frequent-flyer programs they actually use, then prefer those programs in miles-credit guidance instead
-of always showing the absolute highest earning option. This requires expanding the bundled/backend Where to Credit snapshot
+of always showing the absolute highest earning option. This requires expanding the bundled/backend mileage earning snapshot
 beyond top-program fields.
 
 ## Opened OTA Page Checks
@@ -54,6 +54,7 @@ Add transparent affiliate routing controlled by backend config and local user op
 
 Replace the small seed dataset with a documented source/update pipeline and generated extension-safe JSON.
 
-## Where to Credit Snapshot Pipeline
+## Mileage Earning Snapshot Pipeline
 
-Document and automate refreshing the extension-safe mileage earning snapshot from approved reference data.
+Document and automate refreshing the extension-safe mileage earning snapshot from airline/program public earning charts,
+licensed datasets, or curated Mu Travel reference data. Do not copy Where to Credit page contents into the extension.
