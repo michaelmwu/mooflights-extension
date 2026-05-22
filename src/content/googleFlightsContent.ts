@@ -126,18 +126,9 @@ function render(): void {
 }
 
 function renderBaseline(result: GoogleFlightsCountryResult): string {
-  const direct = result.direct
-    ? `${result.direct.priceText} ${result.direct.provider}`
-    : "No direct airline option found";
-  const cheapest = result.cheapest
-    ? `${result.cheapest.priceText} ${result.cheapest.provider}`
-    : "No booking options found";
   return `
     <dl>
-      <div><dt>This page</dt><dd>${escapeHtml(result.country)}</dd></div>
-      <div><dt>Cheapest</dt><dd>${escapeHtml(cheapest)}</dd></div>
-      <div><dt>Direct</dt><dd>${escapeHtml(direct)}</dd></div>
-      <div><dt>Options</dt><dd>${result.options.length}</dd></div>
+      <div><dt>This page</dt><dd>${escapeHtml(countryDisplayName(result.country))}</dd></div>
     </dl>
   `;
 }
@@ -159,7 +150,7 @@ function renderResults(results: GoogleFlightsCountryResult[]): string {
           const isCurrent = state.baseline?.url === result.url;
           return `
             <div class="result ${result.status}">
-              <strong>${escapeHtml(result.country)}${isCurrent ? ' <span class="current">current</span>' : ""}</strong>
+              <strong>${escapeHtml(countryDisplayName(result.country))}${isCurrent ? ' <span class="current">current</span>' : ""}</strong>
               <span>${escapeHtml(cheapest)}</span>
               <small>${escapeHtml(direct)} · ${result.options.length} option(s)${result.refreshed ? " · retried" : ""}</small>
             </div>
@@ -176,6 +167,17 @@ function renderCheapest(result: GoogleFlightsCountryResult): string {
     .filter((option) => option.price === result.cheapest?.price)
     .map((option) => option.provider);
   return `${result.cheapest.priceText} ${tiedProviders.join(", ")}`;
+}
+
+function countryDisplayName(country: string): string {
+  const code = country.toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) return "Current country";
+  try {
+    const label = new Intl.DisplayNames(["en"], { type: "region" }).of(code);
+    return label ? `${label} (${code})` : code;
+  } catch {
+    return code;
+  }
 }
 
 async function compareCountries(): Promise<void> {
