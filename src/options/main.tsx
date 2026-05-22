@@ -343,14 +343,17 @@ function categoryLabel(category: string): string {
 }
 
 function filteredMileagePrograms(programs: string[], selectedPrograms: string[], search: string): string[] {
-  const selected = new Set(selectedPrograms);
+  const selectedRanks = new Map(selectedPrograms.map((program, index) => [program, index]));
   const query = search.trim().toLowerCase();
   return programs
     .filter((program) => !query || program.toLowerCase().includes(query))
     .sort((left, right) => {
-      const leftSelected = selected.has(left);
-      const rightSelected = selected.has(right);
+      const leftSelected = selectedRanks.has(left);
+      const rightSelected = selectedRanks.has(right);
       if (leftSelected !== rightSelected) return leftSelected ? -1 : 1;
+      if (leftSelected && rightSelected) {
+        return (selectedRanks.get(left) ?? 0) - (selectedRanks.get(right) ?? 0);
+      }
       return left.localeCompare(right);
     })
     .slice(0, query ? 30 : 14);

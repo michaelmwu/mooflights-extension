@@ -563,7 +563,9 @@ function resultRowForGrid(grid: HTMLElement): HTMLTableRowElement | null {
 
 function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSummary {
   const estimates = estimateEarnings(itinerary);
-  const preferredPrograms = new Set(state.settings?.preferredFrequentFlyerPrograms || []);
+  const preferredProgramRanks = new Map(
+    (state.settings?.preferredFrequentFlyerPrograms || []).map((program, index) => [program, index]),
+  );
   const byProgram = new Map<string, { miles: number; formulas: MileageFormula[] }>();
   for (const estimate of estimates) {
     if (typeof estimate.estimatedMiles !== "number" || estimate.estimatedMiles <= 0) continue;
@@ -583,10 +585,12 @@ function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSumm
       program,
       miles: value.miles,
       formulas: value.formulas,
-      preferred: preferredPrograms.has(program),
+      preferenceRank: preferredProgramRanks.get(program) ?? Number.POSITIVE_INFINITY,
+      preferred: preferredProgramRanks.has(program),
     }))
     .sort((left, right) => {
       if (left.preferred !== right.preferred) return left.preferred ? -1 : 1;
+      if (left.preferenceRank !== right.preferenceRank) return left.preferenceRank - right.preferenceRank;
       return right.miles - left.miles || left.program.localeCompare(right.program);
     });
 
@@ -768,13 +772,16 @@ function compactMileageCalculation(formulas: MileageFormula[]): string {
 }
 
 function segmentDirectionLabel(itinerary: NormalizedItinerary, segment: ItinerarySegment): string {
-  if (itinerary.slices.length <= 1) return "";
+  if (itinerary.slices.length <= 1) return itinerary.tripType === "one-way" ? "one-way" : "";
   const sliceIndex = itinerary.slices.findIndex((slice) => slice.segments.includes(segment));
   if (sliceIndex < 0) return "";
+  const slice = itinerary.slices[sliceIndex];
+  const route = slice ? `${slice.origin}-${slice.destination}` : "";
   if (itinerary.tripType === "round-trip" && itinerary.slices.length === 2) {
-    return sliceIndex === 0 ? "outbound" : "return";
+    return sliceIndex === 0 ? `outbound ${route}` : `return ${route}`;
   }
-  return `slice ${sliceIndex + 1}`;
+  if (itinerary.tripType === "multi-city") return `leg ${sliceIndex + 1}${route ? ` ${route}` : ""}`;
+  return `slice ${sliceIndex + 1}${route ? ` ${route}` : ""}`;
 }
 
 function maybeAutoCapture(shouldResetLocation = true): void {
