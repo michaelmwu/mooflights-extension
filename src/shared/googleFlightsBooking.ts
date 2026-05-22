@@ -24,6 +24,7 @@ export type GoogleFlightsFlightSegment = {
   destination: string;
   departureDate: string;
   sliceDate?: string;
+  sliceGroup?: number;
   carrier?: string;
   flightNumber?: string;
 };
@@ -107,26 +108,67 @@ export function parseGoogleFlightsBookingOptions(
 function parseGoogleFlightsTfsSegments(tfs: string): GoogleFlightsFlightSegment[] {
   const decoded = decodeBase64UrlText(tfs);
   if (!decoded) return [];
+  const slices = googleFlightsTfsSliceBlocks(decoded);
+  const parsedSlices = slices.length > 0 ? slices : [{ value: decoded, group: 0 }];
+  const segments = parsedSlices.flatMap((slice) => parseGoogleFlightsTfsSliceSegments(slice.value, slice.group));
+  return dedupeGoogleFlightsSegments(segments);
+}
+
+function googleFlightsTfsSliceBlocks(value: string): Array<{ value: string; group: number }> {
+  const blocks: Array<{ value: string; group: number }> = [];
+  let group = 0;
+  for (let index = 0; index < value.length - 2; index += 1) {
+    if (value.charCodeAt(index) !== 26) continue;
+    const length = readVarint(value, index + 1);
+    if (!length) continue;
+    const start = length.nextIndex;
+    const end = start + length.value;
+    if (end > value.length) continue;
+    const block = value.slice(start, end);
+    if (!/\d{4}-\d{2}-\d{2}/.test(block) || !/[A-Z]{3}/.test(block)) continue;
+    blocks.push({ value: block, group });
+    group += 1;
+    index = end - 1;
+  }
+  return blocks;
+}
+
+function readVarint(value: string, startIndex: number): { value: number; nextIndex: number } | null {
+  let result = 0;
+  let shift = 0;
+  for (let index = startIndex; index < value.length; index += 1) {
+    const byte = value.charCodeAt(index);
+    result |= (byte & 0x7f) << shift;
+    if ((byte & 0x80) === 0) return { value: result, nextIndex: index + 1 };
+    shift += 7;
+    if (shift > 28) return null;
+  }
+  return null;
+}
+
+function parseGoogleFlightsTfsSliceSegments(value: string, group: number): GoogleFlightsFlightSegment[] {
   const segments: GoogleFlightsFlightSegment[] = [];
+  const sliceDate = value.match(/\d{4}-\d{2}-\d{2}/)?.[0];
   // biome-ignore lint/complexity/useRegexLiterals: constructor keeps protobuf control markers out of a regex literal.
   const pattern = new RegExp(
-    "(\\d{4}-\\d{2}-\\d{2})[\\s\\S]{0,24}?([A-Z]{3})[\\s\\S]{0,24}?(\\d{4}-\\d{2}-\\d{2})[\\s\\S]{0,24}?([A-Z]{3})[\\s\\S]{0,12}?([A-Z][A-Z0-9]|[0-9][A-Z])(?:[\\x20-\\x7E]{0,2})?[\\x01-\\x04](\\d{1,4})",
+    "\\x0a\\x03([A-Z]{3})\\x12\\x0a(\\d{4}-\\d{2}-\\d{2})\\x1a\\x03([A-Z]{3})\\x2a\\x02([A-Z][A-Z0-9]|[0-9][A-Z])\\x32[\\x01-\\x04](\\d{1,4})",
     "g",
   );
-  let match = pattern.exec(decoded);
+  let match = pattern.exec(value);
   while (match) {
-    const [, sliceDate, origin, segmentDate, destination, carrier, flightNumber] = match;
+    const [, origin, segmentDate, destination, carrier, flightNumber] = match;
     segments.push({
-      origin,
-      destination,
-      departureDate: segmentDate || sliceDate,
+      origin: origin || "",
+      destination: destination || "",
+      departureDate: segmentDate || sliceDate || "",
       sliceDate,
+      sliceGroup: group,
       carrier,
       flightNumber,
     });
-    match = pattern.exec(decoded);
+    match = pattern.exec(value);
   }
-  return dedupeGoogleFlightsSegments(segments);
+  return segments;
 }
 
 function dedupeGoogleFlightsSegments(segments: GoogleFlightsFlightSegment[]): GoogleFlightsFlightSegment[] {
@@ -137,6 +179,7 @@ function dedupeGoogleFlightsSegments(segments: GoogleFlightsFlightSegment[]): Go
       segment.destination,
       segment.departureDate,
       segment.sliceDate || "",
+      typeof segment.sliceGroup === "number" ? segment.sliceGroup : "",
       segment.carrier || "",
       segment.flightNumber || "",
     ].join(":");
@@ -152,10 +195,12 @@ function groupGoogleFlightsSegments(segments: GoogleFlightsFlightSegment[]): Goo
     const current = slices.at(-1);
     const currentOrigin = current?.segments[0]?.origin;
     const currentDestination = current?.segments.at(-1)?.destination;
-    const currentSliceDate = current?.segments[0]?.sliceDate;
-    const sameSlice = currentSliceDate && segment.sliceDate ? currentSliceDate === segment.sliceDate : true;
-    const isConnection =
-      current && sameSlice && currentDestination === segment.origin && segment.destination !== currentOrigin;
+    const currentSliceGroup = current?.segments[0]?.sliceGroup;
+    const sameSliceGroup =
+      typeof currentSliceGroup === "number" && typeof segment.sliceGroup === "number"
+        ? currentSliceGroup === segment.sliceGroup
+        : currentDestination === segment.origin;
+    const isConnection = current && sameSliceGroup && segment.destination !== currentOrigin;
     if (current && isConnection) {
       current.destination = segment.destination;
       current.segments.push(segment);

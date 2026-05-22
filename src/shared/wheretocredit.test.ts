@@ -315,6 +315,70 @@ describe("Where to Credit earnings estimates", () => {
     });
   });
 
+  it("shows United MileagePlus status tiers from ITA base fare when United is preferred", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "one-way",
+      totalPrice: 600,
+      passengerCount: 1,
+      carriers: ["UA"],
+      fareBases: ["SNAA0BC"],
+      slices: [
+        {
+          origin: "TPE",
+          destination: "SFO",
+          segments: [
+            {
+              origin: "TPE",
+              destination: "SFO",
+              carrier: "UA",
+              bookingClass: "S",
+              farePrice: 450,
+              cabin: "economy",
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(
+      estimateEarnings(itinerary, ["United MileagePlus"])
+        .filter((estimate) => estimate.program.startsWith("United MileagePlus"))
+        .map((estimate) => ({
+          program: estimate.program,
+          miles: estimate.estimatedMiles,
+          formula: estimate.formula,
+        })),
+    ).toEqual([
+      {
+        program: "United MileagePlus member",
+        miles: 2250,
+        formula: "450 x 5 miles per currency unit",
+      },
+      {
+        program: "United MileagePlus Premier Silver",
+        miles: 3150,
+        formula: "450 x 7 miles per currency unit",
+      },
+      {
+        program: "United MileagePlus Premier Gold",
+        miles: 3600,
+        formula: "450 x 8 miles per currency unit",
+      },
+      {
+        program: "United MileagePlus Premier Platinum",
+        miles: 4050,
+        formula: "450 x 9 miles per currency unit",
+      },
+      {
+        program: "United MileagePlus Premier 1K",
+        miles: 4950,
+        formula: "450 x 11 miles per currency unit",
+      },
+    ]);
+  });
+
   it("splits revenue-based earnings by passenger and segment", () => {
     const itinerary: NormalizedItinerary = {
       source: "ita-matrix",

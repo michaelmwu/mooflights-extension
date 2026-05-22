@@ -120,6 +120,18 @@ const PROGRAM_OWNER_CARRIER_CODES: Record<string, string[]> = {
 // snapshot stores all program earning rows. Keep this small and source future
 // additions from airline/program public earning charts or licensed data.
 const SUPPLEMENTAL_PROGRAM_EARNINGS: Record<string, Record<string, SupplementalProgramEarning[]>> = {
+  UA: Object.fromEntries(
+    ["B", "E", "G", "H", "K", "L", "M", "N", "Q", "S", "T", "U", "V", "W", "Y"].map((bookingClass) => [
+      bookingClass,
+      [
+        { program: "United MileagePlus member", percent: null, value: "5 Miles/USD" },
+        { program: "United MileagePlus Premier Silver", percent: null, value: "7 Miles/USD" },
+        { program: "United MileagePlus Premier Gold", percent: null, value: "8 Miles/USD" },
+        { program: "United MileagePlus Premier Platinum", percent: null, value: "9 Miles/USD" },
+        { program: "United MileagePlus Premier 1K", percent: null, value: "11 Miles/USD" },
+      ],
+    ]),
+  ),
   OZ: {
     S: [
       { program: "Air India Maharaja Club", percent: 100, value: "100%" },
@@ -269,7 +281,7 @@ function estimateSegmentEarningsRows(
   if (!airline || !booking) return [];
 
   const distance = segment.distance ?? inferSegmentDistance(itinerary, segment, segments, segmentIndex, segmentCount);
-  const fare = inferSegmentFare(itinerary, segmentCount, segmentIndex);
+  const fare = inferSegmentFare(itinerary, segment, segmentCount, segmentIndex);
   const rows = earningRows(carrier, bookingClass, booking, preferredPrograms);
 
   return rows.map((row) => {
@@ -305,11 +317,19 @@ function earningRows(
 
   const preferred = new Set(preferredPrograms);
   for (const row of SUPPLEMENTAL_PROGRAM_EARNINGS[carrier]?.[bookingClass] || []) {
-    if (preferred.size > 0 && !preferred.has(row.program)) continue;
+    if (preferred.size > 0 && !matchesPreferredProgram(row.program, preferred)) continue;
     rows.set(row.program, row);
   }
 
   return Array.from(rows.values());
+}
+
+function matchesPreferredProgram(program: string, preferredPrograms: Set<string>): boolean {
+  if (preferredPrograms.has(program)) return true;
+  for (const preferredProgram of preferredPrograms) {
+    if (program.startsWith(`${preferredProgram} `)) return true;
+  }
+  return false;
 }
 
 function computeMiles(
@@ -400,9 +420,11 @@ function inferReciprocalRoundTripDistance(
 
 function inferSegmentFare(
   itinerary: NormalizedItinerary,
+  segment: ItinerarySegment | undefined,
   segmentCount: number,
   _segmentIndex: number,
 ): number | undefined {
+  if (finiteNumber(segment?.farePrice)) return segment.farePrice;
   if (!finiteNumber(itinerary.totalPrice)) return undefined;
   const passengerCount =
     finiteNumber(itinerary.passengerCount) && itinerary.passengerCount > 0 ? itinerary.passengerCount : 1;

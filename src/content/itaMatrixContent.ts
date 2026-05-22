@@ -659,8 +659,8 @@ function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSumm
       program,
       miles: value.miles,
       formulas: value.formulas,
-      preferenceRank: preferredProgramRanks.get(program) ?? Number.POSITIVE_INFINITY,
-      preferred: preferredProgramRanks.has(program),
+      preferenceRank: mileageProgramPreferenceRank(program, preferredProgramRanks),
+      preferred: mileageProgramPreferenceRank(program, preferredProgramRanks) !== Number.POSITIVE_INFINITY,
     }))
     .sort((left, right) => {
       if (left.preferred !== right.preferred) return left.preferred ? -1 : 1;
@@ -745,6 +745,15 @@ function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSumm
     title: "No mileage estimate available for this result.",
     status: "missing",
   };
+}
+
+function mileageProgramPreferenceRank(program: string, preferredProgramRanks: Map<string, number>): number {
+  const exact = preferredProgramRanks.get(program);
+  if (typeof exact === "number") return exact;
+  for (const [preferredProgram, rank] of preferredProgramRanks.entries()) {
+    if (program.startsWith(`${preferredProgram} `)) return rank;
+  }
+  return Number.POSITIVE_INFINITY;
 }
 
 function updateResultRowMileage(row: HTMLTableRowElement, summary: ResultMileageSummary): void {
@@ -1020,7 +1029,7 @@ function renderMileageCredit(itinerary: NormalizedItinerary): string {
   const preferredPrograms = new Set(preferredProgramList);
   const visibleEstimates =
     preferredPrograms.size > 0 && !state.showAllMileagePrograms
-      ? estimates.filter((estimate) => preferredPrograms.has(estimate.program))
+      ? estimates.filter((estimate) => matchesPreferredMileageProgram(estimate.program, preferredPrograms))
       : estimates;
   const hiddenEstimateCount = estimates.length - visibleEstimates.length;
   const insights = inspectWhereToCreditSegments(itinerary);
@@ -1069,6 +1078,14 @@ function renderMileageCredit(itinerary: NormalizedItinerary): string {
         .join("")}
     </div>
   `;
+}
+
+function matchesPreferredMileageProgram(program: string, preferredPrograms: Set<string>): boolean {
+  if (preferredPrograms.has(program)) return true;
+  for (const preferredProgram of preferredPrograms) {
+    if (program.startsWith(`${preferredProgram} `)) return true;
+  }
+  return false;
 }
 
 function creditSegmentKey(

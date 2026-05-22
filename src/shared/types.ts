@@ -12,6 +12,7 @@ export type ItinerarySegment = {
   bookingClass?: string;
   fareBasis?: string;
   fareCarrier?: string;
+  farePrice?: number;
   duration?: number;
   cabin: Cabin;
   departure?: string;

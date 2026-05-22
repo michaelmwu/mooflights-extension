@@ -161,13 +161,57 @@ describe("Google Flights booking option parser", () => {
     });
   });
 
+  it("keeps connected Google Flights segments in one Matrix slice", () => {
+    const result = parseGoogleFlightsMatrixSearch(
+      "https://www.google.com/travel/flights/booking?tfs=CBwQAhpuEgoyMDI2LTA1LTI5IiAKA0hORBIKMjAyNi0wNS0yORoDR01QKgJPWjIEMTA3NSIfCgNJQ04SCjIwMjYtMDUtMzAaA0hLRyoCT1oyAzcyMUAKSBNQAFgXagwIAxIIL20vMDdkZmtyBwgBEgNIS0dAAUgBcAGCAQsI____________AZgBAg&tfu=CnRDalJJVlRsNlIwa3hhRTlXVmxsQlJIaGljVUZDUnkwdExTMHRMUzB0TFhSc2Myb3lNa0ZCUVVGQlIyOVJhRXRaVDNoUlVuVkJFZ3hQV2pFd056VjhUMW8zTWpFYUN3anIvUUVRQWhvRFZWTkVPQnh3Ni8wQhICCAAiAA&gl=JP&curr=USD",
+    );
+
+    expect(result).toMatchObject({
+      tripType: "one-way",
+      carriers: ["OZ"],
+      slices: [
+        {
+          origin: "HND",
+          destination: "HKG",
+          departureDate: "2026-05-29",
+          segments: [
+            {
+              origin: "HND",
+              destination: "GMP",
+              carrier: "OZ",
+              flightNumber: "1075",
+            },
+            {
+              origin: "ICN",
+              destination: "HKG",
+              carrier: "OZ",
+              flightNumber: "721",
+            },
+          ],
+        },
+      ],
+    });
+
+    const search = new URL(result?.matrixUrl || "").searchParams.get("search") || "";
+    const decoded = JSON.parse(atob(search));
+    expect(decoded.slices[0]).toMatchObject({
+      origin: ["HND"],
+      dest: ["HKG"],
+      routing: "OZ1075 OZ721",
+    });
+  });
+
   it("keeps return-leg connections in their own Matrix slice", () => {
     const result = parseGoogleFlightsMatrixSearch(
       `https://www.google.com/travel/flights/booking?tfs=${encodeTfsText([
-        tfsSegment("2026-05-29", "HND", "ICN", "OZ", "1075"),
-        tfsSegment("2026-05-29", "ICN", "HKG", "OZ", "721"),
-        tfsSegment("2026-06-03", "HKG", "TPE", "CI", "922"),
-        tfsSegment("2026-06-03", "TPE", "HND", "CI", "220"),
+        tfsSlice(
+          tfsSegment("2026-05-29", "HND", "ICN", "OZ", "1075"),
+          tfsSegment("2026-05-29", "ICN", "HKG", "OZ", "721"),
+        ),
+        tfsSlice(
+          tfsSegment("2026-06-03", "HKG", "TPE", "CI", "922"),
+          tfsSegment("2026-06-03", "TPE", "HND", "CI", "220"),
+        ),
       ])}`,
     );
 
@@ -208,17 +252,22 @@ describe("Google Flights booking option parser", () => {
 });
 
 function tfsSegment(
-  sliceDate: string,
+  departureDate: string,
   origin: string,
   destination: string,
   carrier: string,
   flightNumber: string,
 ): string {
-  return `${sliceDate} ${origin} ${sliceDate} ${destination} ${carrier}${String.fromCharCode(
+  return `\x0a\x03${origin}\x12\x0a${departureDate}\x1a\x03${destination}\x2a\x02${carrier}\x32${String.fromCharCode(
     flightNumber.length,
   )}${flightNumber}`;
 }
 
+function tfsSlice(...segments: string[]): string {
+  const value = segments.join("");
+  return `\x1a${String.fromCharCode(value.length)}${value}`;
+}
+
 function encodeTfsText(parts: string[]): string {
-  return btoa(parts.join(" ")).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return btoa(parts.join("")).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }

@@ -106,8 +106,8 @@ function normalizeBookingClass(value: unknown): string {
   return /^[A-Z]$/.test(bookingClass) ? bookingClass : "";
 }
 
-function buildFareMap(data: any): Map<string, { carrier?: string; code?: string }> {
-  const fareMap = new Map<string, { carrier?: string; code?: string }>();
+function buildFareMap(data: any): Map<string, { carrier?: string; code?: string; price?: number }> {
+  const fareMap = new Map<string, { carrier?: string; code?: string; price?: number }>();
   const fareCounters = new Map<string, number>();
   const tickets = Array.isArray(data?.tickets) ? data.tickets : [];
 
@@ -128,6 +128,7 @@ function buildFareMap(data: any): Map<string, { carrier?: string; code?: string 
             fareMap.set(numberedFareKey(baseKey, fareIndex), {
               carrier: stringOrUndefined(fare?.carrier)?.toUpperCase(),
               code: stringOrUndefined(fare?.code)?.toUpperCase(),
+              price: parseDisplayTotal(fare?.displayAdjustedPrice),
             });
           }
         }
@@ -140,7 +141,7 @@ function buildFareMap(data: any): Map<string, { carrier?: string; code?: string 
 
 function normalizeSegments(
   slice: any,
-  fareMap: Map<string, { carrier?: string; code?: string }>,
+  fareMap: Map<string, { carrier?: string; code?: string; price?: number }>,
   fareCounters: Map<string, number>,
 ): ItinerarySegment[] {
   const segments = Array.isArray(slice?.segments) ? slice.segments : [];
@@ -171,6 +172,7 @@ function normalizeSegments(
       bookingClass,
       fareBasis: fare?.code,
       fareCarrier: fare?.carrier,
+      farePrice: fare?.price,
       duration: numberOrUndefined(leg?.duration ?? segment?.duration),
       cabin: normalizeCabin(bookingInfo?.cabin),
       departure: stringOrUndefined(leg?.departure),

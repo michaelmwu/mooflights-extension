@@ -194,7 +194,7 @@ function renderMilesEstimatePrompt(matrixSearch: GoogleFlightsMatrixSearch | nul
   return `
     <div class="mileage-prompt">
       <strong>Miles earning</strong>
-      <span>Booking class is unknown on Google Flights. Search ITA Matrix to improve estimates for ${escapeHtml(carrierLabels)}.</span>
+      <span>Search ITA Matrix to see booking classes and mileage earning details for ${escapeHtml(carrierLabels)}.</span>
     </div>
   `;
 }
