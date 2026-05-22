@@ -200,7 +200,8 @@ function groupGoogleFlightsSegments(segments: GoogleFlightsFlightSegment[]): Goo
       typeof currentSliceGroup === "number" && typeof segment.sliceGroup === "number"
         ? currentSliceGroup === segment.sliceGroup
         : currentDestination === segment.origin;
-    const isConnection = current && sameSliceGroup && segment.destination !== currentOrigin;
+    const isConnection =
+      current && sameSliceGroup && currentDestination === segment.origin && segment.destination !== currentOrigin;
     if (current && isConnection) {
       current.destination = segment.destination;
       current.segments.push(segment);

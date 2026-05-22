@@ -161,18 +161,18 @@ describe("Google Flights booking option parser", () => {
     });
   });
 
-  it("keeps connected Google Flights segments in one Matrix slice", () => {
+  it("splits Google Flights airport-change segments into Matrix multi-city slices", () => {
     const result = parseGoogleFlightsMatrixSearch(
       "https://www.google.com/travel/flights/booking?tfs=CBwQAhpuEgoyMDI2LTA1LTI5IiAKA0hORBIKMjAyNi0wNS0yORoDR01QKgJPWjIEMTA3NSIfCgNJQ04SCjIwMjYtMDUtMzAaA0hLRyoCT1oyAzcyMUAKSBNQAFgXagwIAxIIL20vMDdkZmtyBwgBEgNIS0dAAUgBcAGCAQsI____________AZgBAg&tfu=CnRDalJJVlRsNlIwa3hhRTlXVmxsQlJIaGljVUZDUnkwdExTMHRMUzB0TFhSc2Myb3lNa0ZCUVVGQlIyOVJhRXRaVDNoUlVuVkJFZ3hQV2pFd056VjhUMW8zTWpFYUN3anIvUUVRQWhvRFZWTkVPQnh3Ni8wQhICCAAiAA&gl=JP&curr=USD",
     );
 
     expect(result).toMatchObject({
-      tripType: "one-way",
+      tripType: "multi-city",
       carriers: ["OZ"],
       slices: [
         {
           origin: "HND",
-          destination: "HKG",
+          destination: "GMP",
           departureDate: "2026-05-29",
           segments: [
             {
@@ -181,6 +181,13 @@ describe("Google Flights booking option parser", () => {
               carrier: "OZ",
               flightNumber: "1075",
             },
+          ],
+        },
+        {
+          origin: "ICN",
+          destination: "HKG",
+          departureDate: "2026-05-30",
+          segments: [
             {
               origin: "ICN",
               destination: "HKG",
@@ -194,10 +201,26 @@ describe("Google Flights booking option parser", () => {
 
     const search = new URL(result?.matrixUrl || "").searchParams.get("search") || "";
     const decoded = JSON.parse(atob(search));
-    expect(decoded.slices[0]).toMatchObject({
-      origin: ["HND"],
-      dest: ["HKG"],
-      routing: "OZ1075 OZ721",
+    expect(decoded).toMatchObject({
+      type: "multi-city",
+      slices: [
+        {
+          origin: ["HND"],
+          dest: ["GMP"],
+          routing: "F:OZ1075",
+          dates: {
+            departureDate: "2026-05-29",
+          },
+        },
+        {
+          origin: ["ICN"],
+          dest: ["HKG"],
+          routing: "F:OZ721",
+          dates: {
+            departureDate: "2026-05-30",
+          },
+        },
+      ],
     });
   });
 
