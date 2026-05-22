@@ -87,7 +87,7 @@ function computeMiles(
   distance: number | undefined,
   fare: number | undefined,
 ): Pick<EarningsEstimate, "estimatedMiles" | "formula" | "basis"> {
-  if (typeof percent === "number" && distance) {
+  if (finiteNumber(percent) && finiteNumber(distance)) {
     return {
       estimatedMiles: Math.round(distance * (percent / 100)),
       formula: `${Math.round(distance).toLocaleString()} miles x ${formatPercent(percent)}`,
@@ -96,7 +96,7 @@ function computeMiles(
   }
 
   const revenueMultiplier = parseRevenueMultiplier(value);
-  if (revenueMultiplier && fare) {
+  if (finiteNumber(revenueMultiplier) && finiteNumber(fare)) {
     return {
       estimatedMiles: Math.round(fare * revenueMultiplier),
       formula: `${formatCurrency(fare)} x ${revenueMultiplier} miles per currency unit`,
@@ -105,7 +105,7 @@ function computeMiles(
   }
 
   const fixedMiles = parseFixedMiles(value);
-  if (fixedMiles) {
+  if (finiteNumber(fixedMiles)) {
     return {
       estimatedMiles: fixedMiles,
       formula: value || `${fixedMiles.toLocaleString()} miles`,
@@ -120,7 +120,7 @@ function computeMiles(
 }
 
 function inferSegmentDistance(itinerary: NormalizedItinerary, segmentCount: number): number | undefined {
-  if (!itinerary.totalDistance) return undefined;
+  if (!finiteNumber(itinerary.totalDistance)) return undefined;
   return segmentCount <= 1 ? itinerary.totalDistance : undefined;
 }
 
@@ -129,9 +129,13 @@ function inferSegmentFare(
   segmentCount: number,
   _segmentIndex: number,
 ): number | undefined {
-  if (!itinerary.totalPrice) return undefined;
+  if (!finiteNumber(itinerary.totalPrice)) return undefined;
   if (segmentCount <= 1) return itinerary.totalPrice;
   return itinerary.totalPrice / segmentCount;
+}
+
+function finiteNumber(value: number | null | undefined): value is number {
+  return typeof value === "number" && Number.isFinite(value);
 }
 
 function parseRevenueMultiplier(value: string | null): number | undefined {

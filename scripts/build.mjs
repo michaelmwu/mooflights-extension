@@ -48,7 +48,7 @@ async function buildEntry(entry) {
     target: "chrome114",
     legalComments: "linked",
     define: {
-      "process.env.NODE_ENV": JSON.stringify("production"),
+      "process.env.NODE_ENV": JSON.stringify(devBuild ? "development" : "production"),
       __MU_TRAVEL_DEV_BUILD__: JSON.stringify(devBuild),
     },
   };

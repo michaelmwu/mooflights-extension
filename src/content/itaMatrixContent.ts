@@ -167,6 +167,7 @@ async function captureItinerary(isAutomatic: boolean): Promise<void> {
     if (isAutomatic) {
       state.captureInFlight = false;
       state.status = "Auto-load did not find ITA JSON yet.";
+      state.autoCaptureAttempted = false;
       render();
       return;
     }

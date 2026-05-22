@@ -38,4 +38,37 @@ describe("Where to Credit earnings estimates", () => {
       url: "https://wheretocredit.com/en/AS/X",
     });
   });
+
+  it("treats zero distance as a known numeric value", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "one-way",
+      totalDistance: 0,
+      totalPrice: 0,
+      carriers: ["AS"],
+      fareBases: [],
+      slices: [
+        {
+          origin: "HNL",
+          destination: "SJC",
+          segments: [
+            {
+              origin: "HNL",
+              destination: "SJC",
+              carrier: "AS",
+              bookingClass: "X",
+              cabin: "economy",
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(estimateEarnings(itinerary)[0]).toMatchObject({
+      estimatedMiles: 0,
+      formula: "0 miles x 30%",
+      basis: "distance-percent",
+    });
+  });
 });

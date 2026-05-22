@@ -37,17 +37,41 @@ export async function patchSettings(patch: Partial<ExtensionSettings>): Promise<
 }
 
 export function mergeSettings(value: unknown): ExtensionSettings {
-  const candidate = value as Partial<ExtensionSettings> | undefined;
+  const candidate = isRecord(value) ? value : {};
+  const airportHelper = isRecord(candidate.airportHelper) ? candidate.airportHelper : {};
+  const backend = isRecord(candidate.backend) ? candidate.backend : {};
+
   return {
-    ...DEFAULT_SETTINGS,
-    ...(candidate || {}),
+    hiddenProviderIds: stringArray(candidate.hiddenProviderIds, DEFAULT_SETTINGS.hiddenProviderIds),
+    preferredProviderIds: stringArray(candidate.preferredProviderIds, DEFAULT_SETTINGS.preferredProviderIds),
+    affiliateOptOut: booleanValue(candidate.affiliateOptOut, DEFAULT_SETTINGS.affiliateOptOut),
+    debugMode: booleanValue(candidate.debugMode, DEFAULT_SETTINGS.debugMode),
     airportHelper: {
-      ...DEFAULT_SETTINGS.airportHelper,
-      ...(candidate?.airportHelper || {}),
+      continent: stringValue(airportHelper.continent, DEFAULT_SETTINGS.airportHelper.continent),
+      countries: stringArray(airportHelper.countries, DEFAULT_SETTINGS.airportHelper.countries),
+      alliance: stringValue(airportHelper.alliance, DEFAULT_SETTINGS.airportHelper.alliance),
+      airlines: stringArray(airportHelper.airlines, DEFAULT_SETTINGS.airportHelper.airlines),
+      exclusions: stringArray(airportHelper.exclusions, DEFAULT_SETTINGS.airportHelper.exclusions),
     },
     backend: {
-      ...DEFAULT_SETTINGS.backend,
-      ...(candidate?.backend || {}),
+      enabled: booleanValue(backend.enabled, DEFAULT_SETTINGS.backend.enabled),
+      baseUrl: stringValue(backend.baseUrl, DEFAULT_SETTINGS.backend.baseUrl),
     },
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stringArray(value: unknown, fallback: string[]): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : fallback;
+}
+
+function booleanValue(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function stringValue(value: unknown, fallback: string): string {
+  return typeof value === "string" ? value : fallback;
 }
