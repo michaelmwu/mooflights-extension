@@ -14,7 +14,7 @@
       "!artifacts",
       "!node_modules",
       "!coverage",
-      "!src/shared/data/airport-coordinates-compact.json"
+      "!src/shared/data/airports.json"
     ]
   },
   "formatter": {

@@ -1,10 +1,4 @@
-import {
-  airportCodes,
-  parseAirportCodes,
-  uniqueAirlines,
-  uniqueAirportValues,
-  uniqueAlliances,
-} from "../shared/airports";
+import { airportCodes, parseAirportCodes, uniqueAirportRegions, uniqueAirportValues } from "../shared/airports";
 import { fetchRemoteProviderMetadata } from "../shared/backendClient";
 import { parseItineraryJson } from "../shared/itinerary";
 import { rankProviderLinks, summarizeItinerary } from "../shared/providers";
@@ -234,8 +228,8 @@ async function updateAirportSetting(key: string, value: string): Promise<void> {
     airportHelper: {
       ...state.settings.airportHelper,
       ...(key === "continent" ? { continent: value } : {}),
-      ...(key === "alliance" ? { alliance: value } : {}),
-      ...(key === "airline" ? { airlines: value ? [value] : [] } : {}),
+      ...(key === "region" ? { region: value } : {}),
+      ...(key === "country" ? { countries: value ? [value] : [] } : {}),
       ...(key === "exclusions" ? { exclusions: parseAirportCodes(value) } : {}),
     },
   };
@@ -378,13 +372,20 @@ function isSearchPage(): boolean {
 }
 
 function renderAirportHelper(settings: ExtensionSettings): string {
+  const regions = uniqueAirportRegions();
   return `
     <details>
       <summary>Airport helper</summary>
       <div class="grid">
+        ${selectHtml(
+          "region",
+          "Region",
+          ["", ...regions.map((region) => region.id)],
+          settings.airportHelper.region,
+          new Map(regions.map((region) => [region.id, region.label])),
+        )}
         ${selectHtml("continent", "Continent", ["", ...uniqueAirportValues("continent")], settings.airportHelper.continent)}
-        ${selectHtml("alliance", "Alliance", ["", ...uniqueAlliances()], settings.airportHelper.alliance)}
-        ${selectHtml("airline", "Airline", ["", ...uniqueAirlines()], settings.airportHelper.airlines[0] || "")}
+        ${selectHtml("country", "Country", ["", ...uniqueAirportValues("country")], settings.airportHelper.countries[0] || "")}
       </div>
       <label>
         Exclude codes
@@ -507,12 +508,18 @@ function creditSegmentKey(
     .join(":");
 }
 
-function selectHtml(name: string, label: string, values: string[], selected: string): string {
+function selectHtml(
+  name: string,
+  label: string,
+  values: string[],
+  selected: string,
+  labels = new Map<string, string>(),
+): string {
   return `
     <label>
       ${escapeHtml(label)}
       <select data-setting="${escapeHtml(name)}">
-        ${values.map((value) => `<option value="${escapeHtml(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(value || "Any")}</option>`).join("")}
+        ${values.map((value) => `<option value="${escapeHtml(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(labels.get(value) || value || "Any")}</option>`).join("")}
       </select>
     </label>
   `;

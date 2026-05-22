@@ -64,10 +64,9 @@ export type ExtensionSettings = {
   affiliateOptOut: boolean;
   debugMode: boolean;
   airportHelper: {
+    region: string;
     continent: string;
     countries: string[];
-    alliance: string;
-    airlines: string[];
     exclusions: string[];
   };
   backend: {
@@ -82,8 +81,8 @@ export type Airport = {
   city: string;
   country: string;
   continent: string;
-  alliance: string[];
-  airlines: string[];
+  latitude: number;
+  longitude: number;
 };
 
 export type AirportFilters = ExtensionSettings["airportHelper"];

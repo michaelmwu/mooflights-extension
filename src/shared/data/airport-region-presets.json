@@ -1,0 +1,77 @@
+[
+  {
+    "id": "nyc",
+    "label": "New York City",
+    "codes": ["EWR", "JFK", "LGA"]
+  },
+  {
+    "id": "sf-bay",
+    "label": "San Francisco Bay Area",
+    "codes": ["OAK", "SFO", "SJC"]
+  },
+  {
+    "id": "los-angeles",
+    "label": "Los Angeles Area",
+    "codes": ["BUR", "LAX", "LGB", "ONT", "SNA"]
+  },
+  {
+    "id": "washington-dc",
+    "label": "Washington DC Area",
+    "codes": ["BWI", "DCA", "IAD"]
+  },
+  {
+    "id": "chicago",
+    "label": "Chicago Area",
+    "codes": ["MDW", "ORD"]
+  },
+  {
+    "id": "london",
+    "label": "London Area",
+    "codes": ["LCY", "LGW", "LHR", "LTN", "SEN", "STN"]
+  },
+  {
+    "id": "paris",
+    "label": "Paris Area",
+    "codes": ["BVA", "CDG", "ORY"]
+  },
+  {
+    "id": "tokyo",
+    "label": "Tokyo Area",
+    "codes": ["HND", "NRT"]
+  },
+  {
+    "id": "seoul",
+    "label": "Seoul Area",
+    "codes": ["GMP", "ICN"]
+  },
+  {
+    "id": "taipei",
+    "label": "Taipei Area",
+    "codes": ["TPE", "TSA"]
+  },
+  {
+    "id": "osaka",
+    "label": "Osaka/Kansai Area",
+    "codes": ["ITM", "KIX", "UKB"]
+  },
+  {
+    "id": "bangkok",
+    "label": "Bangkok Area",
+    "codes": ["BKK", "DMK"]
+  },
+  {
+    "id": "shanghai",
+    "label": "Shanghai Area",
+    "codes": ["PVG", "SHA"]
+  },
+  {
+    "id": "beijing",
+    "label": "Beijing Area",
+    "codes": ["PEK", "PKX"]
+  },
+  {
+    "id": "hawaii",
+    "label": "Hawaii",
+    "codes": ["HNL", "ITO", "KOA", "LIH", "OGG"]
+  }
+]

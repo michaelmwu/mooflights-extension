@@ -6,10 +6,9 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   affiliateOptOut: false,
   debugMode: false,
   airportHelper: {
+    region: "",
     continent: "",
     countries: [],
-    alliance: "",
-    airlines: [],
     exclusions: [],
   },
   backend: {
@@ -47,10 +46,9 @@ export function mergeSettings(value: unknown): ExtensionSettings {
     affiliateOptOut: booleanValue(candidate.affiliateOptOut, DEFAULT_SETTINGS.affiliateOptOut),
     debugMode: booleanValue(candidate.debugMode, DEFAULT_SETTINGS.debugMode),
     airportHelper: {
+      region: stringValue(airportHelper.region, DEFAULT_SETTINGS.airportHelper.region),
       continent: stringValue(airportHelper.continent, DEFAULT_SETTINGS.airportHelper.continent),
       countries: stringArray(airportHelper.countries, DEFAULT_SETTINGS.airportHelper.countries),
-      alliance: stringValue(airportHelper.alliance, DEFAULT_SETTINGS.airportHelper.alliance),
-      airlines: stringArray(airportHelper.airlines, DEFAULT_SETTINGS.airportHelper.airlines),
       exclusions: stringArray(airportHelper.exclusions, DEFAULT_SETTINGS.airportHelper.exclusions),
     },
     backend: {

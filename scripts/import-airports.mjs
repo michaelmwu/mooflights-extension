@@ -5,8 +5,17 @@ const AIRPORTS_SOURCE = "https://davidmegginson.github.io/ourairports-data/airpo
 const ATTRIBUTION_URL = "https://ourairports.com/data/";
 const INCLUDED_TYPES = new Set(["large_airport", "medium_airport"]);
 
-const OUTPUT = "src/shared/data/airport-coordinates-compact.json";
-const coordinates = {};
+const OUTPUT = "src/shared/data/airports.json";
+const airports = {};
+const CONTINENTS = {
+  AF: "Africa",
+  AN: "Antarctica",
+  AS: "Asia",
+  EU: "Europe",
+  NA: "North America",
+  OC: "Oceania",
+  SA: "South America",
+};
 
 const response = await fetch(AIRPORTS_SOURCE);
 if (!response.ok) throw new Error(`Failed to fetch ${AIRPORTS_SOURCE}: ${response.status}`);
@@ -18,11 +27,22 @@ const index = Object.fromEntries(header.map((name, fieldIndex) => [name, fieldIn
 for (const row of rows) {
   const type = row[index.type];
   const code = row[index.iata_code];
+  const name = row[index.name];
+  const city = row[index.municipality];
+  const country = row[index.iso_country];
+  const continent = CONTINENTS[row[index.continent]] || row[index.continent];
   const lat = Number(row[index.latitude_deg]);
   const lon = Number(row[index.longitude_deg]);
   if (!INCLUDED_TYPES.has(type)) continue;
   if (!/^[A-Z0-9]{3}$/.test(code) || !Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-  coordinates[code] = [Math.round(lat * 10_000), Math.round(lon * 10_000)];
+  airports[code] = [
+    compactString(name),
+    compactString(city),
+    compactString(country),
+    compactString(continent),
+    Math.round(lat * 10_000),
+    Math.round(lon * 10_000),
+  ];
 }
 
 const output = {
@@ -31,14 +51,19 @@ const output = {
   source_urls: [AIRPORTS_SOURCE, ATTRIBUTION_URL],
   fetched_at: new Date().toISOString(),
   included_types: Array.from(INCLUDED_TYPES).sort(),
+  fields: ["name", "city", "country", "continent", "latitude", "longitude"],
   precision: "latitude and longitude are stored as integer degrees * 10000",
-  coordinates,
+  airports,
 };
 
 const target = resolve(process.cwd(), OUTPUT);
 await mkdir(dirname(target), { recursive: true });
 await writeFile(target, `${JSON.stringify(output)}\n`);
-console.log(`Wrote ${Object.keys(coordinates).length} medium/large airport coordinates to ${OUTPUT}`);
+console.log(`Wrote ${Object.keys(airports).length} medium/large airports to ${OUTPUT}`);
+
+function compactString(value) {
+  return String(value || "").trim();
+}
 
 function parseCsv(text) {
   const rows = [];

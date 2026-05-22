@@ -27,6 +27,7 @@ describe("settings", () => {
         affiliateOptOut: "yes",
         debugMode: 1,
         airportHelper: {
+          region: 7,
           continent: 123,
           countries: [null, "US"],
           alliance: false,

@@ -1,7 +1,7 @@
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { uniqueAirlines, uniqueAirportValues, uniqueAlliances } from "../shared/airports";
+import { uniqueAirportRegions, uniqueAirportValues } from "../shared/airports";
 import { LOCAL_PROVIDERS, providerConfidence } from "../shared/providers";
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from "../shared/storage";
 import type { ExtensionSettings } from "../shared/types";
@@ -12,8 +12,7 @@ function Options(): React.ReactElement {
   const [saved, setSaved] = useState(false);
   const countries = useMemo(() => uniqueAirportValues("country"), []);
   const continents = useMemo(() => uniqueAirportValues("continent"), []);
-  const alliances = useMemo(() => uniqueAlliances(), []);
-  const airlines = useMemo(() => uniqueAirlines(), []);
+  const regions = useMemo(() => uniqueAirportRegions(), []);
 
   useEffect(() => {
     void loadSettings().then(setSettings);
@@ -84,19 +83,18 @@ function Options(): React.ReactElement {
         <h2>Airport Helper Defaults</h2>
         <div className="grid">
           <Select
+            label="Region"
+            value={settings.airportHelper.region}
+            values={["", ...regions.map((region) => region.id)]}
+            labels={new Map(regions.map((region) => [region.id, region.label]))}
+            onChange={(region) => void persist({ ...settings, airportHelper: { ...settings.airportHelper, region } })}
+          />
+          <Select
             label="Continent"
             value={settings.airportHelper.continent}
             values={["", ...continents]}
             onChange={(continent) =>
               void persist({ ...settings, airportHelper: { ...settings.airportHelper, continent } })
-            }
-          />
-          <Select
-            label="Alliance"
-            value={settings.airportHelper.alliance}
-            values={["", ...alliances]}
-            onChange={(alliance) =>
-              void persist({ ...settings, airportHelper: { ...settings.airportHelper, alliance } })
             }
           />
           <Select
@@ -107,17 +105,6 @@ function Options(): React.ReactElement {
               void persist({
                 ...settings,
                 airportHelper: { ...settings.airportHelper, countries: country ? [country] : [] },
-              })
-            }
-          />
-          <Select
-            label="Airline"
-            value={settings.airportHelper.airlines[0] || ""}
-            values={["", ...airlines]}
-            onChange={(airline) =>
-              void persist({
-                ...settings,
-                airportHelper: { ...settings.airportHelper, airlines: airline ? [airline] : [] },
               })
             }
           />
@@ -221,6 +208,7 @@ function Select(props: {
   label: string;
   value: string;
   values: string[];
+  labels?: Map<string, string>;
   onChange: (value: string) => void;
 }): React.ReactElement {
   return (
@@ -229,7 +217,7 @@ function Select(props: {
       <select value={props.value} onChange={(event) => props.onChange(event.currentTarget.value)}>
         {props.values.map((value) => (
           <option key={value || "any"} value={value}>
-            {value || "Any"}
+            {props.labels?.get(value) || value || "Any"}
           </option>
         ))}
       </select>
