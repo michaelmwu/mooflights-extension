@@ -1082,6 +1082,14 @@ function renderMileageCredit(itinerary: NormalizedItinerary): string {
             </div>`
           : ""
       }
+      ${
+        hiddenEstimateCount > 0 && visibleEstimates.length > 0
+          ? `<div class="earning more-earnings">
+              <small>${hiddenEstimateCount.toLocaleString()} more earning row(s) hidden by preferred programs.</small>
+              <button type="button" class="inline-button" data-action="show-all-mileage">Show all earnings</button>
+            </div>`
+          : ""
+      }
       ${notices
         .map(
           (insight) => `
@@ -1330,6 +1338,7 @@ function styles(): string {
     .segment-links .earning { display: grid; gap: 2px; }
     .segment-links .tier-group { gap: 5px; }
     .segment-links .notice { padding: 6px; border-radius: 6px; background: #fff7ed; color: #7c2d12; }
+    .segment-links .more-earnings { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 4px; border-top: 1px solid #ccfbf1; }
     .segment-links em { font-style: normal; color: #115e59; }
     .segment-links a { color: #0f766e; text-decoration: none; }
     .segment-links a:hover { text-decoration: underline; }
