@@ -80,6 +80,7 @@ let autoOpenStartedAt = 0;
 let autoOpenDone = false;
 let autoOpenLocationKey = "";
 let autoOpenClickedPrimaryResult = false;
+let autoOpenPrimaryResultRow: HTMLTableRowElement | null = null;
 
 const state: PanelState = {
   settings: null,
@@ -564,7 +565,10 @@ function maybeAutoOpenMatrixResult(): void {
     return;
   }
   if (!isFlightsPage()) {
-    if (!isSearchPage()) resetAutoOpenState();
+    if (!isSearchPage()) {
+      resetAutoOpenState();
+      forgetAutoOpenRequest();
+    }
     return;
   }
   if (!shouldAutoOpenMatrixResult()) {
@@ -584,13 +588,26 @@ function maybeAutoOpenMatrixResult(): void {
   const target = matrixResultOpenTarget();
   if (target) {
     const primaryRow = primaryResultRowFor(target);
+    const clickedExpandedControl = autoOpenClickedPrimaryResult;
     target.dataset.muTravelAutoOpenClicked = "true";
     if (primaryRow) {
       primaryRow.dataset.muTravelAutoOpenClicked = "true";
       autoOpenClickedPrimaryResult = true;
+      autoOpenPrimaryResultRow = primaryRow;
     }
     setStatus("Opening first Matrix result...");
+    if (clickedExpandedControl) {
+      autoOpenDone = true;
+      forgetAutoOpenRequest();
+      target.click();
+      return;
+    }
     target.click();
+    if (primaryRow && !shouldContinueAutoOpenAfterPrimaryClick(target, primaryRow)) {
+      autoOpenDone = true;
+      forgetAutoOpenRequest();
+      return;
+    }
     if (Date.now() - autoOpenStartedAt < AUTO_OPEN_TIMEOUT_MS) scheduleAutoOpenMatrixResult();
     return;
   }
@@ -634,9 +651,7 @@ function firstVisibleFlightResultRow(): HTMLTableRowElement | null {
 }
 
 function firstExpandedResultOpenControl(): HTMLElement | null {
-  const scopes = Array.from(document.querySelectorAll<HTMLElement>("tr.detail-row, matrix-itinerary-grid")).filter(
-    isVisibleElement,
-  );
+  const scopes = expandedResultScopesFor(autoOpenPrimaryResultRow);
   for (const scope of scopes) {
     const control = firstResultOpenControl(scope);
     if (control) return control;
@@ -659,7 +674,22 @@ function firstResultOpenControl(scope: ParentNode): HTMLElement | null {
 }
 
 function isResultOpenControl(control: HTMLElement): boolean {
-  const label = normalize(
+  const label = controlSearchLabel(control);
+  return (
+    /\b(select|choose|continue|details|view|open|itinerary)\b/.test(label) ||
+    /\b(usd|eur|gbp|jpy|cad|aud|hkd|twd|sgd)\s*[\d,.]+/.test(label) ||
+    /[$€£¥]\s*[\d,.]+/.test(label)
+  );
+}
+
+function shouldContinueAutoOpenAfterPrimaryClick(target: HTMLElement, primaryRow: HTMLTableRowElement): boolean {
+  if (target === primaryRow) return true;
+  const label = controlSearchLabel(target);
+  return /\b(details|view|open|itinerary)\b/.test(label) && !/\b(select|choose|continue)\b/.test(label);
+}
+
+function controlSearchLabel(control: HTMLElement): string {
+  return normalize(
     [
       control.getAttribute("aria-label"),
       control.getAttribute("title"),
@@ -669,11 +699,6 @@ function isResultOpenControl(control: HTMLElement): boolean {
       .filter(Boolean)
       .join(" "),
   ).toLowerCase();
-  return (
-    /\b(select|choose|continue|details|view|open|itinerary)\b/.test(label) ||
-    /\b(usd|eur|gbp|jpy|cad|aud|hkd|twd|sgd)\s*[\d,.]+/.test(label) ||
-    /[$€£¥]\s*[\d,.]+/.test(label)
-  );
 }
 
 function matrixSearchButton(): HTMLButtonElement | null {
@@ -706,6 +731,17 @@ function primaryResultRowFor(element: HTMLElement): HTMLTableRowElement | null {
   return element.closest<HTMLTableRowElement>("tr[mat-row].mat-mdc-row:not(.detail-row)");
 }
 
+function expandedResultScopesFor(row: HTMLTableRowElement | null): HTMLElement[] {
+  if (!row?.isConnected) return [];
+  const scopes: HTMLElement[] = [];
+  const nextRow = row.nextElementSibling;
+  if (nextRow instanceof HTMLElement && nextRow.matches("tr.detail-row") && isVisibleElement(nextRow)) {
+    scopes.push(nextRow);
+    scopes.push(...Array.from(nextRow.querySelectorAll<HTMLElement>("matrix-itinerary-grid")).filter(isVisibleElement));
+  }
+  return scopes;
+}
+
 function rememberAutoOpenRequest(): void {
   try {
     sessionStorage.setItem(AUTO_OPEN_STORAGE_KEY, "1");
@@ -735,6 +771,7 @@ function resetAutoOpenState(): void {
   autoOpenDone = false;
   autoOpenLocationKey = "";
   autoOpenClickedPrimaryResult = false;
+  autoOpenPrimaryResultRow = null;
 }
 
 function annotateFlightResultsSoon(): void {
