@@ -81,6 +81,8 @@ export type WhereToCreditSegmentInsight = {
 const DATA = mileageEarningData as unknown as CompactMileageEarningData;
 const PROGRAM_TIER_LABELS = programTierLabels as ProgramTierLabelData;
 const AIRLINES = normalizeCompactAirlines(DATA);
+let uniqueMileageProgramsCache: string[] | undefined;
+let tierParentProgramCache: Map<string, string> | undefined;
 
 const PROGRAM_OWNER_CARRIER_CODES: Record<string, string[]> = {
   "ANA Mileage Club": ["NH"],
@@ -205,13 +207,15 @@ export function estimateEarnings(
 }
 
 export function uniqueMileagePrograms(): string[] {
+  if (uniqueMileageProgramsCache) return [...uniqueMileageProgramsCache];
   const programs = new Set<string>();
   for (const airline of Object.values(AIRLINES)) {
     for (const bookingClass of Object.values(airline.booking_classes)) {
       for (const row of bookingClass.redeemable_miles) programs.add(row.program);
     }
   }
-  return Array.from(programs).sort((left, right) => left.localeCompare(right));
+  uniqueMileageProgramsCache = Array.from(programs).sort((left, right) => left.localeCompare(right));
+  return [...uniqueMileageProgramsCache];
 }
 
 export function uniqueMileageProgramOptions(): MileageProgramOption[] {
@@ -421,10 +425,18 @@ function matchesDisplayedProgramTier(program: string, programTiers: MileageProgr
 }
 
 function tierParentProgram(program: string): string {
+  return tierParentPrograms().get(program) || "";
+}
+
+function tierParentPrograms(): Map<string, string> {
+  if (tierParentProgramCache) return tierParentProgramCache;
+  tierParentProgramCache = new Map();
   for (const parentProgram of uniqueMileagePrograms()) {
-    if (isTieredProgram(parentProgram, program)) return parentProgram;
+    for (const tier of mileageProgramTierOptions(parentProgram)) {
+      if (tier.program !== parentProgram) tierParentProgramCache.set(tier.program, parentProgram);
+    }
   }
-  return "";
+  return tierParentProgramCache;
 }
 
 function selectedProgramTierProgram(program: string, programTiers: MileageProgramTierPreference): string {

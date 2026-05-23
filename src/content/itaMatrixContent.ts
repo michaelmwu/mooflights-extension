@@ -1450,22 +1450,30 @@ function renderMileageEstimateSegmentEntries(
 ): string {
   const tierGroups = mileageTierGroups(estimates, preferredProgramList);
   const renderedGroups = new Set<string>();
+  const preferredPrograms = new Set(preferredProgramList);
   return estimates
     .map((estimate) => {
       const groupKey = mileageTierGroupKey(estimate, preferredProgramList);
-      if (!groupKey) return renderMileageEstimateEntry(estimate, showSegmentLabel);
+      if (!groupKey) return renderMileageEstimateEntry(estimate, showSegmentLabel, preferredPrograms);
       const group = tierGroups.get(groupKey);
-      if (!group || group.estimates.length <= 1) return renderMileageEstimateEntry(estimate, showSegmentLabel);
+      if (!group || group.estimates.length <= 1) {
+        return renderMileageEstimateEntry(estimate, showSegmentLabel, preferredPrograms);
+      }
       if (renderedGroups.has(groupKey)) return "";
       renderedGroups.add(groupKey);
-      return renderMileageTierGroup(group, showSegmentLabel);
+      return renderMileageTierGroup(group, showSegmentLabel, preferredPrograms);
     })
     .join("");
 }
 
-function renderMileageEstimateEntry(estimate: EarningsEstimate, showSegmentLabel: boolean): string {
+function renderMileageEstimateEntry(
+  estimate: EarningsEstimate,
+  showSegmentLabel: boolean,
+  preferredPrograms: Set<string>,
+): string {
+  const preferenceClass = mileagePreferenceClass(estimate.program, preferredPrograms);
   return `
-    <a href="${escapeHtml(estimate.url)}" target="_blank" rel="noopener noreferrer" class="earning">
+    <a href="${escapeHtml(estimate.url)}" target="_blank" rel="noopener noreferrer" class="earning ${preferenceClass}">
       ${showSegmentLabel ? `<span>${escapeHtml(mileageSegmentLabel(estimate))}</span>` : ""}
       <em>${escapeHtml(estimate.program)}</em>
       <small>${typeof estimate.estimatedMiles === "number" ? `${estimate.estimatedMiles.toLocaleString()} miles · ` : ""}${escapeHtml(estimate.formula)}</small>
@@ -1481,13 +1489,15 @@ function renderMileageTierGroup(
     estimates: EarningsEstimate[];
   },
   showSegmentLabel: boolean,
+  preferredPrograms: Set<string>,
 ): string {
   const estimates = sortTierEstimates(group.parentProgram, group.estimates);
   const parsedFormulas = estimates.map((estimate) => parseRevenueMileageFormula(estimate.formula));
   const baseFare = commonValue(estimates.map((estimate) => estimate.displayFare || ""));
   const isApproximate = estimates.some((estimate) => estimate.approximate);
+  const preferenceClass = mileagePreferenceClass(group.parentProgram, preferredPrograms);
   return `
-    <div class="earning tier-group">
+    <div class="earning tier-group ${preferenceClass}">
       ${showSegmentLabel ? `<span>${escapeHtml(group.segmentLabel)}</span>` : ""}
       <a href="${escapeHtml(group.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(group.parentProgram)}</a>
       ${baseFare ? `<small>Base fare ${escapeHtml(baseFare)}</small>` : ""}
@@ -1606,11 +1616,17 @@ function compactTierName(parentProgram: string, program: string): string {
 }
 
 function matchesPreferredMileageProgram(program: string, preferredPrograms: Set<string>): boolean {
+  if (preferredPrograms.size === 0) return false;
   if (preferredPrograms.has(program)) return true;
   for (const preferredProgram of preferredPrograms) {
     if (program.startsWith(`${preferredProgram} `)) return true;
   }
   return false;
+}
+
+function mileagePreferenceClass(program: string, preferredPrograms: Set<string>): string {
+  if (preferredPrograms.size === 0) return "";
+  return matchesPreferredMileageProgram(program, preferredPrograms) ? "preferred" : "non-preferred";
 }
 
 function creditSegmentKey(
@@ -1712,6 +1728,12 @@ function styles(): string {
     .links { display: grid; gap: 8px; margin-top: 10px; }
     .segment-links { display: grid; gap: 6px; margin-top: 10px; padding: 8px; border-radius: 6px; background: #f0fdfa; }
     .segment-links .earning { display: grid; gap: 2px; }
+    .segment-links .earning.non-preferred {
+      margin-left: 6px;
+      padding-left: 8px;
+      border-left: 2px solid #cbd5e1;
+      opacity: 0.78;
+    }
     .segment-links .tier-group { gap: 5px; }
     .segment-links .segment-group { gap: 5px; padding-top: 4px; border-top: 1px solid #ccfbf1; }
     .segment-links .segment-group:first-of-type { padding-top: 0; border-top: 0; }
@@ -1720,10 +1742,13 @@ function styles(): string {
     .segment-links .more-earnings small { min-width: 0; }
     .segment-links em { font-style: normal; color: #115e59; }
     .segment-links a { color: #0f766e; text-decoration: none; }
+    .segment-links .non-preferred em,
+    .segment-links .non-preferred a { color: #475569; }
     .segment-links a:hover { text-decoration: underline; }
     .segment-links table { width: 100%; border-collapse: collapse; font-size: 12px; }
     .segment-links th, .segment-links td { padding: 2px 4px 2px 0; text-align: left; vertical-align: top; }
     .segment-links th { width: 62px; color: #115e59; font-weight: 650; }
+    .segment-links .non-preferred th { color: #475569; }
     .segment-links td:nth-child(2) { width: 64px; color: #162033; font-weight: 650; text-align: right; }
     .segment-links td:nth-child(3) { color: #64748b; }
     .segment-links .inline-button { width: fit-content; margin-top: 4px; border-color: #fed7aa; background: #ffffff; color: #9a3412; padding: 4px 7px; white-space: nowrap; }
