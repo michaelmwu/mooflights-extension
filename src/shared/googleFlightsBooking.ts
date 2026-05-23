@@ -311,8 +311,7 @@ function decodeBase64UrlText(value: string): string {
       .replace(/-/g, "+")
       .replace(/_/g, "/")
       .padEnd(Math.ceil(value.length / 4) * 4, "=");
-    const binary = globalThis.atob(base64);
-    return Array.from(binary, (character) => character).join("");
+    return globalThis.atob(base64);
   } catch {
     return "";
   }

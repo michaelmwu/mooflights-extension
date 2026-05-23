@@ -459,8 +459,15 @@ function renderResultActions(result: GoogleFlightsCountryResult): string {
 function mergeCountryResults(
   previousResults: GoogleFlightsCountryResult[],
   updates: GoogleFlightsCountryResult[],
+  selectedCountries: string[],
 ): { results: GoogleFlightsCountryResult[]; retained: boolean } {
-  const byCountry = new Map(previousResults.map((result) => [result.country, result]));
+  const updateCountries = new Set(updates.map((result) => result.country));
+  const selectedCountrySet = new Set(selectedCountries);
+  const byCountry = new Map(
+    previousResults
+      .filter((result) => selectedCountrySet.has(result.country) || updateCountries.has(result.country))
+      .map((result) => [result.country, result]),
+  );
   let retained = false;
   for (const update of updates) {
     const previous = byCountry.get(update.country);
@@ -469,7 +476,7 @@ function mergeCountryResults(
     byCountry.set(update.country, merged);
   }
   for (const previous of previousResults) {
-    if (!updates.some((update) => update.country === previous.country)) retained = true;
+    if (selectedCountrySet.has(previous.country) && !updateCountries.has(previous.country)) retained = true;
   }
   return { results: Array.from(byCountry.values()), retained };
 }
@@ -638,7 +645,7 @@ async function compareCountries(): Promise<void> {
     if (state.pageKey !== comparePageKey) return;
     if (!response?.ok) throw new Error(response?.error || "Country comparison failed.");
     const updates = baseline ? [baseline, ...(response.results || [])] : response.results || [];
-    const merged = mergeCountryResults(previousResults, updates);
+    const merged = mergeCountryResults(previousResults, updates, selectedCountries);
     state.results = merged.results;
     state.resultsCachedAt = merged.retained ? previousCachedAt || Date.now() : 0;
     if (comparePageKey) {
