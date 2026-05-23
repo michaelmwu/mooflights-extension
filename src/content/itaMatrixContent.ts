@@ -119,7 +119,7 @@ function render(): void {
         </div>
       </header>
 
-      ${state.error ? `<p class="message error">${escapeHtml(state.error)}</p>` : `<p class="message">${escapeHtml(state.status)}</p>`}
+      ${renderStatusMessage()}
 
       ${isItineraryPage() ? renderItineraryPanel() : ""}
       ${isItineraryPage() ? renderLinksPanel() : ""}
@@ -132,6 +132,12 @@ function render(): void {
   `;
 
   bind(shadow);
+}
+
+function renderStatusMessage(): string {
+  if (state.error) return `<p class="message error">${escapeHtml(state.error)}</p>`;
+  if (isItineraryPage() && state.itinerary && state.status === "Itinerary captured.") return "";
+  return `<p class="message">${escapeHtml(state.status)}</p>`;
 }
 
 function renderItineraryPanel(): string {
@@ -1221,7 +1227,8 @@ function renderMileageTierGroup(
   },
   showSegmentLabel: boolean,
 ): string {
-  const parsedFormulas = group.estimates.map((estimate) => parseRevenueMileageFormula(estimate.formula));
+  const estimates = sortTierEstimates(group.parentProgram, group.estimates);
+  const parsedFormulas = estimates.map((estimate) => parseRevenueMileageFormula(estimate.formula));
   const baseFare = commonValue(parsedFormulas.map((formula) => formula?.baseFare || ""));
   return `
     <div class="earning tier-group">
@@ -1230,7 +1237,7 @@ function renderMileageTierGroup(
       ${baseFare ? `<small>Base fare ${escapeHtml(baseFare)}</small>` : ""}
       <table>
         <tbody>
-          ${group.estimates
+          ${estimates
             .map((estimate, index) => {
               const parsedFormula = parsedFormulas[index];
               return `
@@ -1246,6 +1253,28 @@ function renderMileageTierGroup(
       </table>
     </div>
   `;
+}
+
+function sortTierEstimates(parentProgram: string, estimates: EarningsEstimate[]): EarningsEstimate[] {
+  return [...estimates].sort((left, right) => {
+    const leftRank = mileageTierDisplayRank(parentProgram, left.program);
+    const rightRank = mileageTierDisplayRank(parentProgram, right.program);
+    if (leftRank !== rightRank) return leftRank - rightRank;
+    return compactTierName(parentProgram, left.program).localeCompare(compactTierName(parentProgram, right.program));
+  });
+}
+
+function mileageTierDisplayRank(parentProgram: string, program: string): number {
+  const label = compactTierName(parentProgram, program);
+  const ranks = new Map([
+    ["Member", 0],
+    ["Silver", 1],
+    ["Gold", 2],
+    ["Platinum", 3],
+    ["Titanium", 4],
+    ["1K", 5],
+  ]);
+  return ranks.get(label) ?? 100;
 }
 
 function parseRevenueMileageFormula(formula: string): { baseFare: string; rate: string } | null {
