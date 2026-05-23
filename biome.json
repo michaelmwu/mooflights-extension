@@ -14,7 +14,8 @@
       "!artifacts",
       "!node_modules",
       "!coverage",
-      "!src/shared/data/airports.json"
+      "!src/shared/data/airports.json",
+      "!src/shared/data/mileage-earning.json"
     ]
   },
   "formatter": {

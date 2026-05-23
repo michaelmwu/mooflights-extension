@@ -65,7 +65,7 @@ when the baseline page is dense, and closes temporary tabs after parsing.
 
 ## Mileage Earning Snapshot
 
-The extension bundles a compact generated snapshot at `src/shared/data/mileage-earning-compact.json`.
+The extension bundles a compact generated snapshot at `src/shared/data/mileage-earning.json`.
 
 It is used to show rough earning estimates such as:
 

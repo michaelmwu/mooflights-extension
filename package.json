@@ -13,6 +13,7 @@
     "check": "biome check .",
     "dev": "node scripts/build.mjs --watch",
     "format": "biome format --write .",
+    "import:mileage-earnings": "node scripts/import-mileage-earnings.mjs",
     "import:airport-coordinates": "node scripts/import-airports.mjs",
     "import:airports": "node scripts/import-airports.mjs",
     "lint": "biome lint .",

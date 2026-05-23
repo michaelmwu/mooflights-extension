@@ -11,7 +11,7 @@ Google Flights search-results miles-crediting annotations near flight cards.
 
 The extension now adds an estimated miles-earning column to first-page `matrix.itasoftware.com/flights` results.
 Follow-up work: improve result matching beyond the first rendered page, add tests for more ITA DOM variants, and use a
-richer mileage snapshot so preferred programs can be evaluated even when they are not the local top earning row.
+richer mileage snapshot so preferred programs can be evaluated across more booking classes.
 
 ## Account Sync
 

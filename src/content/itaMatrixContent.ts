@@ -968,7 +968,7 @@ function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSumm
         },
       ],
       title:
-        "No preferred program matched the local top earning rows. The extension is hiding non-preferred programs to avoid orphan-mile suggestions.",
+        "No preferred program matched the local earning rows. The extension is hiding non-preferred programs to avoid orphan-mile suggestions.",
       status: "fallback",
     };
   }
@@ -1333,7 +1333,7 @@ function renderMileageCredit(itinerary: NormalizedItinerary): string {
         hiddenEstimateCount > 0 && visibleEstimates.length === 0
           ? `<div class="earning notice">
               <span>No preferred program match</span>
-              <small>Local top earning rows exist, but they are not in your preferred programs.</small>
+              <small>Local earning rows exist, but they are not in your preferred programs.</small>
               <button type="button" class="inline-button" data-action="show-all-mileage">Show all</button>
             </div>`
           : ""
@@ -1371,13 +1371,17 @@ function sortMileageEstimatesByPreference(
     const rightRank = mileageProgramPreferenceRank(right.program, preferredProgramRanks);
     if (leftRank !== rightRank) return leftRank - rightRank;
     return (
+      mileageEstimateValue(right) - mileageEstimateValue(left) ||
       creditSegmentKey(left.segment, left.bookingClass).localeCompare(
         creditSegmentKey(right.segment, right.bookingClass),
       ) ||
-      (right.estimatedMiles ?? -1) - (left.estimatedMiles ?? -1) ||
       left.program.localeCompare(right.program)
     );
   });
+}
+
+function mileageEstimateValue(estimate: EarningsEstimate): number {
+  return estimate.estimatedMiles ?? -1;
 }
 
 function renderMileageEstimateEntries(estimates: EarningsEstimate[], preferredProgramList: string[]): string {

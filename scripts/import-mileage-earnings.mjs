@@ -1,0 +1,60 @@
+import { readFile, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+
+const root = process.cwd();
+const sourcePath =
+  process.argv[2] ||
+  "/Users/michaelwu/conductor/workspaces/asiatraveldeals/salvador-v1/data/reference/wheretocredit.json";
+const outPath = resolve(root, "src/shared/data/mileage-earning.json");
+
+const source = JSON.parse(await readFile(sourcePath, "utf8"));
+const compact = {
+  f: source.fetched_at || new Date().toISOString(),
+  n: "Compact local copy of all redeemable mileage rows from the Mu Travel reference snapshot.",
+  p: [],
+  a: {},
+};
+const programIndexes = new Map();
+
+for (const [iata, airline] of Object.entries(source.airlines || {})) {
+  const bookingClasses = {};
+  for (const [bookingClass, row] of Object.entries(airline.booking_classes || {})) {
+    const rows = compactRows(row.redeemable_miles || []);
+    if (rows.length > 0) bookingClasses[bookingClass] = rows;
+  }
+  if (Object.keys(bookingClasses).length > 0) compact.a[iata] = [airline.name || iata, bookingClasses];
+}
+compact.p = Array.from(programIndexes.keys());
+
+await writeFile(outPath, `${JSON.stringify(compact)}\n`);
+
+function compactRows(rows) {
+  const seen = new Set();
+  const compactRows = [];
+  for (const row of rows) {
+    const base = row.base || {};
+    const value = typeof base.value === "string" ? base.value : null;
+    const percent = typeof base.percent === "number" ? base.percent : null;
+    const program = normalizedProgram(row.program);
+    if (!program || (!value && percent === null)) continue;
+    if (percent === 0 || value === "0%" || value === "0 Miles") continue;
+    const key = [program, percent ?? "", value ?? ""].join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    compactRows.push([programIndex(program), percent, value]);
+  }
+  return compactRows;
+}
+
+function normalizedProgram(program) {
+  if (program === "Air Canada Aeroplan 2026") return "Air Canada Aeroplan";
+  return program || "";
+}
+
+function programIndex(program) {
+  const existing = programIndexes.get(program);
+  if (existing !== undefined) return existing;
+  const next = programIndexes.size;
+  programIndexes.set(program, next);
+  return next;
+}
