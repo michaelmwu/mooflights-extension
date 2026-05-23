@@ -17,6 +17,8 @@ import {
   estimateEarnings,
   estimateSegmentEarnings,
   inspectWhereToCreditSegments,
+  mileageProgramTierOptions,
+  uniqueMileagePrograms,
 } from "../shared/mileageEarnings";
 import { rankProviderLinks, summarizeItinerary } from "../shared/providers";
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from "../shared/storage";
@@ -66,6 +68,7 @@ const AUTO_SEARCH_TIMEOUT_MS = 15_000;
 const AUTO_OPEN_DEBOUNCE_MS = 300;
 const AUTO_OPEN_TIMEOUT_MS = 15_000;
 const AUTO_OPEN_STORAGE_KEY = "muTravelMatrixAutoOpen";
+const MILEAGE_PROGRAMS_BY_LENGTH = uniqueMileagePrograms().sort((left, right) => right.length - left.length);
 let autoCaptureCheckTimer: number | undefined;
 let flightResultAnnotationTimer: number | undefined;
 let autoSearchTimer: number | undefined;
@@ -580,8 +583,12 @@ function maybeAutoOpenMatrixResult(): void {
 
   const target = matrixResultOpenTarget();
   if (target) {
+    const primaryRow = primaryResultRowFor(target);
     target.dataset.muTravelAutoOpenClicked = "true";
-    if (isPrimaryResultRow(target)) autoOpenClickedPrimaryResult = true;
+    if (primaryRow) {
+      primaryRow.dataset.muTravelAutoOpenClicked = "true";
+      autoOpenClickedPrimaryResult = true;
+    }
     setStatus("Opening first Matrix result...");
     target.click();
     if (Date.now() - autoOpenStartedAt < AUTO_OPEN_TIMEOUT_MS) scheduleAutoOpenMatrixResult();
@@ -643,6 +650,7 @@ function firstResultOpenControl(scope: ParentNode): HTMLElement | null {
       (control) =>
         !control.closest(`#${PANEL_ID}`) &&
         control.dataset.muTravelAutoOpenClicked !== "true" &&
+        primaryResultRowFor(control)?.dataset.muTravelAutoOpenClicked !== "true" &&
         isVisibleElement(control) &&
         !isDisabledControl(control) &&
         isResultOpenControl(control),
@@ -694,8 +702,8 @@ function isVisibleElement(element: HTMLElement): boolean {
   return rect.width > 0 && rect.height > 0 && getComputedStyle(element).visibility !== "hidden";
 }
 
-function isPrimaryResultRow(element: HTMLElement): boolean {
-  return element.matches("tr[mat-row].mat-mdc-row:not(.detail-row)");
+function primaryResultRowFor(element: HTMLElement): HTMLTableRowElement | null {
+  return element.closest<HTMLTableRowElement>("tr[mat-row].mat-mdc-row:not(.detail-row)");
 }
 
 function rememberAutoOpenRequest(): void {
@@ -1532,6 +1540,10 @@ function mileageTierGroupKey(estimate: EarningsEstimate, preferredProgramList: s
 function mileageTierParentProgram(program: string, preferredProgramList: string[]): string {
   for (const preferredProgram of preferredProgramList) {
     if (program !== preferredProgram && program.startsWith(`${preferredProgram} `)) return preferredProgram;
+  }
+  for (const parentProgram of MILEAGE_PROGRAMS_BY_LENGTH) {
+    if (program === parentProgram || !program.startsWith(`${parentProgram} `)) continue;
+    if (mileageProgramTierOptions(parentProgram).some((tier) => tier.program === program)) return parentProgram;
   }
   return "";
 }
