@@ -10,6 +10,8 @@ The extension targets Manifest V3 and currently requests:
 - required host access for `https://matrix.itasoftware.com/*`
 - required host access for Google Flights booking pages on `https://www.google.com/travel/flights/booking*` and
   `https://google.com/travel/flights/booking*`
+- required host access for daily cached public USD FX rates from `https://cdn.jsdelivr.net/*` and
+  `https://api.fxratesapi.com/*`
 - optional host access for `https://travel.mu-travel.com/*`
 
 Dev builds also add required host access for `https://travel.mu-travel.com/*`, `http://localhost/*`, and
@@ -54,6 +56,7 @@ when the baseline page is dense, and closes temporary tabs after parsing.
 - `airports.ts`: airport filtering helpers.
 - `storage.ts`: settings defaults and persistence.
 - `backendClient.ts`: optional hosted metadata client with silent fallback.
+- `currencyRates.ts`: public USD FX-rate fetch/cache helper for approximate revenue-based mileage conversion.
 - `mileageEarnings.ts`: compact offline earnings estimates plus outbound Where to Credit link helpers.
 
 ## Mileage Earning Snapshot
@@ -63,7 +66,8 @@ The extension bundles a compact generated snapshot at `src/shared/data/mileage-e
 It is used to show rough earning estimates such as:
 
 - distance x earning percentage
-- fare x revenue multiplier
+- fare x revenue multiplier, with non-USD base fares converted through a one-day cached public FX snapshot and labeled
+  as approximate
 - fixed miles
 
 This snapshot should be generated only from approved airline/program public earning charts, licensed datasets, or curated

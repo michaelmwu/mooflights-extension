@@ -49,6 +49,20 @@ const resultCache = new Map<
   }
 >();
 
+function readCachedResults(pageKey: string, now = Date.now()): GoogleFlightsCountryResult[] {
+  const cached = resultCache.get(pageKey);
+  if (!cached) return [];
+  if (now - cached.cachedAt <= RESULT_CACHE_TTL_MS) return cached.results;
+  resultCache.delete(pageKey);
+  return [];
+}
+
+function pruneExpiredResultCache(now = Date.now()): void {
+  for (const [pageKey, cached] of resultCache.entries()) {
+    if (now - cached.cachedAt > RESULT_CACHE_TTL_MS) resultCache.delete(pageKey);
+  }
+}
+
 chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
   const payload = message as { command?: string };
   if (payload.command !== "parseGoogleFlightsBookingOptions") return false;
@@ -138,8 +152,7 @@ function scheduleRender(): void {
     state.baselineSignature = "";
     state.error = "";
     state.comparing = false;
-    const cached = resultCache.get(pageKey);
-    state.results = cached && Date.now() - cached.cachedAt <= RESULT_CACHE_TTL_MS ? cached.results : [];
+    state.results = readCachedResults(pageKey);
   }
 
   if (state.comparing) return;
@@ -327,6 +340,7 @@ async function compareCountries(): Promise<void> {
     if (!response?.ok) throw new Error(response?.error || "Country comparison failed.");
     state.results = baseline ? [baseline, ...(response.results || [])] : response.results || [];
     if (comparePageKey) {
+      pruneExpiredResultCache();
       resultCache.set(comparePageKey, {
         results: state.results,
         cachedAt: Date.now(),

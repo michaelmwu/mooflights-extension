@@ -1,4 +1,5 @@
 import { airportDistanceMiles } from "./airportCoordinates";
+import type { UsdCurrencyRates } from "./currencyRates";
 import mileageEarningData from "./data/mileage-earning-compact.json";
 import programTierLabels from "./data/program-tier-labels.json";
 import { flattenSegments } from "./itinerary";
@@ -66,7 +67,9 @@ export type EarningsEstimate = {
   program: string;
   estimatedMiles?: number;
   formula: string;
+  displayFare?: string;
   basis: "distance-percent" | "revenue-multiplier" | "fixed" | "unknown";
+  approximate?: boolean;
   sourceFetchedAt: string;
 };
 
@@ -196,11 +199,12 @@ export function estimateEarnings(
   itinerary: NormalizedItinerary,
   preferredPrograms: string[] = [],
   programTiers: MileageProgramTierPreference = {},
+  currencyRates?: UsdCurrencyRates | null,
 ): EarningsEstimate[] {
   const segments = flattenSegments(itinerary);
   return segments
     .flatMap((segment, index) =>
-      estimateSegmentEarningsRows(segment, itinerary, segments, index, preferredPrograms, programTiers),
+      estimateSegmentEarningsRows(segment, itinerary, segments, index, preferredPrograms, programTiers, currencyRates),
     )
     .filter((estimate): estimate is EarningsEstimate => Boolean(estimate));
 }
@@ -316,8 +320,19 @@ export function estimateSegmentEarnings(
   segmentsOrCount: ItinerarySegment[] | number = flattenSegments(itinerary),
   segmentIndex = 0,
   programTiers: MileageProgramTierPreference = {},
+  currencyRates?: UsdCurrencyRates | null,
 ): EarningsEstimate | null {
-  return estimateSegmentEarningsRows(segment, itinerary, segmentsOrCount, segmentIndex, [], programTiers)[0] || null;
+  return (
+    estimateSegmentEarningsRows(
+      segment,
+      itinerary,
+      segmentsOrCount,
+      segmentIndex,
+      [],
+      programTiers,
+      currencyRates,
+    )[0] || null
+  );
 }
 
 function estimateSegmentEarningsRows(
@@ -327,6 +342,7 @@ function estimateSegmentEarningsRows(
   segmentIndex = 0,
   preferredPrograms: string[] = [],
   programTiers: MileageProgramTierPreference = {},
+  currencyRates?: UsdCurrencyRates | null,
 ): EarningsEstimate[] {
   const segments = Array.isArray(segmentsOrCount) ? segmentsOrCount : flattenSegments(itinerary);
   const segmentCount = Array.isArray(segmentsOrCount) ? segmentsOrCount.length : segmentsOrCount;
@@ -343,7 +359,7 @@ function estimateSegmentEarningsRows(
   const rows = earningRows(carrier, bookingClass, booking, preferredPrograms, programTiers);
 
   return rows.map((row) => {
-    const computed = computeMiles(row.percent, row.value, distance, fare, itinerary.currency);
+    const computed = computeMiles(row.percent, row.value, distance, fare, itinerary.currency, currencyRates);
     return {
       segment,
       airlineName: airline.name,
@@ -352,7 +368,9 @@ function estimateSegmentEarningsRows(
       program: row.program,
       estimatedMiles: computed.estimatedMiles,
       formula: computed.formula,
+      displayFare: computed.displayFare,
       basis: computed.basis,
+      approximate: computed.approximate,
       sourceFetchedAt: DATA.fetched_at,
     };
   });
@@ -465,7 +483,8 @@ function computeMiles(
   distance: number | undefined,
   fare: number | undefined,
   fareCurrency: string | undefined,
-): Pick<EarningsEstimate, "estimatedMiles" | "formula" | "basis"> {
+  currencyRates: UsdCurrencyRates | null | undefined,
+): Pick<EarningsEstimate, "estimatedMiles" | "formula" | "displayFare" | "basis" | "approximate"> {
   if (finiteNumber(percent) && finiteNumber(distance)) {
     return {
       estimatedMiles: Math.round(distance * (percent / 100)),
@@ -476,7 +495,21 @@ function computeMiles(
 
   const revenueMultiplier = parseRevenueMultiplier(value);
   if (revenueMultiplier && finiteNumber(fare)) {
-    const effectiveFareCurrency = fareCurrency || revenueMultiplier.currency;
+    const effectiveFareCurrency = (fareCurrency || revenueMultiplier.currency).toUpperCase();
+    const convertedFare = convertCurrency(fare, effectiveFareCurrency, revenueMultiplier.currency, currencyRates);
+    if (convertedFare) {
+      const displayFare =
+        effectiveFareCurrency === revenueMultiplier.currency
+          ? formatCurrencyWithCode(fare, effectiveFareCurrency)
+          : `${formatCurrencyWithCode(fare, effectiveFareCurrency)} ~ ${formatDisplayCurrencyWithCode(convertedFare.amount, revenueMultiplier.currency)}`;
+      return {
+        estimatedMiles: Math.round(convertedFare.amount * revenueMultiplier.multiplier),
+        formula: `${displayFare} x ${revenueMultiplier.multiplier} miles/${revenueMultiplier.currency}${convertedFare.approximate ? " (cached FX estimate)" : ""}`,
+        displayFare,
+        basis: "revenue-multiplier",
+        approximate: convertedFare.approximate,
+      };
+    }
     if (effectiveFareCurrency !== revenueMultiplier.currency) {
       return {
         formula: `${formatCurrencyWithCode(fare, effectiveFareCurrency)} cannot be used with ${revenueMultiplier.multiplier} miles/${revenueMultiplier.currency} without FX conversion`,
@@ -486,6 +519,7 @@ function computeMiles(
     return {
       estimatedMiles: Math.round(fare * revenueMultiplier.multiplier),
       formula: `${formatCurrencyWithCode(fare, effectiveFareCurrency)} x ${revenueMultiplier.multiplier} miles/${revenueMultiplier.currency}`,
+      displayFare: formatCurrencyWithCode(fare, effectiveFareCurrency),
       basis: "revenue-multiplier",
     };
   }
@@ -502,6 +536,23 @@ function computeMiles(
   return {
     formula: value || "Open Where to Credit for details",
     basis: "unknown",
+  };
+}
+
+function convertCurrency(
+  amount: number,
+  fromCurrency: string,
+  toCurrency: string,
+  currencyRates: UsdCurrencyRates | null | undefined,
+): { amount: number; approximate: boolean } | null {
+  if (fromCurrency === toCurrency) return { amount, approximate: false };
+  if (!currencyRates) return null;
+  const fromRate = currencyRates.rates[fromCurrency];
+  const toRate = currencyRates.rates[toCurrency];
+  if (!finiteNumber(fromRate) || !finiteNumber(toRate) || fromRate <= 0 || toRate <= 0) return null;
+  return {
+    amount: (amount / fromRate) * toRate,
+    approximate: true,
   };
 }
 
@@ -611,6 +662,11 @@ function formatCurrency(value: number): string {
 
 function formatCurrencyWithCode(value: number, currency: string): string {
   return `${formatCurrency(value)} ${currency}`;
+}
+
+function formatDisplayCurrencyWithCode(value: number, currency: string): string {
+  if (currency === "USD") return `$${formatCurrency(value)} USD`;
+  return formatCurrencyWithCode(value, currency);
 }
 
 function formatNumber(value: number): string {

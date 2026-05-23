@@ -9,6 +9,7 @@ import {
   uniqueAirportValues,
 } from "../shared/airports";
 import { fetchRemoteProviderMetadata } from "../shared/backendClient";
+import { loadUsdCurrencyRates, type UsdCurrencyRates } from "../shared/currencyRates";
 import { flattenSegments, parseItaBookingDetails, parseItineraryJson } from "../shared/itinerary";
 import {
   type EarningsEstimate,
@@ -33,6 +34,7 @@ type PanelState = {
   bookingDetailsSignature: string;
   locationKey: string;
   showAllMileagePrograms: boolean;
+  currencyRates: UsdCurrencyRates | null;
 };
 
 type ResultMileageSummary = {
@@ -80,6 +82,7 @@ const state: PanelState = {
   bookingDetailsSignature: "",
   locationKey: currentLocationKey(),
   showAllMileagePrograms: false,
+  currencyRates: null,
 };
 
 const AIRPORT_REGION_OPTIONS = uniqueAirportRegions();
@@ -94,6 +97,11 @@ async function init(): Promise<void> {
   window.addEventListener("message", onBridgeMessage);
   state.settings = await loadSettings();
   state.airportPreview = airportCodes(state.settings.airportHelper).slice(0, 120);
+  void loadUsdCurrencyRates().then((rates) => {
+    state.currencyRates = rates;
+    if (state.itinerary) render();
+    annotateFlightResultsSoon();
+  });
   render();
   installAutoCaptureObserver();
   installFlightResultObserver();
@@ -562,7 +570,7 @@ function annotateFlightResults(): void {
       const index = segmentIndex;
       segmentIndex++;
       if (item.querySelector(".mu-mileage-earnings")) return;
-      const estimate = estimateSegmentEarnings(segment, itinerary, segments, index);
+      const estimate = estimateSegmentEarnings(segment, itinerary, segments, index, {}, state.currencyRates);
       const target = item.querySelector<HTMLElement>(".info-grid");
       if (!target) return;
       target.appendChild(renderResultMileageLine(segment, estimate));
@@ -714,7 +722,12 @@ function resultRowForGrid(grid: HTMLElement): HTMLTableRowElement | null {
 
 function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSummary {
   const preferredPrograms = state.settings?.preferredFrequentFlyerPrograms || [];
-  const estimates = estimateEarnings(itinerary, preferredPrograms, state.settings?.frequentFlyerProgramTiers || {});
+  const estimates = estimateEarnings(
+    itinerary,
+    preferredPrograms,
+    state.settings?.frequentFlyerProgramTiers || {},
+    state.currencyRates,
+  );
   const preferredProgramRanks = new Map(preferredPrograms.map((program, index) => [program, index]));
   const byProgram = new Map<string, { miles: number; formulas: MileageFormula[] }>();
   for (const estimate of estimates) {
@@ -1098,7 +1111,12 @@ function providerConfidenceCopy(link: RankedProviderLink): { label: string } {
 
 function renderMileageCredit(itinerary: NormalizedItinerary): string {
   const preferredProgramList = state.settings?.preferredFrequentFlyerPrograms || [];
-  const estimates = estimateEarnings(itinerary, preferredProgramList, state.settings?.frequentFlyerProgramTiers || {});
+  const estimates = estimateEarnings(
+    itinerary,
+    preferredProgramList,
+    state.settings?.frequentFlyerProgramTiers || {},
+    state.currencyRates,
+  );
   const preferredPrograms = new Set(preferredProgramList);
   const visibleEstimates =
     preferredPrograms.size > 0 && !state.showAllMileagePrograms
@@ -1129,7 +1147,7 @@ function renderMileageCredit(itinerary: NormalizedItinerary): string {
         hiddenEstimateCount > 0 && visibleEstimates.length > 0
           ? `<div class="earning more-earnings">
               <small>${hiddenEstimateCount.toLocaleString()} more earning row(s) hidden by preferred programs.</small>
-              <button type="button" class="inline-button" data-action="show-all-mileage">Show all earnings</button>
+              <button type="button" class="inline-button" data-action="show-all-mileage">Show all</button>
             </div>`
           : ""
       }
@@ -1229,12 +1247,14 @@ function renderMileageTierGroup(
 ): string {
   const estimates = sortTierEstimates(group.parentProgram, group.estimates);
   const parsedFormulas = estimates.map((estimate) => parseRevenueMileageFormula(estimate.formula));
-  const baseFare = commonValue(parsedFormulas.map((formula) => formula?.baseFare || ""));
+  const baseFare = commonValue(estimates.map((estimate) => estimate.displayFare || ""));
+  const isApproximate = estimates.some((estimate) => estimate.approximate);
   return `
     <div class="earning tier-group">
       ${showSegmentLabel ? `<span>${escapeHtml(group.segmentLabel)}</span>` : ""}
       <a href="${escapeHtml(group.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(group.parentProgram)}</a>
       ${baseFare ? `<small>Base fare ${escapeHtml(baseFare)}</small>` : ""}
+      ${isApproximate ? `<small>FX conversion is approximate.</small>` : ""}
       <table>
         <tbody>
           ${estimates
@@ -1278,7 +1298,7 @@ function mileageTierDisplayRank(parentProgram: string, program: string): number 
 }
 
 function parseRevenueMileageFormula(formula: string): { baseFare: string; rate: string } | null {
-  const match = formula.match(/^(.+\s[A-Z]{3})\s+x\s+([\d.]+\s+miles\/[A-Z]{3})$/);
+  const match = formula.match(/^(.+\s[A-Z]{3})\s+x\s+([\d.]+\s+miles\/[A-Z]{3})(?:\s+\(.+\))?$/);
   if (!match) return null;
   return {
     baseFare: match[1]?.trim() || "",

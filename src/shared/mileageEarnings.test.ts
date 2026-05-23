@@ -1,3 +1,4 @@
+import type { UsdCurrencyRates } from "./currencyRates";
 import {
   buildValidatedWhereToCreditUrl,
   estimateEarnings,
@@ -524,6 +525,68 @@ describe("Mileage earning estimates", () => {
         miles: undefined,
         formula: "27,328 JPY cannot be used with 11 miles/USD without FX conversion",
         basis: "unknown",
+      },
+    ]);
+  });
+
+  it("uses cached FX rates for approximate non-USD revenue mileage math", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "one-way",
+      currency: "JPY",
+      totalPrice: 30000,
+      passengerCount: 1,
+      carriers: ["UA"],
+      fareBases: ["NNAA0BC"],
+      slices: [
+        {
+          origin: "HNL",
+          destination: "SFO",
+          segments: [
+            {
+              origin: "HNL",
+              destination: "SFO",
+              carrier: "UA",
+              bookingClass: "N",
+              farePrice: 27328,
+              cabin: "economy",
+            },
+          ],
+        },
+      ],
+    };
+    const rates: UsdCurrencyRates = {
+      base: "USD",
+      rates: { USD: 1, JPY: 152.5 },
+      fetchedAt: 0,
+      source: "test",
+    };
+
+    expect(
+      estimateEarnings(
+        itinerary,
+        ["United MileagePlus"],
+        {
+          "United MileagePlus": "United MileagePlus Premier 1K",
+        },
+        rates,
+      )
+        .filter((estimate) => estimate.program.startsWith("United MileagePlus"))
+        .map((estimate) => ({
+          miles: estimate.estimatedMiles,
+          formula: estimate.formula,
+          displayFare: estimate.displayFare,
+          approximate: estimate.approximate,
+          basis: estimate.basis,
+        })),
+    ).toEqual([
+      {
+        miles: 1971,
+        formula: "27,328 JPY ~ $179.2 USD x 11 miles/USD (cached FX estimate)",
+        displayFare: "27,328 JPY ~ $179.2 USD",
+        approximate: true,
+        basis: "revenue-multiplier",
       },
     ]);
   });
