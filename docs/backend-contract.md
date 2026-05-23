@@ -83,4 +83,4 @@ Rules:
 - `POST /api/extension/v1/provider-feedback`
 - `GET /api/extension/v1/entitlements`
 
-These are intentionally not implemented in the extension MVP.
+These are intentionally deferred from the first reviewable extension release.
