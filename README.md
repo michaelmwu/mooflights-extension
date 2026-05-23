@@ -1,6 +1,6 @@
 # Mu Travel Flights Extension
 
-Offline-first Chrome extension for ITA Matrix power users.
+Offline-first extension for Chromium-compatible browsers and ITA Matrix power users.
 
 The first MVP helps with:
 
