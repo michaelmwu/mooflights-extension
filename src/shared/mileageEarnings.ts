@@ -320,9 +320,8 @@ export function estimateSegmentEarnings(
   programTiers: MileageProgramTierPreference = {},
   currencyRates?: UsdCurrencyRates | null,
 ): EarningsEstimate | null {
-  return (
-    estimateSegmentEarningsRows(segment, itinerary, segmentsOrCount, segmentIndex, programTiers, currencyRates)[0] ||
-    null
+  return bestEarningsEstimate(
+    estimateSegmentEarningsRows(segment, itinerary, segmentsOrCount, segmentIndex, programTiers, currencyRates),
   );
 }
 
@@ -364,6 +363,15 @@ function estimateSegmentEarningsRows(
       sourceFetchedAt: DATA.f,
     };
   });
+}
+
+function bestEarningsEstimate(estimates: EarningsEstimate[]): EarningsEstimate | null {
+  return (
+    [...estimates].sort(
+      (left, right) =>
+        (right.estimatedMiles ?? -1) - (left.estimatedMiles ?? -1) || left.program.localeCompare(right.program),
+    )[0] || null
+  );
 }
 
 function earningRows(

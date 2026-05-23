@@ -30,6 +30,7 @@
     "https://cdn.jsdelivr.net/*",
     "https://api.fxratesapi.com/*"
   ],
+  "optional_host_permissions": ["https://travel.mu-travel.com/*", "http://localhost/*", "http://127.0.0.1/*"],
   "permissions": ["storage", "clipboardWrite", "tabs"],
   "options_page": "options/index.html"
 }

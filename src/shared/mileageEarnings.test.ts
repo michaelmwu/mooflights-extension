@@ -2,6 +2,7 @@ import type { UsdCurrencyRates } from "./currencyRates";
 import {
   buildValidatedWhereToCreditUrl,
   estimateEarnings,
+  estimateSegmentEarnings,
   inspectWhereToCreditSegments,
   mileageProgramTierOptions,
   uniqueMileageProgramOptions,
@@ -138,6 +139,20 @@ describe("Mileage earning estimates", () => {
       formula: "1,000 miles x 30%",
       basis: "distance-percent",
       url: "https://wheretocredit.com/en/AS/X",
+    });
+  });
+
+  it("uses the highest-mile row for single segment annotations", () => {
+    const itinerary: NormalizedItinerary = itineraryFor("4Y", "B");
+    const segment = itinerary.slices[0]?.segments[0];
+    if (!segment) throw new Error("Expected itinerary fixture segment");
+
+    expect(estimateSegmentEarnings(segment, itinerary)).toMatchObject({
+      airlineName: "Discover Airlines",
+      bookingClass: "B",
+      program: "Miles&More",
+      estimatedMiles: 1500,
+      formula: "1,000 miles x 150%",
     });
   });
 

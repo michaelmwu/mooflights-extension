@@ -1,10 +1,9 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { access, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const root = process.cwd();
-const sourcePath =
-  process.argv[2] ||
-  "/Users/michaelwu/conductor/workspaces/asiatraveldeals/salvador-v1/data/reference/wheretocredit.json";
+const sourcePath = await mileageEarningSourcePath();
 const outPath = resolve(root, "src/shared/data/mileage-earning.json");
 
 const source = JSON.parse(await readFile(sourcePath, "utf8"));
@@ -66,4 +65,18 @@ function programIndex(program) {
   const next = programIndexes.size;
   programIndexes.set(program, next);
   return next;
+}
+
+async function mileageEarningSourcePath() {
+  if (process.argv[2]) return resolve(root, process.argv[2]);
+  const localDefault = resolve(root, "data/reference/wheretocredit.json");
+  try {
+    await access(localDefault, constants.R_OK);
+    return localDefault;
+  } catch {
+    console.error(
+      "Usage: bun run import:mileage-earnings -- <path-to-source-json>\nExpected source shape: data/reference/wheretocredit.json",
+    );
+    process.exit(1);
+  }
 }

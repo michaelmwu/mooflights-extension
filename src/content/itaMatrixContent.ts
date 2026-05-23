@@ -72,7 +72,7 @@ const AUTO_SEARCH_TIMEOUT_MS = 15_000;
 const AUTO_OPEN_DEBOUNCE_MS = 300;
 const AUTO_OPEN_TIMEOUT_MS = 15_000;
 const AUTO_OPEN_STORAGE_KEY = "muTravelMatrixAutoOpen";
-const MILEAGE_PROGRAMS_BY_LENGTH = uniqueMileagePrograms().sort((left, right) => right.length - left.length);
+let mileageProgramsByLengthCache: string[] | undefined;
 let autoCaptureCheckTimer: number | undefined;
 let flightResultAnnotationTimer: number | undefined;
 let autoSearchTimer: number | undefined;
@@ -1660,11 +1660,18 @@ function mileageTierParentProgram(program: string, preferredProgramList: string[
   for (const preferredProgram of preferredProgramList) {
     if (program !== preferredProgram && program.startsWith(`${preferredProgram} `)) return preferredProgram;
   }
-  for (const parentProgram of MILEAGE_PROGRAMS_BY_LENGTH) {
+  for (const parentProgram of mileageProgramsByLength()) {
     if (program === parentProgram || !program.startsWith(`${parentProgram} `)) continue;
     if (mileageProgramTierOptions(parentProgram).some((tier) => tier.program === program)) return parentProgram;
   }
   return "";
+}
+
+function mileageProgramsByLength(): string[] {
+  if (!mileageProgramsByLengthCache) {
+    mileageProgramsByLengthCache = uniqueMileagePrograms().sort((left, right) => right.length - left.length);
+  }
+  return mileageProgramsByLengthCache;
 }
 
 function mileageSegmentLabel(estimate: EarningsEstimate): string {
