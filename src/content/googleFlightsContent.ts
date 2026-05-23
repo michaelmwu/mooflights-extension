@@ -104,13 +104,6 @@ async function storeCachedResults(
   await writeStoredResultCache(pruneStoredResultCache(cache, cachedAt));
 }
 
-async function deleteStoredCachedResults(pageKey: string): Promise<void> {
-  const cache = await readStoredResultCache();
-  if (!(pageKey in cache)) return;
-  delete cache[pageKey];
-  await writeStoredResultCache(cache);
-}
-
 async function readStoredResultCache(): Promise<StoredResultCache> {
   try {
     const stored = await chrome.storage.local.get(RESULT_CACHE_STORAGE_KEY);
@@ -261,12 +254,7 @@ function scheduleRender(): void {
     applyCachedResults(readCachedResults(pageKey));
     void loadStoredCachedResults(pageKey);
   } else if (state.baselineSignature && state.baselineSignature !== baselineSignature) {
-    if (state.baseline?.country === baseline.country) {
-      state.results = [];
-      state.resultsCachedAt = 0;
-      resultCache.delete(pageKey);
-      void deleteStoredCachedResults(pageKey);
-    } else if (state.results.length > 0 && !state.resultsCachedAt) {
+    if (state.results.length > 0 && !state.resultsCachedAt) {
       state.resultsCachedAt = Date.now();
     } else if (state.results.length === 0) {
       void loadStoredCachedResults(pageKey);
@@ -412,6 +400,59 @@ function renderResultActions(result: GoogleFlightsCountryResult): string {
   `;
 }
 
+function mergeCountryResults(
+  previousResults: GoogleFlightsCountryResult[],
+  updates: GoogleFlightsCountryResult[],
+): { results: GoogleFlightsCountryResult[]; retained: boolean } {
+  const byCountry = new Map(previousResults.map((result) => [result.country, result]));
+  let retained = false;
+  for (const update of updates) {
+    const previous = byCountry.get(update.country);
+    const merged = previous ? mergeCountryResult(previous, update) : update;
+    if (previous && resultRetainedPreviousData(previous, update, merged)) retained = true;
+    byCountry.set(update.country, merged);
+  }
+  for (const previous of previousResults) {
+    if (!updates.some((update) => update.country === previous.country)) retained = true;
+  }
+  return { results: Array.from(byCountry.values()), retained };
+}
+
+function mergeCountryResult(
+  previous: GoogleFlightsCountryResult,
+  update: GoogleFlightsCountryResult,
+): GoogleFlightsCountryResult {
+  const optionsByKey = new Map(previous.options.map((option) => [bookingOptionKey(option), option]));
+  for (const option of update.options) optionsByKey.set(bookingOptionKey(option), option);
+  const options = Array.from(optionsByKey.values()).sort(
+    (left, right) => left.price - right.price || left.provider.localeCompare(right.provider),
+  );
+  return {
+    ...previous,
+    ...update,
+    options,
+    cheapest: options[0],
+    direct: options.find((option) => option.isDirect),
+    status: options.length > 0 && update.status === "empty" ? previous.status : update.status,
+  };
+}
+
+function resultRetainedPreviousData(
+  previous: GoogleFlightsCountryResult,
+  update: GoogleFlightsCountryResult,
+  merged: GoogleFlightsCountryResult,
+): boolean {
+  return (
+    merged.options.length > update.options.length ||
+    Boolean(previous.direct && !update.direct && merged.direct) ||
+    previous.country !== update.country
+  );
+}
+
+function bookingOptionKey(option: GoogleFlightsCountryResult["options"][number]): string {
+  return `${option.provider}:${option.isDirect ? "direct" : "ota"}`;
+}
+
 function bookingActionTargets(result: GoogleFlightsCountryResult): Array<{ label: string; url: string }> {
   const targets: Array<{ label: string; url: string }> = [];
   if (result.cheapest?.bookingUrl) {
@@ -518,8 +559,8 @@ async function compareCountries(): Promise<void> {
   state.countryInput = selectedCountries.join(", ");
   state.comparing = true;
   state.error = "";
-  state.results = [];
-  state.resultsCachedAt = 0;
+  const previousResults = state.results;
+  const previousCachedAt = state.resultsCachedAt;
   const currentUrl = new URL(window.location.href);
   const hasComparableCurrency = currentUrl.searchParams.has("curr");
   state.baseline = hasComparableCurrency ? parseCurrentBookingPage() : null;
@@ -539,7 +580,10 @@ async function compareCountries(): Promise<void> {
     })) as CompareResponse;
     if (state.pageKey !== comparePageKey) return;
     if (!response?.ok) throw new Error(response?.error || "Country comparison failed.");
-    state.results = baseline ? [baseline, ...(response.results || [])] : response.results || [];
+    const updates = baseline ? [baseline, ...(response.results || [])] : response.results || [];
+    const merged = mergeCountryResults(previousResults, updates);
+    state.results = merged.results;
+    state.resultsCachedAt = merged.retained ? previousCachedAt || Date.now() : 0;
     if (comparePageKey) {
       pruneExpiredResultCache();
       void storeCachedResults(comparePageKey, state.results);
