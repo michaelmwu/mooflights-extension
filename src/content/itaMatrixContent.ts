@@ -57,8 +57,14 @@ const PANEL_ID = "mu-travel-flights-panel";
 const BRIDGE_ID = "mu-travel-flights-page-bridge";
 const MESSAGE_SOURCE = "mu-travel-flights";
 const AUTO_CAPTURE_DEBOUNCE_MS = 150;
+const AUTO_SEARCH_DEBOUNCE_MS = 250;
+const AUTO_SEARCH_TIMEOUT_MS = 15_000;
 let autoCaptureCheckTimer: number | undefined;
 let flightResultAnnotationTimer: number | undefined;
+let autoSearchTimer: number | undefined;
+let autoSearchStartedAt = 0;
+let autoSearchDone = false;
+let autoSearchLocationKey = "";
 
 const state: PanelState = {
   settings: null,
@@ -89,8 +95,10 @@ async function init(): Promise<void> {
   render();
   installAutoCaptureObserver();
   installFlightResultObserver();
+  installSearchAutoSubmitObserver();
   maybeAutoCapture();
   annotateFlightResultsSoon();
+  scheduleAutoSubmitMatrixSearch();
 }
 
 function render(): void {
@@ -403,6 +411,15 @@ function installFlightResultObserver(): void {
   window.addEventListener("hashchange", annotateFlightResultsSoon);
 }
 
+function installSearchAutoSubmitObserver(): void {
+  const observer = new MutationObserver(() => {
+    if (isSearchPage()) scheduleAutoSubmitMatrixSearch();
+  });
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+  window.addEventListener("popstate", scheduleAutoSubmitMatrixSearch);
+  window.addEventListener("hashchange", scheduleAutoSubmitMatrixSearch);
+}
+
 function scheduleAutoCaptureCheck(): void {
   if (autoCaptureCheckTimer) window.clearTimeout(autoCaptureCheckTimer);
   autoCaptureCheckTimer = window.setTimeout(() => {
@@ -410,6 +427,63 @@ function scheduleAutoCaptureCheck(): void {
     resetForLocationChange();
     maybeAutoCapture(false);
   }, AUTO_CAPTURE_DEBOUNCE_MS);
+}
+
+function scheduleAutoSubmitMatrixSearch(): void {
+  if (autoSearchTimer) window.clearTimeout(autoSearchTimer);
+  autoSearchTimer = window.setTimeout(() => {
+    autoSearchTimer = undefined;
+    maybeAutoSubmitMatrixSearch();
+  }, AUTO_SEARCH_DEBOUNCE_MS);
+}
+
+function maybeAutoSubmitMatrixSearch(): void {
+  if (!shouldAutoSubmitMatrixSearch()) {
+    autoSearchStartedAt = 0;
+    autoSearchDone = false;
+    autoSearchLocationKey = "";
+    return;
+  }
+
+  const locationKey = currentLocationKey();
+  if (autoSearchLocationKey !== locationKey) {
+    autoSearchLocationKey = locationKey;
+    autoSearchStartedAt = Date.now();
+    autoSearchDone = false;
+  }
+  if (autoSearchDone) return;
+
+  const button = matrixSearchButton();
+  if (button && !isDisabledButton(button)) {
+    autoSearchDone = true;
+    setStatus("Searching prefilled Matrix form...");
+    button.click();
+    return;
+  }
+
+  if (Date.now() - autoSearchStartedAt < AUTO_SEARCH_TIMEOUT_MS) scheduleAutoSubmitMatrixSearch();
+}
+
+function shouldAutoSubmitMatrixSearch(): boolean {
+  if (!isSearchPage()) return false;
+  const url = new URL(window.location.href);
+  return url.searchParams.get("muTravelAutoSearch") === "1" && Boolean(url.searchParams.get("search"));
+}
+
+function matrixSearchButton(): HTMLButtonElement | null {
+  return (
+    document.querySelector<HTMLButtonElement>("button[type='submit'].search-button") ||
+    document.querySelector<HTMLButtonElement>("button[type='submit']")
+  );
+}
+
+function isDisabledButton(button: HTMLButtonElement): boolean {
+  return (
+    button.disabled ||
+    button.getAttribute("aria-disabled") === "true" ||
+    button.classList.contains("mat-mdc-button-disabled") ||
+    button.classList.contains("mdc-button--disabled")
+  );
 }
 
 function annotateFlightResultsSoon(): void {
