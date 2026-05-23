@@ -46,13 +46,16 @@ const resultCache = new Map<
   {
     results: GoogleFlightsCountryResult[];
     cachedAt: number;
+    baselineSignature: string;
   }
 >();
 
-function readCachedResults(pageKey: string, now = Date.now()): GoogleFlightsCountryResult[] {
+function readCachedResults(pageKey: string, baselineSignature: string, now = Date.now()): GoogleFlightsCountryResult[] {
   const cached = resultCache.get(pageKey);
   if (!cached) return [];
-  if (now - cached.cachedAt <= RESULT_CACHE_TTL_MS) return cached.results;
+  if (now - cached.cachedAt <= RESULT_CACHE_TTL_MS && cached.baselineSignature === baselineSignature) {
+    return cached.results;
+  }
   resultCache.delete(pageKey);
   return [];
 }
@@ -147,17 +150,20 @@ function scheduleRender(): void {
   }
 
   installPanel();
+  const baseline = parseCurrentBookingPage();
+  const baselineSignature = googleFlightsResultSignature(baseline);
   if (state.pageKey !== pageKey) {
     state.pageKey = pageKey;
     state.baselineSignature = "";
     state.error = "";
     state.comparing = false;
-    state.results = readCachedResults(pageKey);
+    state.results = readCachedResults(pageKey, baselineSignature);
+  } else if (state.baselineSignature && state.baselineSignature !== baselineSignature) {
+    state.results = [];
+    resultCache.delete(pageKey);
   }
 
   if (state.comparing) return;
-  const baseline = parseCurrentBookingPage();
-  const baselineSignature = googleFlightsResultSignature(baseline);
   if (state.baselineSignature === baselineSignature) return;
   state.baseline = baseline;
   state.baselineSignature = baselineSignature;
@@ -324,6 +330,7 @@ async function compareCountries(): Promise<void> {
   state.baseline = hasComparableCurrency ? parseCurrentBookingPage() : null;
   const comparePageKey = state.pageKey;
   const baseline = state.baseline;
+  const compareBaselineSignature = baseline ? googleFlightsResultSignature(baseline) : "";
   const baseUrl = googleFlightsCountryUrl(window.location.href, currentComparableCountryCode());
   render();
 
@@ -344,6 +351,7 @@ async function compareCountries(): Promise<void> {
       resultCache.set(comparePageKey, {
         results: state.results,
         cachedAt: Date.now(),
+        baselineSignature: compareBaselineSignature,
       });
     }
   } catch (error) {
