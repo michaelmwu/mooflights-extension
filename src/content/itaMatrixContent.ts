@@ -37,6 +37,8 @@ type PanelState = {
   bookingDetailsSignature: string;
   locationKey: string;
   showAllMileagePrograms: boolean;
+  mileageSortMode: MileageSortMode;
+  groupPreferredMileage: boolean;
   currencyRates: UsdCurrencyRates | null;
 };
 
@@ -58,6 +60,8 @@ type MileageFormula = {
   segment: string;
   formula: string;
 };
+
+type MileageSortMode = "miles" | "name";
 
 const PANEL_ID = "mu-travel-flights-panel";
 const BRIDGE_ID = "mu-travel-flights-page-bridge";
@@ -95,6 +99,8 @@ const state: PanelState = {
   bookingDetailsSignature: "",
   locationKey: currentLocationKey(),
   showAllMileagePrograms: false,
+  mileageSortMode: "miles",
+  groupPreferredMileage: true,
   currencyRates: null,
 };
 
@@ -220,6 +226,18 @@ function bind(root: ShadowRoot): void {
     state.showAllMileagePrograms = true;
     render();
   });
+  root.querySelectorAll<HTMLButtonElement>('[data-action="mileage-sort"]').forEach((button) => {
+    button.addEventListener("click", () => {
+      state.mileageSortMode = button.dataset.sort === "name" ? "name" : "miles";
+      render();
+    });
+  });
+  root
+    .querySelector<HTMLInputElement>('[data-action="toggle-preferred-mileage-group"]')
+    ?.addEventListener("change", (event) => {
+      state.groupPreferredMileage = event.currentTarget instanceof HTMLInputElement && event.currentTarget.checked;
+      render();
+    });
 
   root.querySelectorAll<HTMLSelectElement>("select[data-setting]").forEach((select) => {
     select.addEventListener("change", () => {
@@ -975,8 +993,8 @@ function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSumm
     byProgram.set(program, current);
   }
 
-  const programs = Array.from(byProgram.entries())
-    .map(([program, value]) => {
+  const programs = sortResultMileagePrograms(
+    Array.from(byProgram.entries()).map(([program, value]) => {
       const preferenceRank = mileageProgramPreferenceRank(program, preferredProgramRanks);
       return {
         program,
@@ -985,13 +1003,8 @@ function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSumm
         preferenceRank,
         preferred: preferenceRank !== Number.POSITIVE_INFINITY,
       };
-    })
-    .sort((left, right) => {
-      if (left.preferred !== right.preferred) return left.preferred ? -1 : 1;
-      if (left.miles !== right.miles) return right.miles - left.miles;
-      if (left.preferenceRank !== right.preferenceRank) return left.preferenceRank - right.preferenceRank;
-      return left.program.localeCompare(right.program);
-    });
+    }),
+  );
 
   const hasPreferredPrograms = preferredProgramRanks.size > 0;
   const visiblePrograms = hasPreferredPrograms ? programs.filter((program) => program.preferred) : programs;
@@ -1355,7 +1368,7 @@ function renderMileageCredit(itinerary: NormalizedItinerary): string {
     preferredPrograms.size > 0 && !state.showAllMileagePrograms
       ? estimates.filter((estimate) => matchesPreferredMileageProgram(estimate.program, preferredPrograms))
       : estimates;
-  const sortedVisibleEstimates = sortMileageEstimatesByPreference(visibleEstimates, preferredProgramList);
+  const sortedVisibleEstimates = sortMileageEstimates(visibleEstimates, preferredProgramList);
   const hiddenEstimateCount = estimates.length - visibleEstimates.length;
   const insights = inspectWhereToCreditSegments(itinerary);
   const estimatedKeys = new Set(estimates.map((estimate) => creditSegmentKey(estimate.segment, estimate.bookingClass)));
@@ -1366,6 +1379,7 @@ function renderMileageCredit(itinerary: NormalizedItinerary): string {
   return `
     <div class="segment-links">
       <strong>Miles credit</strong>
+      ${visibleEstimates.length > 1 ? renderMileageSortControls(preferredPrograms.size > 0) : ""}
       ${sortedVisibleEstimates.length ? renderMileageEstimateEntries(sortedVisibleEstimates, preferredProgramList) : ""}
       ${
         hiddenEstimateCount > 0 && visibleEstimates.length === 0
@@ -1399,21 +1413,74 @@ function renderMileageCredit(itinerary: NormalizedItinerary): string {
   `;
 }
 
-function sortMileageEstimatesByPreference(
-  estimates: EarningsEstimate[],
-  preferredProgramList: string[],
-): EarningsEstimate[] {
+function renderMileageSortControls(hasPreferredPrograms: boolean): string {
+  const milesSelected = state.mileageSortMode === "miles";
+  const nameSelected = state.mileageSortMode === "name";
+  return `
+    <div class="mileage-sort-controls">
+      <div class="segmented-control" role="group" aria-label="Sort mileage rows">
+        <button type="button" data-action="mileage-sort" data-sort="miles" aria-pressed="${milesSelected}">Miles</button>
+        <button type="button" data-action="mileage-sort" data-sort="name" aria-pressed="${nameSelected}">Name</button>
+      </div>
+      ${
+        hasPreferredPrograms
+          ? `<label><input type="checkbox" data-action="toggle-preferred-mileage-group" ${state.groupPreferredMileage ? "checked" : ""}> Preferred first</label>`
+          : ""
+      }
+    </div>
+  `;
+}
+
+function sortMileageEstimates(estimates: EarningsEstimate[], preferredProgramList: string[]): EarningsEstimate[] {
   const preferredProgramRanks = new Map(preferredProgramList.map((program, index) => [program, index]));
   return [...estimates].sort((left, right) => {
     const leftRank = mileageProgramPreferenceRank(left.program, preferredProgramRanks);
     const rightRank = mileageProgramPreferenceRank(right.program, preferredProgramRanks);
-    const mileageDifference = mileageEstimateValue(right) - mileageEstimateValue(left);
+    const leftPreferred = leftRank !== Number.POSITIVE_INFINITY;
+    const rightPreferred = rightRank !== Number.POSITIVE_INFINITY;
+    if (state.groupPreferredMileage && leftPreferred !== rightPreferred) return leftPreferred ? -1 : 1;
+    const sorted = compareMileageEstimateByMode(left, right);
+    if (sorted !== 0) return sorted;
     if (leftRank !== rightRank) return leftRank - rightRank;
-    if (mileageDifference !== 0) return mileageDifference;
+    return creditSegmentKey(left.segment, left.bookingClass).localeCompare(
+      creditSegmentKey(right.segment, right.bookingClass),
+    );
+  });
+}
+
+function compareMileageEstimateByMode(left: EarningsEstimate, right: EarningsEstimate): number {
+  if (state.mileageSortMode === "name") {
     return (
+      left.program.localeCompare(right.program) ||
+      mileageEstimateValue(right) - mileageEstimateValue(left) ||
       creditSegmentKey(left.segment, left.bookingClass).localeCompare(
         creditSegmentKey(right.segment, right.bookingClass),
-      ) || left.program.localeCompare(right.program)
+      )
+    );
+  }
+  return (
+    mileageEstimateValue(right) - mileageEstimateValue(left) ||
+    left.program.localeCompare(right.program) ||
+    creditSegmentKey(left.segment, left.bookingClass).localeCompare(creditSegmentKey(right.segment, right.bookingClass))
+  );
+}
+
+function sortResultMileagePrograms<
+  T extends { program: string; miles: number; preferred: boolean; preferenceRank: number },
+>(programs: T[]): T[] {
+  return [...programs].sort((left, right) => {
+    if (state.groupPreferredMileage && left.preferred !== right.preferred) return left.preferred ? -1 : 1;
+    if (state.mileageSortMode === "name") {
+      return (
+        left.program.localeCompare(right.program) ||
+        right.miles - left.miles ||
+        left.preferenceRank - right.preferenceRank
+      );
+    }
+    return (
+      right.miles - left.miles ||
+      left.program.localeCompare(right.program) ||
+      left.preferenceRank - right.preferenceRank
     );
   });
 }
@@ -1727,6 +1794,45 @@ function styles(): string {
     .summary { margin-bottom: 2px; }
     .links { display: grid; gap: 8px; margin-top: 10px; }
     .segment-links { display: grid; gap: 6px; margin-top: 10px; padding: 8px; border-radius: 6px; background: #f0fdfa; }
+    .mileage-sort-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: -2px;
+    }
+    .mileage-sort-controls label {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin: 0;
+      color: #475569;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .mileage-sort-controls input {
+      width: auto;
+      padding: 0;
+    }
+    .segmented-control {
+      display: inline-flex;
+      overflow: hidden;
+      border: 1px solid #99f6e4;
+      border-radius: 6px;
+      background: #ffffff;
+    }
+    .segmented-control button {
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: #0f766e;
+      padding: 3px 7px;
+      font-size: 12px;
+    }
+    .segmented-control button[aria-pressed="true"] {
+      background: #0f766e;
+      color: #ffffff;
+    }
     .segment-links .earning { display: grid; gap: 2px; }
     .segment-links .earning.non-preferred {
       margin-left: 6px;
