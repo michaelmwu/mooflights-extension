@@ -349,7 +349,8 @@ function bookingOptionUrl(row: Element, pageUrl: string): string | undefined {
       : row.querySelector<HTMLAnchorElement>("a[href]") || row.closest<HTMLAnchorElement>("a[href]");
   if (!anchor?.href) return undefined;
   try {
-    return new URL(anchor.getAttribute("href") || anchor.href, pageUrl).toString();
+    const url = new URL(anchor.getAttribute("href") || anchor.href, pageUrl);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : undefined;
   } catch {
     return undefined;
   }
@@ -486,7 +487,7 @@ function parseSingleSeparatorNumber(value: string, separator: "," | "."): number
 function currencyFromText(value: string): string {
   if (/NT\$/i.test(value) || /Taiwan dollars?/i.test(value)) return "TWD";
   if (/HK\$/i.test(value) || /Hong Kong dollars?/i.test(value)) return "HKD";
-  if (/S\$/i.test(value) || /Singapore dollars?/i.test(value)) return "SGD";
+  if (/(?:^|[^\p{L}\p{N}])S\$/iu.test(value) || /Singapore dollars?/i.test(value)) return "SGD";
   if (/C\$/i.test(value) || /Canadian dollars?/i.test(value)) return "CAD";
   if (/A\$/i.test(value) || /Australian dollars?/i.test(value)) return "AUD";
   if (/\$|US dollars?|USD/i.test(value)) return "USD";

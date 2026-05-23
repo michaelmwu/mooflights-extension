@@ -67,6 +67,24 @@ describe("Google Flights booking option parser", () => {
     });
   });
 
+  it("does not surface non-http booking links", () => {
+    document.body.innerHTML = `
+      <div class="gN1nAc">
+        <a href="javascript:alert('x')">
+          <div class="ogfYpf">Book with Mytrip</div>
+          <span role="text">$140</span>
+        </a>
+      </div>
+    `;
+
+    const result = parseGoogleFlightsBookingOptions(document, "JP", "https://www.google.com/travel/flights/booking");
+
+    expect(result.cheapest).toMatchObject({
+      provider: "Mytrip",
+    });
+    expect(result.cheapest?.bookingUrl).toBeUndefined();
+  });
+
   it("changes only the Google Flights country parameter", () => {
     const url = googleFlightsCountryUrl("https://www.google.com/travel/flights/booking?tfs=abc&curr=USD&gl=TW", "MY");
 
@@ -140,6 +158,26 @@ describe("Google Flights booking option parser", () => {
         priceText: "NOK 1,240",
         isDirect: false,
       },
+    ]);
+  });
+
+  it("treats US$ as USD instead of Singapore dollars", () => {
+    document.body.innerHTML = `
+      <div class="gN1nAc">
+        <div class="ogfYpf">Book with Mytrip</div>
+        <span role="text">US$140</span>
+      </div>
+      <div class="gN1nAc">
+        <div class="ogfYpf">Book with Singapore OTA</div>
+        <span role="text">S$150</span>
+      </div>
+    `;
+
+    const result = parseGoogleFlightsBookingOptions(document, "SG", "https://www.google.com/travel/flights/booking");
+
+    expect(result.options.map((option) => `${option.provider}:${option.currency}`)).toEqual([
+      "Mytrip:USD",
+      "Singapore OTA:SGD",
     ]);
   });
 

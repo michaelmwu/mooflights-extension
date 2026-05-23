@@ -15,6 +15,7 @@ type CompareState = {
   baseline: GoogleFlightsCountryResult | null;
   baselineSignature: string;
   results: GoogleFlightsCountryResult[];
+  resultsCachedAt: number;
   error: string;
   countryInput: string;
   pageKey: string;
@@ -28,7 +29,8 @@ type CompareResponse = {
 
 const PANEL_ID = "mu-travel-google-flights-panel";
 const BOOKING_PATH_RE = /^\/travel\/flights\/booking/;
-const RESULT_CACHE_TTL_MS = 60 * 60 * 1000;
+const RESULT_CACHE_TTL_MS = 10 * 60 * 1000;
+const RESULT_CACHE_STORAGE_KEY = "muTravelGoogleFlightsCountryResults";
 let regionDisplayNames: Intl.DisplayNames | null | undefined;
 let countryCodeByDisplayName: Map<string, string> | null | undefined;
 
@@ -37,6 +39,7 @@ const state: CompareState = {
   baseline: null,
   baselineSignature: "",
   results: [],
+  resultsCachedAt: 0,
   error: "",
   countryInput: DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES.join(", "),
   pageKey: "",
@@ -47,24 +50,112 @@ const resultCache = new Map<
   {
     results: GoogleFlightsCountryResult[];
     cachedAt: number;
-    baselineSignature: string;
   }
 >();
 
-function readCachedResults(pageKey: string, baselineSignature: string, now = Date.now()): GoogleFlightsCountryResult[] {
+type StoredResultCache = Record<string, { results: GoogleFlightsCountryResult[]; cachedAt: number }>;
+
+function readCachedResults(
+  pageKey: string,
+  now = Date.now(),
+): { results: GoogleFlightsCountryResult[]; cachedAt: number } | null {
   const cached = resultCache.get(pageKey);
-  if (!cached) return [];
-  if (now - cached.cachedAt <= RESULT_CACHE_TTL_MS && cached.baselineSignature === baselineSignature) {
-    return cached.results;
-  }
+  if (!cached) return null;
+  if (now - cached.cachedAt <= RESULT_CACHE_TTL_MS) return cached;
   resultCache.delete(pageKey);
-  return [];
+  return null;
 }
 
 function pruneExpiredResultCache(now = Date.now()): void {
   for (const [pageKey, cached] of resultCache.entries()) {
     if (now - cached.cachedAt > RESULT_CACHE_TTL_MS) resultCache.delete(pageKey);
   }
+}
+
+function applyCachedResults(cached: { results: GoogleFlightsCountryResult[]; cachedAt: number } | null): void {
+  state.results = cached?.results || [];
+  state.resultsCachedAt = cached?.cachedAt || 0;
+}
+
+async function loadStoredCachedResults(pageKey: string, now = Date.now()): Promise<void> {
+  const cache = await readStoredResultCache();
+  const cached = cache[pageKey];
+  if (!cached) return;
+  if (now - cached.cachedAt > RESULT_CACHE_TTL_MS) {
+    delete cache[pageKey];
+    await writeStoredResultCache(cache);
+    return;
+  }
+  resultCache.set(pageKey, cached);
+  if (state.pageKey !== pageKey || state.results.length > 0) return;
+  applyCachedResults(cached);
+  render();
+}
+
+async function storeCachedResults(
+  pageKey: string,
+  results: GoogleFlightsCountryResult[],
+  cachedAt = Date.now(),
+): Promise<void> {
+  const cached = { results, cachedAt };
+  resultCache.set(pageKey, cached);
+  const cache = await readStoredResultCache();
+  cache[pageKey] = cached;
+  await writeStoredResultCache(pruneStoredResultCache(cache, cachedAt));
+}
+
+async function deleteStoredCachedResults(pageKey: string): Promise<void> {
+  const cache = await readStoredResultCache();
+  if (!(pageKey in cache)) return;
+  delete cache[pageKey];
+  await writeStoredResultCache(cache);
+}
+
+async function readStoredResultCache(): Promise<StoredResultCache> {
+  try {
+    const stored = await chrome.storage.local.get(RESULT_CACHE_STORAGE_KEY);
+    return normalizeStoredResultCache(stored[RESULT_CACHE_STORAGE_KEY]);
+  } catch {
+    return {};
+  }
+}
+
+async function writeStoredResultCache(cache: StoredResultCache): Promise<void> {
+  try {
+    await chrome.storage.local.set({ [RESULT_CACHE_STORAGE_KEY]: cache });
+  } catch {
+    // Country comparison cache is optional; fresh comparisons still work without persistence.
+  }
+}
+
+function normalizeStoredResultCache(value: unknown): StoredResultCache {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const cache: StoredResultCache = {};
+  for (const [pageKey, entry] of Object.entries(value)) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    const candidate = entry as { results?: unknown; cachedAt?: unknown };
+    if (!Array.isArray(candidate.results) || typeof candidate.cachedAt !== "number") continue;
+    cache[pageKey] = {
+      results: candidate.results.filter(isGoogleFlightsCountryResult),
+      cachedAt: candidate.cachedAt,
+    };
+  }
+  return cache;
+}
+
+function pruneStoredResultCache(cache: StoredResultCache, now = Date.now()): StoredResultCache {
+  return Object.fromEntries(Object.entries(cache).filter(([, cached]) => now - cached.cachedAt <= RESULT_CACHE_TTL_MS));
+}
+
+function isGoogleFlightsCountryResult(value: unknown): value is GoogleFlightsCountryResult {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const candidate = value as { country?: unknown; url?: unknown; options?: unknown; status?: unknown };
+  return (
+    typeof candidate.country === "string" &&
+    typeof candidate.url === "string" &&
+    Array.isArray(candidate.options) &&
+    typeof candidate.status === "string"
+  );
 }
 
 chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
@@ -152,12 +243,14 @@ function scheduleRender(): void {
     state.baseline = null;
     state.baselineSignature = "";
     state.results = [];
+    state.resultsCachedAt = 0;
     state.error = "";
     state.comparing = false;
     return;
   }
 
   installPanel();
+  if (state.comparing && state.pageKey === pageKey) return;
   const baseline = parseCurrentBookingPage();
   const baselineSignature = googleFlightsResultSignature(baseline);
   if (state.pageKey !== pageKey) {
@@ -165,13 +258,21 @@ function scheduleRender(): void {
     state.baselineSignature = "";
     state.error = "";
     state.comparing = false;
-    state.results = readCachedResults(pageKey, baselineSignature);
+    applyCachedResults(readCachedResults(pageKey));
+    void loadStoredCachedResults(pageKey);
   } else if (state.baselineSignature && state.baselineSignature !== baselineSignature) {
-    state.results = [];
-    resultCache.delete(pageKey);
+    if (state.baseline?.country === baseline.country) {
+      state.results = [];
+      state.resultsCachedAt = 0;
+      resultCache.delete(pageKey);
+      void deleteStoredCachedResults(pageKey);
+    } else if (state.results.length > 0 && !state.resultsCachedAt) {
+      state.resultsCachedAt = Date.now();
+    } else if (state.results.length === 0) {
+      void loadStoredCachedResults(pageKey);
+    }
   }
 
-  if (state.comparing) return;
   if (state.baselineSignature === baselineSignature) return;
   state.baseline = baseline;
   state.baselineSignature = baselineSignature;
@@ -182,7 +283,7 @@ function currentBookingPageKey(): string {
   if (!isBookingPage()) return "";
   const url = new URL(window.location.href);
   const params = new URLSearchParams();
-  for (const key of ["tfs", "tfu", "curr", "gl"]) {
+  for (const key of ["tfs", "tfu", "curr"]) {
     const value = url.searchParams.get(key);
     if (value) params.set(key, value);
   }
@@ -216,6 +317,7 @@ function render(): void {
         <button type="button" class="secondary" data-action="open-options">Options</button>
       </div>
       ${state.error ? `<p class="error">${escapeHtml(state.error)}</p>` : ""}
+      ${renderCacheNotice()}
       ${renderResults(state.results)}
     </section>
   `;
@@ -242,6 +344,13 @@ function renderBaseline(result: GoogleFlightsCountryResult): string {
       <div><dt>This page</dt><dd>${escapeHtml(countryDisplayName(result.country))}</dd></div>
     </dl>
   `;
+}
+
+function renderCacheNotice(now = Date.now()): string {
+  if (!state.resultsCachedAt || state.results.length === 0) return "";
+  const minutes = Math.max(0, Math.floor((now - state.resultsCachedAt) / 60000));
+  const age = minutes <= 0 ? "just now" : `${minutes} min ago`;
+  return `<p class="cache-note">Cached country comparison from ${escapeHtml(age)}.</p>`;
 }
 
 function renderMilesEstimatePrompt(matrixSearch: GoogleFlightsMatrixSearch | null): string {
@@ -410,12 +519,12 @@ async function compareCountries(): Promise<void> {
   state.comparing = true;
   state.error = "";
   state.results = [];
+  state.resultsCachedAt = 0;
   const currentUrl = new URL(window.location.href);
   const hasComparableCurrency = currentUrl.searchParams.has("curr");
   state.baseline = hasComparableCurrency ? parseCurrentBookingPage() : null;
   const comparePageKey = state.pageKey;
   const baseline = state.baseline;
-  const compareBaselineSignature = baseline ? googleFlightsResultSignature(baseline) : "";
   const baseUrl = googleFlightsCountryUrl(window.location.href, currentComparableCountryCode());
   render();
 
@@ -433,11 +542,7 @@ async function compareCountries(): Promise<void> {
     state.results = baseline ? [baseline, ...(response.results || [])] : response.results || [];
     if (comparePageKey) {
       pruneExpiredResultCache();
-      resultCache.set(comparePageKey, {
-        results: state.results,
-        cachedAt: Date.now(),
-        baselineSignature: compareBaselineSignature,
-      });
+      void storeCachedResults(comparePageKey, state.results);
     }
   } catch (error) {
     if (state.pageKey !== comparePageKey) return;
@@ -571,6 +676,14 @@ function styles(): string {
       background: #fef2f2;
       color: #991b1b;
       padding: 8px;
+    }
+    .cache-note {
+      margin: 0 12px 10px;
+      border-radius: 6px;
+      background: #f8fafc;
+      color: #64748b;
+      padding: 6px 8px;
+      font-size: 12px;
     }
     .results {
       display: grid;
