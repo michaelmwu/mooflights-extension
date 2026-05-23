@@ -1129,27 +1129,46 @@ function renderMileageTierGroup(group: {
   url: string;
   estimates: EarningsEstimate[];
 }): string {
+  const parsedFormulas = group.estimates.map((estimate) => parseRevenueMileageFormula(estimate.formula));
+  const baseFare = commonValue(parsedFormulas.map((formula) => formula?.baseFare || ""));
   return `
     <div class="earning tier-group">
       <span>${escapeHtml(group.segmentLabel)}</span>
       <a href="${escapeHtml(group.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(group.parentProgram)}</a>
+      ${baseFare ? `<small>Base fare ${escapeHtml(baseFare)}</small>` : ""}
       <table>
         <tbody>
           ${group.estimates
-            .map(
-              (estimate) => `
-                <tr>
+            .map((estimate, index) => {
+              const parsedFormula = parsedFormulas[index];
+              return `
+                <tr title="${escapeHtml(estimate.formula)}">
                   <th>${escapeHtml(compactTierName(group.parentProgram, estimate.program))}</th>
                   <td>${escapeHtml(typeof estimate.estimatedMiles === "number" ? estimate.estimatedMiles.toLocaleString() : "")}</td>
-                  <td>${escapeHtml(estimate.formula)}</td>
+                  <td>${escapeHtml(parsedFormula?.rate || estimate.formula)}</td>
                 </tr>
-              `,
-            )
+              `;
+            })
             .join("")}
         </tbody>
       </table>
     </div>
   `;
+}
+
+function parseRevenueMileageFormula(formula: string): { baseFare: string; rate: string } | null {
+  const match = formula.match(/^(.+\s[A-Z]{3})\s+x\s+([\d.]+\s+miles\/[A-Z]{3})$/);
+  if (!match) return null;
+  return {
+    baseFare: match[1]?.trim() || "",
+    rate: match[2]?.trim() || "",
+  };
+}
+
+function commonValue(values: string[]): string {
+  const nonEmptyValues = values.filter(Boolean);
+  if (nonEmptyValues.length === 0) return "";
+  return nonEmptyValues.every((value) => value === nonEmptyValues[0]) ? nonEmptyValues[0] : "";
 }
 
 function mileageTierGroups(
