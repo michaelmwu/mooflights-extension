@@ -30,7 +30,15 @@ describe("Mileage earning estimates", () => {
       { program: "United MileagePlus Premier Platinum", label: "Platinum" },
       { program: "United MileagePlus Premier 1K", label: "1K" },
     ]);
-    expect(mileageProgramTierOptions("Air Canada Aeroplan")).toEqual([]);
+    expect(mileageProgramTierOptions("Air Canada Aeroplan")).toEqual([
+      { program: "Air Canada Aeroplan Member", label: "Member" },
+      { program: "Air Canada Aeroplan 25K", label: "25K" },
+      { program: "Air Canada Aeroplan 35K", label: "35K" },
+      { program: "Air Canada Aeroplan 50K", label: "50K" },
+      { program: "Air Canada Aeroplan 75K", label: "75K" },
+      { program: "Air Canada Aeroplan Super Elite", label: "Super Elite" },
+    ]);
+    expect(mileageProgramTierOptions("Air Canada Aeroplan 2026")).toEqual([]);
   });
 
   it("includes curated preferred earning rows that are not the compact top row", () => {

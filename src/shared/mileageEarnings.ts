@@ -1,5 +1,6 @@
 import { airportDistanceMiles } from "./airportCoordinates";
 import mileageEarningData from "./data/mileage-earning-compact.json";
+import programTierLabels from "./data/program-tier-labels.json";
 import { flattenSegments } from "./itinerary";
 import type { ItinerarySegment, NormalizedItinerary } from "./types";
 
@@ -36,6 +37,12 @@ type CompactMileageEarningData = {
   source_note: string;
   fetched_at: string;
   airlines: Record<string, CompactAirline>;
+};
+
+type ProgramTierLabelData = {
+  source_note: string;
+  fetched_at: string;
+  programs: Record<string, string[]>;
 };
 
 export type MileageProgramOption = {
@@ -75,6 +82,7 @@ export type WhereToCreditSegmentInsight = {
 // licensed datasets, or curated Mu Travel reference data. Where to Credit URLs
 // are outbound lookup destinations, not the source copied into this file.
 const DATA = mileageEarningData as CompactMileageEarningData;
+const PROGRAM_TIER_LABELS = programTierLabels as ProgramTierLabelData;
 
 const PROGRAM_OWNER_CARRIER_CODES: Record<string, string[]> = {
   "ANA Mileage Club": ["NH"],
@@ -220,18 +228,33 @@ export function uniqueMileageProgramOptions(): MileageProgramOption[] {
 }
 
 export function mileageProgramTierOptions(program: string): MileageProgramTierOption[] {
-  const tierPrograms = new Map<string, string>();
+  const tierPrograms = new Map<string, { label: string; rank: number }>();
+  const importedLabels = PROGRAM_TIER_LABELS.programs[program] || [];
+  for (const [index, tierLabel] of importedLabels.entries()) {
+    const tierProgram = `${program} ${tierLabel}`;
+    tierPrograms.set(tierProgram, {
+      label: compactTierLabel(program, tierProgram),
+      rank: index,
+    });
+  }
+
   for (const airlineRows of Object.values(SUPPLEMENTAL_PROGRAM_EARNINGS)) {
     for (const rows of Object.values(airlineRows)) {
       for (const row of rows) {
         if (!isTieredProgram(program, row.program)) continue;
-        tierPrograms.set(row.program, compactTierLabel(program, row.program));
+        const label = compactTierLabel(program, row.program);
+        const current = tierPrograms.get(row.program);
+        tierPrograms.set(row.program, {
+          label,
+          rank: current?.rank ?? tierRank(label),
+        });
       }
     }
   }
   return Array.from(tierPrograms.entries())
-    .map(([tierProgram, label]) => ({ program: tierProgram, label }))
-    .sort((left, right) => tierRank(left.label) - tierRank(right.label) || left.label.localeCompare(right.label));
+    .map(([tierProgram, value]) => ({ program: tierProgram, label: value.label, rank: value.rank }))
+    .sort((left, right) => left.rank - right.rank || left.label.localeCompare(right.label))
+    .map(({ program, label }) => ({ program, label }));
 }
 
 function inspectWhereToCreditSegment(segment: ItinerarySegment): WhereToCreditSegmentInsight | null {
