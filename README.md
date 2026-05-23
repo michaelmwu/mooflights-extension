@@ -1,8 +1,8 @@
 # Mu Travel Flights Extension
 
-Extension for Chromium-compatible browsers and ITA Matrix power users.
+Mu Travel Flights is a Chromium-compatible browser extension for mileage earning estimates, Google Flights country price checks, and ITA Matrix workflows.
 
-The first MVP helps with:
+It helps with:
 
 - Show estimated mileage earnings in the ITA companion panel and first-page search results.
 - Compare Google Flights booking-page offers across selected countries while keeping currency fixed.
