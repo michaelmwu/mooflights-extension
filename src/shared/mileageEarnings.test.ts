@@ -481,6 +481,53 @@ describe("Mileage earning estimates", () => {
     ]);
   });
 
+  it("does not multiply non-USD fares by USD revenue multipliers", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "one-way",
+      currency: "JPY",
+      totalPrice: 30000,
+      passengerCount: 1,
+      carriers: ["UA"],
+      fareBases: ["NNAA0BC"],
+      slices: [
+        {
+          origin: "HNL",
+          destination: "SFO",
+          segments: [
+            {
+              origin: "HNL",
+              destination: "SFO",
+              carrier: "UA",
+              bookingClass: "N",
+              farePrice: 27328,
+              cabin: "economy",
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(
+      estimateEarnings(itinerary, ["United MileagePlus"], {
+        "United MileagePlus": "United MileagePlus Premier 1K",
+      })
+        .filter((estimate) => estimate.program.startsWith("United MileagePlus"))
+        .map((estimate) => ({
+          miles: estimate.estimatedMiles,
+          formula: estimate.formula,
+          basis: estimate.basis,
+        })),
+    ).toEqual([
+      {
+        miles: undefined,
+        formula: "27,328 JPY cannot be used with 11 miles/USD without FX conversion",
+        basis: "unknown",
+      },
+    ]);
+  });
+
   it("apportions one fare component across multiple legs before revenue mileage math", () => {
     const itinerary: NormalizedItinerary = {
       source: "ita-matrix",

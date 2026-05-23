@@ -476,9 +476,16 @@ function computeMiles(
 
   const revenueMultiplier = parseRevenueMultiplier(value);
   if (revenueMultiplier && finiteNumber(fare)) {
+    const effectiveFareCurrency = fareCurrency || revenueMultiplier.currency;
+    if (effectiveFareCurrency !== revenueMultiplier.currency) {
+      return {
+        formula: `${formatCurrencyWithCode(fare, effectiveFareCurrency)} cannot be used with ${revenueMultiplier.multiplier} miles/${revenueMultiplier.currency} without FX conversion`,
+        basis: "unknown",
+      };
+    }
     return {
       estimatedMiles: Math.round(fare * revenueMultiplier.multiplier),
-      formula: `${formatCurrencyWithCode(fare, fareCurrency || revenueMultiplier.currency)} x ${revenueMultiplier.multiplier} miles/${revenueMultiplier.currency}`,
+      formula: `${formatCurrencyWithCode(fare, effectiveFareCurrency)} x ${revenueMultiplier.multiplier} miles/${revenueMultiplier.currency}`,
       basis: "revenue-multiplier",
     };
   }
