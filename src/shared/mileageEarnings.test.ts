@@ -435,6 +435,67 @@ describe("Mileage earning estimates", () => {
     ]);
   });
 
+  it("apportions one fare component across multiple legs before revenue mileage math", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "one-way",
+      totalPrice: 600,
+      passengerCount: 1,
+      carriers: ["UA"],
+      fareBases: ["SNAA0BC"],
+      slices: [
+        {
+          origin: "TPE",
+          destination: "SFO",
+          segments: [
+            {
+              origin: "TPE",
+              destination: "NRT",
+              carrier: "UA",
+              bookingClass: "S",
+              farePrice: 450,
+              fareComponentKey: "0/0",
+              cabin: "economy",
+            },
+            {
+              origin: "NRT",
+              destination: "SFO",
+              carrier: "UA",
+              bookingClass: "S",
+              farePrice: 450,
+              fareComponentKey: "0/0",
+              cabin: "economy",
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(
+      estimateEarnings(itinerary, ["United MileagePlus"], {
+        "United MileagePlus": "United MileagePlus Premier Gold",
+      })
+        .filter((estimate) => estimate.program.startsWith("United MileagePlus"))
+        .map((estimate) => ({
+          segment: `${estimate.segment.origin}-${estimate.segment.destination}`,
+          miles: estimate.estimatedMiles,
+          formula: estimate.formula,
+        })),
+    ).toEqual([
+      {
+        segment: "TPE-NRT",
+        miles: 1800,
+        formula: "225 x 8 miles per currency unit",
+      },
+      {
+        segment: "NRT-SFO",
+        miles: 1800,
+        formula: "225 x 8 miles per currency unit",
+      },
+    ]);
+  });
+
   it("splits revenue-based earnings by passenger and segment", () => {
     const itinerary: NormalizedItinerary = {
       source: "ita-matrix",

@@ -311,7 +311,7 @@ function estimateSegmentEarningsRows(
   if (!airline || !booking) return [];
 
   const distance = segment.distance ?? inferSegmentDistance(itinerary, segment, segments, segmentIndex, segmentCount);
-  const fare = inferSegmentFare(itinerary, segment, segmentCount, segmentIndex);
+  const fare = inferSegmentFare(itinerary, segment, segments, segmentCount);
   const rows = earningRows(carrier, bookingClass, booking, preferredPrograms, programTiers);
 
   return rows.map((row) => {
@@ -501,10 +501,16 @@ function inferReciprocalRoundTripDistance(
 function inferSegmentFare(
   itinerary: NormalizedItinerary,
   segment: ItinerarySegment | undefined,
+  segments: ItinerarySegment[],
   segmentCount: number,
-  _segmentIndex: number,
 ): number | undefined {
-  if (finiteNumber(segment?.farePrice)) return segment.farePrice;
+  if (finiteNumber(segment?.farePrice)) {
+    if (!segment.fareComponentKey) return segment.farePrice;
+    const componentSegmentCount = segments.filter(
+      (candidate) => candidate.fareComponentKey === segment.fareComponentKey,
+    ).length;
+    return componentSegmentCount > 1 ? segment.farePrice / componentSegmentCount : segment.farePrice;
+  }
   if (!finiteNumber(itinerary.totalPrice)) return undefined;
   const passengerCount =
     finiteNumber(itinerary.passengerCount) && itinerary.passengerCount > 0 ? itinerary.passengerCount : 1;
