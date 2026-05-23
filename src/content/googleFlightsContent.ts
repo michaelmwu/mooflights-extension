@@ -271,12 +271,39 @@ function renderResults(results: GoogleFlightsCountryResult[]): string {
               <strong>${escapeHtml(countryDisplayName(result.country))}${isCurrent ? ' <span class="current">current</span>' : ""}</strong>
               <span>${escapeHtml(cheapest)}</span>
               <small>${escapeHtml(direct)} · ${result.options.length} option(s)${result.refreshed ? " · retried" : ""}</small>
+              ${renderResultActions(result)}
             </div>
           `;
         })
         .join("")}
     </div>
   `;
+}
+
+function renderResultActions(result: GoogleFlightsCountryResult): string {
+  const bookingTargets = bookingActionTargets(result);
+  return `
+    <div class="result-actions">
+      <a href="${escapeHtml(result.url)}" target="_blank" rel="noopener noreferrer">Open country page</a>
+      ${bookingTargets
+        .map(
+          (target) =>
+            `<a href="${escapeHtml(target.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(target.label)}</a>`,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function bookingActionTargets(result: GoogleFlightsCountryResult): Array<{ label: string; url: string }> {
+  const targets: Array<{ label: string; url: string }> = [];
+  if (result.cheapest?.bookingUrl) {
+    targets.push({ label: `Book ${result.cheapest.provider}`, url: result.cheapest.bookingUrl });
+  }
+  if (result.direct?.bookingUrl && result.direct.bookingUrl !== result.cheapest?.bookingUrl) {
+    targets.push({ label: `Book direct`, url: result.direct.bookingUrl });
+  }
+  return targets;
 }
 
 function renderCheapest(result: GoogleFlightsCountryResult): string {
@@ -299,7 +326,7 @@ function countryDisplayName(country: string): string {
   const displayNames = getRegionDisplayNames();
   if (displayNames) {
     const label = displayNames.of(code);
-    return label ? `${label} (${code})` : code;
+    return label || code;
   }
   return code;
 }
@@ -513,6 +540,25 @@ function styles(): string {
       font-weight: 700;
     }
     .result small { color: #64748b; }
+    .result-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 4px;
+    }
+    .result-actions a {
+      border: 1px solid #cbd5e1;
+      border-radius: 5px;
+      color: #334155;
+      padding: 3px 6px;
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .result-actions a:hover {
+      border-color: #0f766e;
+      color: #0f766e;
+    }
   `;
 }
 

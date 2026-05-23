@@ -7,6 +7,7 @@ export type GoogleFlightsBookingOption = {
   currency: string;
   priceText: string;
   isDirect: boolean;
+  bookingUrl?: string;
 };
 
 export type GoogleFlightsCountryResult = {
@@ -99,7 +100,7 @@ export function parseGoogleFlightsBookingOptions(
   url: string,
 ): GoogleFlightsCountryResult {
   const options = Array.from(root.querySelectorAll(".gN1nAc"))
-    .map((row) => parseBookingOption(row))
+    .map((row) => parseBookingOption(row, url))
     .filter((option): option is GoogleFlightsBookingOption => Boolean(option))
     .sort((left, right) => left.price - right.price || left.provider.localeCompare(right.provider));
 
@@ -325,18 +326,33 @@ function isString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
 }
 
-function parseBookingOption(row: Element): GoogleFlightsBookingOption | null {
+function parseBookingOption(row: Element, pageUrl: string): GoogleFlightsBookingOption | null {
   const label = providerLabel(row);
   const price = providerPrice(row);
   if (!label || !price) return null;
 
+  const bookingUrl = bookingOptionUrl(row, pageUrl);
   return {
     provider: label.provider,
     price: price.price,
     currency: price.currency,
     priceText: price.priceText,
     isDirect: label.isDirect,
+    ...(bookingUrl ? { bookingUrl } : {}),
   };
+}
+
+function bookingOptionUrl(row: Element, pageUrl: string): string | undefined {
+  const anchor =
+    row instanceof HTMLAnchorElement
+      ? row
+      : row.querySelector<HTMLAnchorElement>("a[href]") || row.closest<HTMLAnchorElement>("a[href]");
+  if (!anchor?.href) return undefined;
+  try {
+    return new URL(anchor.getAttribute("href") || anchor.href, pageUrl).toString();
+  } catch {
+    return undefined;
+  }
 }
 
 function providerLabel(row: Element): { provider: string; isDirect: boolean } | null {

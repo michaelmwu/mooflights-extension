@@ -39,6 +39,34 @@ describe("Google Flights booking option parser", () => {
     });
   });
 
+  it("captures booking links when Google exposes provider anchors", () => {
+    document.body.innerHTML = `
+      <div class="gN1nAc">
+        <a href="/travel/flights/booking/redirect/cheap">
+          <div class="ogfYpf">Book with Mytrip</div>
+          <span role="text">$140</span>
+        </a>
+      </div>
+      <div class="gN1nAc">
+        <div class="ogfYpf">Book with STARLUX Airlines<div class="EA71Tc">Airline</div></div>
+        <a href="https://www.google.com/travel/flights/booking/redirect/direct">
+          <span aria-label="155 US dollars" role="text">$155</span>
+        </a>
+      </div>
+    `;
+
+    const result = parseGoogleFlightsBookingOptions(document, "JP", "https://www.google.com/travel/flights/booking");
+
+    expect(result.cheapest).toMatchObject({
+      provider: "Mytrip",
+      bookingUrl: "https://www.google.com/travel/flights/booking/redirect/cheap",
+    });
+    expect(result.direct).toMatchObject({
+      provider: "STARLUX Airlines",
+      bookingUrl: "https://www.google.com/travel/flights/booking/redirect/direct",
+    });
+  });
+
   it("changes only the Google Flights country parameter", () => {
     const url = googleFlightsCountryUrl("https://www.google.com/travel/flights/booking?tfs=abc&curr=USD&gl=TW", "MY");
 
