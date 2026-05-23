@@ -13,6 +13,7 @@ import { loadSettings } from "../shared/storage";
 type CompareState = {
   comparing: boolean;
   baseline: GoogleFlightsCountryResult | null;
+  baselineSignature: string;
   results: GoogleFlightsCountryResult[];
   error: string;
   countryInput: string;
@@ -33,6 +34,7 @@ let regionDisplayNames: Intl.DisplayNames | null | undefined;
 const state: CompareState = {
   comparing: false,
   baseline: null,
+  baselineSignature: "",
   results: [],
   error: "",
   countryInput: DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES.join(", "),
@@ -123,6 +125,7 @@ function scheduleRender(): void {
     removePanel();
     state.pageKey = "";
     state.baseline = null;
+    state.baselineSignature = "";
     state.results = [];
     state.error = "";
     state.comparing = false;
@@ -132,6 +135,7 @@ function scheduleRender(): void {
   installPanel();
   if (state.pageKey !== pageKey) {
     state.pageKey = pageKey;
+    state.baselineSignature = "";
     state.error = "";
     state.comparing = false;
     const cached = resultCache.get(pageKey);
@@ -139,7 +143,11 @@ function scheduleRender(): void {
   }
 
   if (state.comparing) return;
-  state.baseline = parseCurrentBookingPage();
+  const baseline = parseCurrentBookingPage();
+  const baselineSignature = googleFlightsResultSignature(baseline);
+  if (state.baselineSignature === baselineSignature) return;
+  state.baseline = baseline;
+  state.baselineSignature = baselineSignature;
   render();
 }
 
@@ -258,6 +266,12 @@ function renderCheapest(result: GoogleFlightsCountryResult): string {
     .filter((option) => option.price === result.cheapest?.price)
     .map((option) => option.provider);
   return `${result.cheapest.priceText} ${tiedProviders.join(", ")}`;
+}
+
+function googleFlightsResultSignature(result: GoogleFlightsCountryResult): string {
+  const cheapest = result.cheapest ? `${result.cheapest.provider}:${result.cheapest.priceText}` : "";
+  const direct = result.direct ? `${result.direct.provider}:${result.direct.priceText}` : "";
+  return [result.country, result.options.length, cheapest, direct, result.status].join("|");
 }
 
 function countryDisplayName(country: string): string {

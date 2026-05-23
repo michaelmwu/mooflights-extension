@@ -73,4 +73,14 @@ describe("settings", () => {
       }).googleFlights.countryCodes,
     ).toEqual([]);
   });
+
+  it("restores Google Flights country defaults when a stored list has no valid codes", () => {
+    expect(
+      mergeSettings({
+        googleFlights: {
+          countryCodes: ["bad", 123],
+        },
+      }).googleFlights.countryCodes,
+    ).toEqual(DEFAULT_SETTINGS.googleFlights.countryCodes);
+  });
 });

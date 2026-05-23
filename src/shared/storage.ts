@@ -73,10 +73,7 @@ export function mergeSettings(value: unknown): ExtensionSettings {
     affiliateOptOut: booleanValue(candidate.affiliateOptOut, DEFAULT_SETTINGS.affiliateOptOut),
     debugMode: booleanValue(candidate.debugMode, DEFAULT_SETTINGS.debugMode),
     googleFlights: {
-      countryCodes: normalizeGoogleFlightsCountryCodes(
-        googleFlights.countryCodes,
-        Array.isArray(googleFlights.countryCodes) ? [] : DEFAULT_SETTINGS.googleFlights.countryCodes,
-      ),
+      countryCodes: googleFlightsCountryCodes(googleFlights.countryCodes),
     },
     airportHelper: {
       region: stringValue(airportHelper.region, DEFAULT_SETTINGS.airportHelper.region),
@@ -97,6 +94,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function stringArray(value: unknown, fallback: string[]): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : fallback;
+}
+
+function googleFlightsCountryCodes(value: unknown): string[] {
+  if (Array.isArray(value) && value.length === 0) return [];
+  return normalizeGoogleFlightsCountryCodes(value, DEFAULT_SETTINGS.googleFlights.countryCodes);
 }
 
 function stringRecord(value: unknown): Record<string, string> {
