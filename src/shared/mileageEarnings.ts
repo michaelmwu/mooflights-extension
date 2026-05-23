@@ -510,7 +510,7 @@ function computeMiles(
           : `${formatCurrencyWithCode(fare, effectiveFareCurrency)} ~ ${formatDisplayCurrencyWithCode(convertedFare.amount, revenueMultiplier.currency)}`;
       return {
         estimatedMiles: Math.round(convertedFare.amount * revenueMultiplier.multiplier),
-        formula: `${displayFare} x ${revenueMultiplier.multiplier} miles/${revenueMultiplier.currency}${convertedFare.approximate ? " (cached FX estimate)" : ""}`,
+        formula: `${displayFare} x ${revenueMultiplier.multiplier} miles/${revenueMultiplier.currency}${convertedFare.approximate ? " (FX estimate)" : ""}`,
         displayFare,
         basis: "revenue-multiplier",
         approximate: convertedFare.approximate,

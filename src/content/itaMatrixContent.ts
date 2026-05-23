@@ -987,8 +987,8 @@ function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSumm
       };
     })
     .sort((left, right) => {
-      if (left.miles !== right.miles) return right.miles - left.miles;
       if (left.preferred !== right.preferred) return left.preferred ? -1 : 1;
+      if (left.miles !== right.miles) return right.miles - left.miles;
       if (left.preferenceRank !== right.preferenceRank) return left.preferenceRank - right.preferenceRank;
       return left.program.localeCompare(right.program);
     });
@@ -1408,8 +1408,8 @@ function sortMileageEstimatesByPreference(
     const leftRank = mileageProgramPreferenceRank(left.program, preferredProgramRanks);
     const rightRank = mileageProgramPreferenceRank(right.program, preferredProgramRanks);
     const mileageDifference = mileageEstimateValue(right) - mileageEstimateValue(left);
-    if (mileageDifference !== 0) return mileageDifference;
     if (leftRank !== rightRank) return leftRank - rightRank;
+    if (mileageDifference !== 0) return mileageDifference;
     return (
       creditSegmentKey(left.segment, left.bookingClass).localeCompare(
         creditSegmentKey(right.segment, right.bookingClass),

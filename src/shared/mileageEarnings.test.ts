@@ -574,7 +574,7 @@ describe("Mileage earning estimates", () => {
     ).toEqual([
       {
         miles: 1971,
-        formula: "27,328 JPY ~ $179.2 USD x 11 miles/USD (cached FX estimate)",
+        formula: "27,328 JPY ~ $179.2 USD x 11 miles/USD (FX estimate)",
         displayFare: "27,328 JPY ~ $179.2 USD",
         approximate: true,
         basis: "revenue-multiplier",
