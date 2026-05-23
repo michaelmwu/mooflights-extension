@@ -8,8 +8,9 @@ The extension targets Manifest V3 and currently requests:
 - `clipboardWrite`
 - `tabs`
 - required host access for `https://matrix.itasoftware.com/*`
-- required host access for Google Flights booking pages on `https://www.google.com/travel/flights/booking*` and
-  `https://google.com/travel/flights/booking*`
+- required host access for Google Flights search and booking pages on
+  `https://www.google.com/travel/flights/search*`, `https://google.com/travel/flights/search*`,
+  `https://www.google.com/travel/flights/booking*`, and `https://google.com/travel/flights/booking*`
 - required host access for daily cached public USD FX rates from `https://cdn.jsdelivr.net/*` and
   `https://api.fxratesapi.com/*`
 - optional host access for `https://travel.mu-travel.com/*`
@@ -29,7 +30,8 @@ Dev builds also add required host access for `https://travel.mu-travel.com/*`, `
 - Auto-submits ITA Matrix `/search` only when a Mu Travel handoff URL includes `muTravelAutoSearch=1` and the
   prefilled form has enabled the native Search button.
 
-`src/content/googleFlightsContent.ts` injects a Google Flights booking-page panel. It:
+`src/content/googleFlightsContent.ts` runs on Google Flights search and booking pages so it can survive search-to-booking
+SPA navigation. It only injects the visible panel on booking pages. It:
 
 - Parses visible booking options, prices, and direct-airline markers from the current booking page.
 - Lets the user start an opt-in country price comparison.

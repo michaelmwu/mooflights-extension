@@ -18,13 +18,20 @@
       "run_at": "document_start"
     },
     {
-      "matches": ["https://www.google.com/travel/flights/booking*", "https://google.com/travel/flights/booking*"],
+      "matches": [
+        "https://www.google.com/travel/flights/search*",
+        "https://google.com/travel/flights/search*",
+        "https://www.google.com/travel/flights/booking*",
+        "https://google.com/travel/flights/booking*"
+      ],
       "js": ["content/googleFlightsContent.js"],
       "run_at": "document_idle"
     }
   ],
   "host_permissions": [
     "https://matrix.itasoftware.com/*",
+    "https://www.google.com/travel/flights/search*",
+    "https://google.com/travel/flights/search*",
     "https://www.google.com/travel/flights/booking*",
     "https://google.com/travel/flights/booking*",
     "https://cdn.jsdelivr.net/*",

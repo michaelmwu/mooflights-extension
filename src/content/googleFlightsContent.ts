@@ -385,6 +385,9 @@ function removePanel(): void {
 function styles(): string {
   return `
     :host { all: initial; }
+    .panel, .panel * {
+      box-sizing: border-box;
+    }
     .panel {
       position: fixed;
       right: 16px;
@@ -392,7 +395,8 @@ function styles(): string {
       z-index: 2147483647;
       width: min(360px, calc(100vw - 32px));
       max-height: min(560px, calc(100vh - 32px));
-      overflow: auto;
+      overflow-x: hidden;
+      overflow-y: auto;
       border: 1px solid #d7dde8;
       border-radius: 8px;
       background: #ffffff;
@@ -442,6 +446,7 @@ function styles(): string {
     }
     .country-input input {
       width: 100%;
+      min-width: 0;
       border: 1px solid #cbd5e1;
       border-radius: 6px;
       background: #ffffff;
@@ -454,7 +459,7 @@ function styles(): string {
     }
     .actions {
       display: grid;
-      grid-template-columns: 1fr auto;
+      grid-template-columns: minmax(0, 1fr) auto;
       gap: 8px;
       padding: 10px 12px;
     }
@@ -467,6 +472,7 @@ function styles(): string {
       font: inherit;
       font-weight: 650;
       cursor: pointer;
+      min-width: 0;
     }
     button.secondary {
       border-color: #94a3b8;
