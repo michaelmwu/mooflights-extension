@@ -1106,42 +1106,70 @@ function renderMileageCredit(itinerary: NormalizedItinerary): string {
 }
 
 function renderMileageEstimateEntries(estimates: EarningsEstimate[], preferredProgramList: string[]): string {
+  const bySegment = new Map<string, EarningsEstimate[]>();
+  for (const estimate of estimates) {
+    const key = creditSegmentKey(estimate.segment, estimate.bookingClass);
+    bySegment.set(key, [...(bySegment.get(key) || []), estimate]);
+  }
+
+  if (bySegment.size <= 1) return renderMileageEstimateSegmentEntries(estimates, preferredProgramList, false);
+  return Array.from(bySegment.values())
+    .map((segmentEstimates) => {
+      const firstEstimate = segmentEstimates[0];
+      return `
+        <div class="earning segment-group">
+          ${firstEstimate ? `<span>${escapeHtml(mileageSegmentLabel(firstEstimate))}</span>` : ""}
+          ${renderMileageEstimateSegmentEntries(segmentEstimates, preferredProgramList, false)}
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function renderMileageEstimateSegmentEntries(
+  estimates: EarningsEstimate[],
+  preferredProgramList: string[],
+  showSegmentLabel: boolean,
+): string {
   const tierGroups = mileageTierGroups(estimates, preferredProgramList);
   const renderedGroups = new Set<string>();
   return estimates
     .map((estimate) => {
       const groupKey = mileageTierGroupKey(estimate, preferredProgramList);
-      if (!groupKey) return renderMileageEstimateEntry(estimate);
+      if (!groupKey) return renderMileageEstimateEntry(estimate, showSegmentLabel);
       const group = tierGroups.get(groupKey);
-      if (!group || group.estimates.length <= 1) return renderMileageEstimateEntry(estimate);
+      if (!group || group.estimates.length <= 1) return renderMileageEstimateEntry(estimate, showSegmentLabel);
       if (renderedGroups.has(groupKey)) return "";
       renderedGroups.add(groupKey);
-      return renderMileageTierGroup(group);
+      return renderMileageTierGroup(group, showSegmentLabel);
     })
     .join("");
 }
 
-function renderMileageEstimateEntry(estimate: EarningsEstimate): string {
+function renderMileageEstimateEntry(estimate: EarningsEstimate, showSegmentLabel: boolean): string {
   return `
     <a href="${escapeHtml(estimate.url)}" target="_blank" rel="noopener noreferrer" class="earning">
-      <span>${escapeHtml(mileageSegmentLabel(estimate))}</span>
+      ${showSegmentLabel ? `<span>${escapeHtml(mileageSegmentLabel(estimate))}</span>` : ""}
       <em>${escapeHtml(estimate.program)}</em>
       <small>${typeof estimate.estimatedMiles === "number" ? `${estimate.estimatedMiles.toLocaleString()} miles · ` : ""}${escapeHtml(estimate.formula)}</small>
     </a>
   `;
 }
 
-function renderMileageTierGroup(group: {
-  parentProgram: string;
-  segmentLabel: string;
-  url: string;
-  estimates: EarningsEstimate[];
-}): string {
+function renderMileageTierGroup(
+  group: {
+    parentProgram: string;
+    segmentLabel: string;
+    url: string;
+    estimates: EarningsEstimate[];
+  },
+  showSegmentLabel: boolean,
+): string {
   const parsedFormulas = group.estimates.map((estimate) => parseRevenueMileageFormula(estimate.formula));
   const baseFare = commonValue(parsedFormulas.map((formula) => formula?.baseFare || ""));
   return `
     <div class="earning tier-group">
-      <span>${escapeHtml(group.segmentLabel)}</span>
+      ${showSegmentLabel ? `<span>${escapeHtml(group.segmentLabel)}</span>` : ""}
       <a href="${escapeHtml(group.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(group.parentProgram)}</a>
       ${baseFare ? `<small>Base fare ${escapeHtml(baseFare)}</small>` : ""}
       <table>
@@ -1337,6 +1365,8 @@ function styles(): string {
     .segment-links { display: grid; gap: 6px; margin-top: 10px; padding: 8px; border-radius: 6px; background: #f0fdfa; }
     .segment-links .earning { display: grid; gap: 2px; }
     .segment-links .tier-group { gap: 5px; }
+    .segment-links .segment-group { gap: 5px; padding-top: 4px; border-top: 1px solid #ccfbf1; }
+    .segment-links .segment-group:first-of-type { padding-top: 0; border-top: 0; }
     .segment-links .notice { padding: 6px; border-radius: 6px; background: #fff7ed; color: #7c2d12; }
     .segment-links .more-earnings { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 4px; border-top: 1px solid #ccfbf1; }
     .segment-links em { font-style: normal; color: #115e59; }
