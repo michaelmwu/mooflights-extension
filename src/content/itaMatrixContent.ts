@@ -30,6 +30,7 @@ type PanelState = {
   autoCaptureAttempted: boolean;
   captureInFlight: boolean;
   activeCaptureId: string;
+  bookingDetailsSignature: string;
   locationKey: string;
   showAllMileagePrograms: boolean;
 };
@@ -76,6 +77,7 @@ const state: PanelState = {
   autoCaptureAttempted: false,
   captureInFlight: false,
   activeCaptureId: "",
+  bookingDetailsSignature: "",
   locationKey: currentLocationKey(),
   showAllMileagePrograms: false,
 };
@@ -257,8 +259,10 @@ async function parseAndSetItinerary(text: string, expectedLocationKey = state.lo
 
 async function parseAndSetBookingDetails(value: unknown, expectedLocationKey = state.locationKey): Promise<void> {
   try {
+    const signature = bookingDetailsSignature(value);
+    if (signature && signature === state.bookingDetailsSignature) return;
     const itinerary = parseItaBookingDetails(value);
-    await setCapturedItinerary(itinerary, expectedLocationKey);
+    await setCapturedItinerary(itinerary, expectedLocationKey, signature);
   } catch {
     // Ignore non-itinerary Alkali payloads.
   }
@@ -267,6 +271,7 @@ async function parseAndSetBookingDetails(value: unknown, expectedLocationKey = s
 async function setCapturedItinerary(
   itinerary: NormalizedItinerary,
   expectedLocationKey = state.locationKey,
+  bookingSignature = "",
 ): Promise<void> {
   const settings = state.settings || (await loadSettings());
   if (expectedLocationKey !== state.locationKey) return;
@@ -277,7 +282,24 @@ async function setCapturedItinerary(
   state.links = applyPageLinkOverrides(rankProviderLinks(itinerary, settings, remoteMetadata));
   state.error = "";
   state.autoCaptureAttempted = true;
+  if (bookingSignature) state.bookingDetailsSignature = bookingSignature;
   setStatus("Itinerary captured.");
+}
+
+function bookingDetailsSignature(value: unknown): string {
+  if (!value || typeof value !== "object") return "";
+  const data = value as {
+    id?: unknown;
+    displayTotal?: unknown;
+    itinerary?: { slices?: unknown };
+    tickets?: unknown;
+  };
+  return JSON.stringify({
+    id: typeof data.id === "string" ? data.id : "",
+    displayTotal: typeof data.displayTotal === "string" ? data.displayTotal : "",
+    slices: data.itinerary?.slices || null,
+    tickets: data.tickets || null,
+  });
 }
 
 function applyPageLinkOverrides(links: RankedProviderLink[]): RankedProviderLink[] {
@@ -402,7 +424,7 @@ function onBridgeMessage(event: MessageEvent): void {
     state.status = event.data.error || state.status;
   }
   if (event.data.type === "alkali-booking-details") {
-    if (isItineraryPage() && !state.itinerary) {
+    if (isItineraryPage()) {
       void parseAndSetBookingDetails(event.data.data);
     }
     annotateBookingDetailsResult(event.data.data);
@@ -959,6 +981,7 @@ function resetForLocationChange(): void {
   state.autoCaptureAttempted = false;
   state.captureInFlight = false;
   state.activeCaptureId = "";
+  state.bookingDetailsSignature = "";
   render();
 }
 
