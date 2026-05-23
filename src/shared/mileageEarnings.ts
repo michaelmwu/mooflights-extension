@@ -39,6 +39,13 @@ export type MileageProgramOption = {
   label: string;
 };
 
+export type MileageProgramTierPreference = Record<string, string>;
+
+export type MileageProgramTierOption = {
+  program: string;
+  label: string;
+};
+
 export type EarningsEstimate = {
   segment: ItinerarySegment;
   airlineName: string;
@@ -124,7 +131,7 @@ const SUPPLEMENTAL_PROGRAM_EARNINGS: Record<string, Record<string, SupplementalP
     ["B", "E", "G", "H", "K", "L", "M", "N", "Q", "S", "T", "U", "V", "W", "Y"].map((bookingClass) => [
       bookingClass,
       [
-        { program: "United MileagePlus member", percent: null, value: "5 Miles/USD" },
+        { program: "United MileagePlus Member", percent: null, value: "5 Miles/USD" },
         { program: "United MileagePlus Premier Silver", percent: null, value: "7 Miles/USD" },
         { program: "United MileagePlus Premier Gold", percent: null, value: "8 Miles/USD" },
         { program: "United MileagePlus Premier Platinum", percent: null, value: "9 Miles/USD" },
@@ -172,10 +179,16 @@ export function inspectWhereToCreditSegments(itinerary: NormalizedItinerary): Wh
     .filter((insight): insight is WhereToCreditSegmentInsight => Boolean(insight));
 }
 
-export function estimateEarnings(itinerary: NormalizedItinerary, preferredPrograms: string[] = []): EarningsEstimate[] {
+export function estimateEarnings(
+  itinerary: NormalizedItinerary,
+  preferredPrograms: string[] = [],
+  programTiers: MileageProgramTierPreference = {},
+): EarningsEstimate[] {
   const segments = flattenSegments(itinerary);
   return segments
-    .flatMap((segment, index) => estimateSegmentEarningsRows(segment, itinerary, segments, index, preferredPrograms))
+    .flatMap((segment, index) =>
+      estimateSegmentEarningsRows(segment, itinerary, segments, index, preferredPrograms, programTiers),
+    )
     .filter((estimate): estimate is EarningsEstimate => Boolean(estimate));
 }
 
@@ -199,6 +212,21 @@ export function uniqueMileageProgramOptions(): MileageProgramOption[] {
       label: carrierCodes.length > 0 ? `${program} (${carrierCodes.join("/")})` : program,
     };
   });
+}
+
+export function mileageProgramTierOptions(program: string): MileageProgramTierOption[] {
+  const tierPrograms = new Map<string, string>();
+  for (const airlineRows of Object.values(SUPPLEMENTAL_PROGRAM_EARNINGS)) {
+    for (const rows of Object.values(airlineRows)) {
+      for (const row of rows) {
+        if (!isTieredProgram(program, row.program)) continue;
+        tierPrograms.set(row.program, compactTierLabel(program, row.program));
+      }
+    }
+  }
+  return Array.from(tierPrograms.entries())
+    .map(([tierProgram, label]) => ({ program: tierProgram, label }))
+    .sort((left, right) => tierRank(left.label) - tierRank(right.label) || left.label.localeCompare(right.label));
 }
 
 function inspectWhereToCreditSegment(segment: ItinerarySegment): WhereToCreditSegmentInsight | null {
@@ -259,8 +287,9 @@ export function estimateSegmentEarnings(
   itinerary: NormalizedItinerary,
   segmentsOrCount: ItinerarySegment[] | number = flattenSegments(itinerary),
   segmentIndex = 0,
+  programTiers: MileageProgramTierPreference = {},
 ): EarningsEstimate | null {
-  return estimateSegmentEarningsRows(segment, itinerary, segmentsOrCount, segmentIndex)[0] || null;
+  return estimateSegmentEarningsRows(segment, itinerary, segmentsOrCount, segmentIndex, [], programTiers)[0] || null;
 }
 
 function estimateSegmentEarningsRows(
@@ -269,6 +298,7 @@ function estimateSegmentEarningsRows(
   segmentsOrCount: ItinerarySegment[] | number = flattenSegments(itinerary),
   segmentIndex = 0,
   preferredPrograms: string[] = [],
+  programTiers: MileageProgramTierPreference = {},
 ): EarningsEstimate[] {
   const segments = Array.isArray(segmentsOrCount) ? segmentsOrCount : flattenSegments(itinerary);
   const segmentCount = Array.isArray(segmentsOrCount) ? segmentsOrCount.length : segmentsOrCount;
@@ -282,7 +312,7 @@ function estimateSegmentEarningsRows(
 
   const distance = segment.distance ?? inferSegmentDistance(itinerary, segment, segments, segmentIndex, segmentCount);
   const fare = inferSegmentFare(itinerary, segment, segmentCount, segmentIndex);
-  const rows = earningRows(carrier, bookingClass, booking, preferredPrograms);
+  const rows = earningRows(carrier, bookingClass, booking, preferredPrograms, programTiers);
 
   return rows.map((row) => {
     const computed = computeMiles(row.percent, row.value, distance, fare);
@@ -305,9 +335,16 @@ function earningRows(
   bookingClass: string,
   booking: CompactBookingClass,
   preferredPrograms: string[],
+  programTiers: MileageProgramTierPreference,
 ): SupplementalProgramEarning[] {
   const rows = new Map<string, SupplementalProgramEarning>();
-  if (booking.top_program) {
+  const supplementalRows = SUPPLEMENTAL_PROGRAM_EARNINGS[carrier]?.[bookingClass] || [];
+  const selectedTierProgram = booking.top_program ? selectedProgramTierProgram(booking.top_program, programTiers) : "";
+  const hideGenericProgram =
+    Boolean(booking.top_program) &&
+    Boolean(selectedTierProgram) &&
+    supplementalRows.some((row) => isTieredProgram(booking.top_program || "", row.program));
+  if (booking.top_program && !hideGenericProgram) {
     rows.set(booking.top_program, {
       program: booking.top_program,
       percent: booking.top_redeemable_percent,
@@ -316,8 +353,9 @@ function earningRows(
   }
 
   const preferred = new Set(preferredPrograms);
-  for (const row of SUPPLEMENTAL_PROGRAM_EARNINGS[carrier]?.[bookingClass] || []) {
+  for (const row of supplementalRows) {
     if (preferred.size > 0 && !matchesPreferredProgram(row.program, preferred)) continue;
+    if (!matchesProgramTier(row.program, programTiers)) continue;
     rows.set(row.program, row);
   }
 
@@ -330,6 +368,48 @@ function matchesPreferredProgram(program: string, preferredPrograms: Set<string>
     if (program.startsWith(`${preferredProgram} `)) return true;
   }
   return false;
+}
+
+function matchesProgramTier(program: string, programTiers: MileageProgramTierPreference): boolean {
+  for (const [parentProgram, selectedTier] of Object.entries(programTiers)) {
+    if (!isTieredProgram(parentProgram, program)) continue;
+    const selectedProgram = selectedProgramTierProgram(parentProgram, { [parentProgram]: selectedTier });
+    return !selectedProgram || program === selectedProgram;
+  }
+  return true;
+}
+
+function selectedProgramTierProgram(program: string, programTiers: MileageProgramTierPreference): string {
+  const selected = programTiers[program];
+  if (!selected) return "";
+  const option = mileageProgramTierOptions(program).find(
+    (tier) => tier.program === selected || tier.label.toLowerCase() === selected.toLowerCase(),
+  );
+  return option?.program || "";
+}
+
+function isTieredProgram(parentProgram: string, program: string): boolean {
+  return program !== parentProgram && program.startsWith(`${parentProgram} `);
+}
+
+function compactTierLabel(parentProgram: string, tierProgram: string): string {
+  return tierProgram
+    .slice(parentProgram.length)
+    .trim()
+    .replace(/^Premier\s+/i, "")
+    .replace(/^Status\s+/i, "")
+    .trim();
+}
+
+function tierRank(label: string): number {
+  const ranks = new Map([
+    ["Member", 0],
+    ["Silver", 1],
+    ["Gold", 2],
+    ["Platinum", 3],
+    ["1K", 4],
+  ]);
+  return ranks.get(label) ?? 100;
 }
 
 function computeMiles(

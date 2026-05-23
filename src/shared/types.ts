@@ -63,6 +63,7 @@ export type ExtensionSettings = {
   hiddenProviderIds: string[];
   preferredProviderIds: string[];
   preferredFrequentFlyerPrograms: string[];
+  frequentFlyerProgramTiers: Record<string, string>;
   affiliateOptOut: boolean;
   debugMode: boolean;
   googleFlights: {

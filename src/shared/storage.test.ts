@@ -25,6 +25,10 @@ describe("settings", () => {
         hiddenProviderIds: null,
         preferredProviderIds: "kayak",
         preferredFrequentFlyerPrograms: ["Air Canada Aeroplan", 123, "British Airways Club"],
+        frequentFlyerProgramTiers: {
+          "United MileagePlus": "United MileagePlus Premier Gold",
+          bad: 123,
+        },
         affiliateOptOut: "yes",
         debugMode: 1,
         googleFlights: {
@@ -46,6 +50,9 @@ describe("settings", () => {
     ).toEqual({
       ...DEFAULT_SETTINGS,
       preferredFrequentFlyerPrograms: ["Air Canada Aeroplan", "British Airways Club"],
+      frequentFlyerProgramTiers: {
+        "United MileagePlus": "United MileagePlus Premier Gold",
+      },
       googleFlights: {
         countryCodes: ["JP", "MY"],
       },

@@ -185,12 +185,23 @@ button.secondary {
 
 .program-row {
   display: grid;
-  grid-template-columns: auto 28px 1fr;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 10px;
   min-height: 42px;
   padding: 9px 12px;
   border-bottom: 1px solid #e2e8f0;
+}
+
+.program-row.with-tier {
+  grid-template-columns: minmax(0, 1fr) 150px;
+}
+
+.program-choice {
+  display: grid;
+  grid-template-columns: auto 28px 1fr;
+  align-items: center;
+  gap: 10px;
   cursor: pointer;
 }
 
@@ -202,16 +213,21 @@ button.secondary {
   background: #f8fafc;
 }
 
-.program-row input {
+.program-choice input {
   min-height: 18px;
   width: 18px;
   padding: 0;
 }
 
-.program-row img {
+.program-choice img {
   width: 24px;
   height: 24px;
   object-fit: contain;
+}
+
+.program-row select {
+  min-height: 32px;
+  padding: 5px 8px;
 }
 
 .selected-summary {

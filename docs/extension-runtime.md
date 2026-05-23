@@ -53,7 +53,7 @@ when the baseline page is dense, and closes temporary tabs after parsing.
 - `airports.ts`: airport filtering helpers.
 - `storage.ts`: settings defaults and persistence.
 - `backendClient.ts`: optional hosted metadata client with silent fallback.
-- `wheretocredit.ts`: compact offline earnings estimates plus outbound Where to Credit link helpers.
+- `mileageEarnings.ts`: compact offline earnings estimates plus outbound Where to Credit link helpers.
 
 ## Mileage Earning Snapshot
 

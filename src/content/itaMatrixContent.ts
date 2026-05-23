@@ -10,15 +10,15 @@ import {
 } from "../shared/airports";
 import { fetchRemoteProviderMetadata } from "../shared/backendClient";
 import { flattenSegments, parseItaBookingDetails, parseItineraryJson } from "../shared/itinerary";
-import { rankProviderLinks, summarizeItinerary } from "../shared/providers";
-import { loadSettings, saveSettings } from "../shared/storage";
-import type { ExtensionSettings, ItinerarySegment, NormalizedItinerary, RankedProviderLink } from "../shared/types";
 import {
   type EarningsEstimate,
   estimateEarnings,
   estimateSegmentEarnings,
   inspectWhereToCreditSegments,
-} from "../shared/wheretocredit";
+} from "../shared/mileageEarnings";
+import { rankProviderLinks, summarizeItinerary } from "../shared/providers";
+import { loadSettings, saveSettings } from "../shared/storage";
+import type { ExtensionSettings, ItinerarySegment, NormalizedItinerary, RankedProviderLink } from "../shared/types";
 
 type PanelState = {
   settings: ExtensionSettings | null;
@@ -666,7 +666,7 @@ function resultRowForGrid(grid: HTMLElement): HTMLTableRowElement | null {
 
 function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSummary {
   const preferredPrograms = state.settings?.preferredFrequentFlyerPrograms || [];
-  const estimates = estimateEarnings(itinerary, preferredPrograms);
+  const estimates = estimateEarnings(itinerary, preferredPrograms, state.settings?.frequentFlyerProgramTiers || {});
   const preferredProgramRanks = new Map(preferredPrograms.map((program, index) => [program, index]));
   const byProgram = new Map<string, { miles: number; formulas: MileageFormula[] }>();
   for (const estimate of estimates) {
@@ -1056,7 +1056,7 @@ function providerConfidenceCopy(link: RankedProviderLink): { label: string } {
 
 function renderMileageCredit(itinerary: NormalizedItinerary): string {
   const preferredProgramList = state.settings?.preferredFrequentFlyerPrograms || [];
-  const estimates = estimateEarnings(itinerary, preferredProgramList);
+  const estimates = estimateEarnings(itinerary, preferredProgramList, state.settings?.frequentFlyerProgramTiers || {});
   const preferredPrograms = new Set(preferredProgramList);
   const visibleEstimates =
     preferredPrograms.size > 0 && !state.showAllMileagePrograms

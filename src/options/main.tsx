@@ -13,10 +13,14 @@ import {
   normalizeGoogleFlightsCountryCodes,
   parseGoogleFlightsCountryInput,
 } from "../shared/googleFlightsBooking";
+import {
+  type MileageProgramOption,
+  mileageProgramTierOptions,
+  uniqueMileageProgramOptions,
+} from "../shared/mileageEarnings";
 import { LOCAL_PROVIDERS, providerConfidence } from "../shared/providers";
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from "../shared/storage";
 import type { ExtensionSettings } from "../shared/types";
-import { type MileageProgramOption, uniqueMileageProgramOptions } from "../shared/wheretocredit";
 import "./options.css";
 
 function Options(): React.ReactElement {
@@ -53,9 +57,28 @@ function Options(): React.ReactElement {
   function togglePreferredProgram(program: string): void {
     const values = new Set(settings.preferredFrequentFlyerPrograms);
     values.has(program) ? values.delete(program) : values.add(program);
+    const frequentFlyerProgramTiers = { ...settings.frequentFlyerProgramTiers };
+    if (!values.has(program)) delete frequentFlyerProgramTiers[program];
     void persist({
       ...settings,
       preferredFrequentFlyerPrograms: Array.from(values),
+      frequentFlyerProgramTiers,
+    });
+  }
+
+  function setProgramTier(program: string, tier: string): void {
+    const frequentFlyerProgramTiers = { ...settings.frequentFlyerProgramTiers };
+    if (tier) {
+      frequentFlyerProgramTiers[program] = tier;
+    } else {
+      delete frequentFlyerProgramTiers[program];
+    }
+    const preferredPrograms = new Set(settings.preferredFrequentFlyerPrograms);
+    if (tier) preferredPrograms.add(program);
+    void persist({
+      ...settings,
+      preferredFrequentFlyerPrograms: Array.from(preferredPrograms),
+      frequentFlyerProgramTiers,
     });
   }
 
@@ -150,23 +173,42 @@ function Options(): React.ReactElement {
         <fieldset className="program-list">
           <legend>Preferred frequent flyer programs</legend>
           <div className="program-list-scroll">
-            {visibleMileagePrograms.map((program) => (
-              <label className="program-row" key={program.program}>
-                <input
-                  type="checkbox"
-                  checked={settings.preferredFrequentFlyerPrograms.includes(program.program)}
-                  onChange={() => togglePreferredProgram(program.program)}
-                />
-                {program.carrierCodes[0] ? (
-                  <img
-                    src={chrome.runtime.getURL(`assets/carriers64/light/${program.carrierCodes[0]}.png`)}
-                    alt=""
-                    aria-hidden="true"
-                  />
-                ) : null}
-                <span>{program.label}</span>
-              </label>
-            ))}
+            {visibleMileagePrograms.map((program) => {
+              const tierOptions = mileageProgramTierOptions(program.program);
+              return (
+                <div className={`program-row ${tierOptions.length > 0 ? "with-tier" : ""}`} key={program.program}>
+                  <label className="program-choice">
+                    <input
+                      type="checkbox"
+                      checked={settings.preferredFrequentFlyerPrograms.includes(program.program)}
+                      onChange={() => togglePreferredProgram(program.program)}
+                    />
+                    {program.carrierCodes[0] ? (
+                      <img
+                        src={chrome.runtime.getURL(`assets/carriers64/light/${program.carrierCodes[0]}.png`)}
+                        alt=""
+                        aria-hidden="true"
+                      />
+                    ) : null}
+                    <span>{program.label}</span>
+                  </label>
+                  {tierOptions.length > 0 ? (
+                    <select
+                      aria-label={`${program.program} status level`}
+                      value={settings.frequentFlyerProgramTiers[program.program] || ""}
+                      onChange={(event) => setProgramTier(program.program, event.currentTarget.value)}
+                    >
+                      <option value="">All levels</option>
+                      {tierOptions.map((tier) => (
+                        <option key={tier.program} value={tier.program}>
+                          {tier.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         </fieldset>
         {visibleMileagePrograms.length === 0 ? (
@@ -174,7 +216,12 @@ function Options(): React.ReactElement {
         ) : settings.preferredFrequentFlyerPrograms.length > 0 ? (
           <div className="selected-summary">
             {settings.preferredFrequentFlyerPrograms.length} selected
-            <button type="button" onClick={() => void persist({ ...settings, preferredFrequentFlyerPrograms: [] })}>
+            <button
+              type="button"
+              onClick={() =>
+                void persist({ ...settings, preferredFrequentFlyerPrograms: [], frequentFlyerProgramTiers: {} })
+              }
+            >
               Clear
             </button>
           </div>

@@ -1,13 +1,14 @@
-import type { NormalizedItinerary } from "./types";
 import {
   buildValidatedWhereToCreditUrl,
   estimateEarnings,
   inspectWhereToCreditSegments,
+  mileageProgramTierOptions,
   uniqueMileageProgramOptions,
   uniqueMileagePrograms,
-} from "./wheretocredit";
+} from "./mileageEarnings";
+import type { NormalizedItinerary } from "./types";
 
-describe("Where to Credit earnings estimates", () => {
+describe("Mileage earning estimates", () => {
   it("lists mileage programs available in the local snapshot", () => {
     expect(uniqueMileagePrograms()).toEqual(expect.arrayContaining(["Air Canada Aeroplan", "British Airways Club"]));
     expect(uniqueMileageProgramOptions()).toEqual(
@@ -19,6 +20,17 @@ describe("Where to Credit earnings estimates", () => {
         }),
       ]),
     );
+  });
+
+  it("lists compact tier labels for programs with tiered local rows", () => {
+    expect(mileageProgramTierOptions("United MileagePlus")).toEqual([
+      { program: "United MileagePlus Member", label: "Member" },
+      { program: "United MileagePlus Premier Silver", label: "Silver" },
+      { program: "United MileagePlus Premier Gold", label: "Gold" },
+      { program: "United MileagePlus Premier Platinum", label: "Platinum" },
+      { program: "United MileagePlus Premier 1K", label: "1K" },
+    ]);
+    expect(mileageProgramTierOptions("Air Canada Aeroplan")).toEqual([]);
   });
 
   it("includes curated preferred earning rows that are not the compact top row", () => {
@@ -352,7 +364,7 @@ describe("Where to Credit earnings estimates", () => {
         })),
     ).toEqual([
       {
-        program: "United MileagePlus member",
+        program: "United MileagePlus Member",
         miles: 2250,
         formula: "450 x 5 miles per currency unit",
       },
@@ -375,6 +387,50 @@ describe("Where to Credit earnings estimates", () => {
         program: "United MileagePlus Premier 1K",
         miles: 4950,
         formula: "450 x 11 miles per currency unit",
+      },
+    ]);
+  });
+
+  it("narrows United MileagePlus revenue earnings to the selected status tier", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "one-way",
+      totalPrice: 600,
+      passengerCount: 1,
+      carriers: ["UA"],
+      fareBases: ["SNAA0BC"],
+      slices: [
+        {
+          origin: "TPE",
+          destination: "SFO",
+          segments: [
+            {
+              origin: "TPE",
+              destination: "SFO",
+              carrier: "UA",
+              bookingClass: "S",
+              farePrice: 450,
+              cabin: "economy",
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(
+      estimateEarnings(itinerary, ["United MileagePlus"], {
+        "United MileagePlus": "United MileagePlus Premier Gold",
+      })
+        .filter((estimate) => estimate.program.startsWith("United MileagePlus"))
+        .map((estimate) => ({
+          program: estimate.program,
+          miles: estimate.estimatedMiles,
+        })),
+    ).toEqual([
+      {
+        program: "United MileagePlus Premier Gold",
+        miles: 3600,
       },
     ]);
   });

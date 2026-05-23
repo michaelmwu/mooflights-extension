@@ -5,6 +5,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   hiddenProviderIds: [],
   preferredProviderIds: ["where-to-credit", "google-flights", "kayak"],
   preferredFrequentFlyerPrograms: [],
+  frequentFlyerProgramTiers: {},
   affiliateOptOut: false,
   debugMode: false,
   googleFlights: {
@@ -68,6 +69,7 @@ export function mergeSettings(value: unknown): ExtensionSettings {
       candidate.preferredFrequentFlyerPrograms,
       DEFAULT_SETTINGS.preferredFrequentFlyerPrograms,
     ),
+    frequentFlyerProgramTiers: stringRecord(candidate.frequentFlyerProgramTiers),
     affiliateOptOut: booleanValue(candidate.affiliateOptOut, DEFAULT_SETTINGS.affiliateOptOut),
     debugMode: booleanValue(candidate.debugMode, DEFAULT_SETTINGS.debugMode),
     googleFlights: {
@@ -95,6 +97,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function stringArray(value: unknown, fallback: string[]): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : fallback;
+}
+
+function stringRecord(value: unknown): Record<string, string> {
+  if (!isRecord(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+  );
 }
 
 function booleanValue(value: unknown, fallback: boolean): boolean {
