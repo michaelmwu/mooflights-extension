@@ -159,7 +159,7 @@ function sanitizeResultsForStorage(results: GoogleFlightsCountryResult[]): Googl
 }
 
 function sanitizeResultForStorage(result: GoogleFlightsCountryResult): GoogleFlightsCountryResult {
-  const safeOptions = result.options.map((option) => {
+  const safeOptions = result.options.filter(isGoogleFlightsBookingOption).map((option) => {
     const { bookingUrl: _bookingUrl, ...safeOption } = option;
     return safeOption;
   });
@@ -174,6 +174,24 @@ function sanitizeResultForStorage(result: GoogleFlightsCountryResult): GoogleFli
     cheapest: options[0],
     direct: options.find((option) => option.isDirect),
   };
+}
+
+function isGoogleFlightsBookingOption(value: unknown): value is GoogleFlightsCountryResult["options"][number] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const candidate = value as {
+    provider?: unknown;
+    price?: unknown;
+    currency?: unknown;
+    priceText?: unknown;
+    isDirect?: unknown;
+  };
+  return (
+    typeof candidate.provider === "string" &&
+    typeof candidate.price === "number" &&
+    typeof candidate.currency === "string" &&
+    typeof candidate.priceText === "string" &&
+    typeof candidate.isDirect === "boolean"
+  );
 }
 
 chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
