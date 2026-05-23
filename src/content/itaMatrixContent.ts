@@ -1594,6 +1594,8 @@ function mileageSegmentLabel(estimate: EarningsEstimate): string {
 }
 
 function compactTierName(parentProgram: string, program: string): string {
+  const optionLabel = mileageProgramTierOptions(parentProgram).find((tier) => tier.program === program)?.label;
+  if (optionLabel) return optionLabel;
   return program
     .slice(parentProgram.length)
     .trim()
