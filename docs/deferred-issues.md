@@ -4,7 +4,8 @@ These items are intentionally out of the ITA Matrix MVP.
 
 ## Google Flights Companion
 
-Add a Google Flights content script that captures search context and renders miles-crediting annotations near flight cards.
+The extension now includes a Google Flights booking-page country price comparison panel. Follow-up work: add
+Google Flights search-results miles-crediting annotations near flight cards.
 
 ## ITA Results Page Earnings Follow-Ups
 

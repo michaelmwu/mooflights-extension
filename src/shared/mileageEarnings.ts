@@ -1,5 +1,7 @@
 import { airportDistanceMiles } from "./airportCoordinates";
+import type { UsdCurrencyRates } from "./currencyRates";
 import mileageEarningData from "./data/mileage-earning-compact.json";
+import programTierLabels from "./data/program-tier-labels.json";
 import { flattenSegments } from "./itinerary";
 import type { ItinerarySegment, NormalizedItinerary } from "./types";
 
@@ -19,6 +21,11 @@ type SupplementalProgramEarning = {
   value: string | null;
 };
 
+type RevenueMultiplier = {
+  multiplier: number;
+  currency: string;
+};
+
 type CompactAirline = {
   iata: string;
   name: string;
@@ -33,9 +40,22 @@ type CompactMileageEarningData = {
   airlines: Record<string, CompactAirline>;
 };
 
+type ProgramTierLabelData = {
+  source_note: string;
+  fetched_at: string;
+  programs: Record<string, string[]>;
+};
+
 export type MileageProgramOption = {
   program: string;
   carrierCodes: string[];
+  label: string;
+};
+
+export type MileageProgramTierPreference = Record<string, string>;
+
+export type MileageProgramTierOption = {
+  program: string;
   label: string;
 };
 
@@ -47,7 +67,9 @@ export type EarningsEstimate = {
   program: string;
   estimatedMiles?: number;
   formula: string;
+  displayFare?: string;
   basis: "distance-percent" | "revenue-multiplier" | "fixed" | "unknown";
+  approximate?: boolean;
   sourceFetchedAt: string;
 };
 
@@ -63,6 +85,7 @@ export type WhereToCreditSegmentInsight = {
 // licensed datasets, or curated Mu Travel reference data. Where to Credit URLs
 // are outbound lookup destinations, not the source copied into this file.
 const DATA = mileageEarningData as CompactMileageEarningData;
+const PROGRAM_TIER_LABELS = programTierLabels as ProgramTierLabelData;
 
 const PROGRAM_OWNER_CARRIER_CODES: Record<string, string[]> = {
   "ANA Mileage Club": ["NH"],
@@ -120,6 +143,18 @@ const PROGRAM_OWNER_CARRIER_CODES: Record<string, string[]> = {
 // snapshot stores all program earning rows. Keep this small and source future
 // additions from airline/program public earning charts or licensed data.
 const SUPPLEMENTAL_PROGRAM_EARNINGS: Record<string, Record<string, SupplementalProgramEarning[]>> = {
+  UA: Object.fromEntries(
+    ["B", "E", "G", "H", "K", "L", "M", "N", "Q", "S", "T", "U", "V", "W", "Y"].map((bookingClass) => [
+      bookingClass,
+      [
+        { program: "United MileagePlus Member", percent: null, value: "5 Miles/USD" },
+        { program: "United MileagePlus Premier Silver", percent: null, value: "7 Miles/USD" },
+        { program: "United MileagePlus Premier Gold", percent: null, value: "8 Miles/USD" },
+        { program: "United MileagePlus Premier Platinum", percent: null, value: "9 Miles/USD" },
+        { program: "United MileagePlus Premier 1K", percent: null, value: "11 Miles/USD" },
+      ],
+    ]),
+  ),
   OZ: {
     S: [
       { program: "Air India Maharaja Club", percent: 100, value: "100%" },
@@ -160,10 +195,17 @@ export function inspectWhereToCreditSegments(itinerary: NormalizedItinerary): Wh
     .filter((insight): insight is WhereToCreditSegmentInsight => Boolean(insight));
 }
 
-export function estimateEarnings(itinerary: NormalizedItinerary, preferredPrograms: string[] = []): EarningsEstimate[] {
+export function estimateEarnings(
+  itinerary: NormalizedItinerary,
+  preferredPrograms: string[] = [],
+  programTiers: MileageProgramTierPreference = {},
+  currencyRates?: UsdCurrencyRates | null,
+): EarningsEstimate[] {
   const segments = flattenSegments(itinerary);
   return segments
-    .flatMap((segment, index) => estimateSegmentEarningsRows(segment, itinerary, segments, index, preferredPrograms))
+    .flatMap((segment, index) =>
+      estimateSegmentEarningsRows(segment, itinerary, segments, index, preferredPrograms, programTiers, currencyRates),
+    )
     .filter((estimate): estimate is EarningsEstimate => Boolean(estimate));
 }
 
@@ -187,6 +229,36 @@ export function uniqueMileageProgramOptions(): MileageProgramOption[] {
       label: carrierCodes.length > 0 ? `${program} (${carrierCodes.join("/")})` : program,
     };
   });
+}
+
+export function mileageProgramTierOptions(program: string): MileageProgramTierOption[] {
+  const tierPrograms = new Map<string, { label: string; rank: number }>();
+  const importedLabels = PROGRAM_TIER_LABELS.programs[program] || [];
+  for (const [index, tierLabel] of importedLabels.entries()) {
+    const tierProgram = `${program} ${tierLabel}`;
+    tierPrograms.set(tierProgram, {
+      label: compactTierLabel(program, tierProgram),
+      rank: index,
+    });
+  }
+
+  for (const airlineRows of Object.values(SUPPLEMENTAL_PROGRAM_EARNINGS)) {
+    for (const rows of Object.values(airlineRows)) {
+      for (const row of rows) {
+        if (!isTieredProgram(program, row.program)) continue;
+        const label = compactTierLabel(program, row.program);
+        const current = tierPrograms.get(row.program);
+        tierPrograms.set(row.program, {
+          label,
+          rank: current?.rank ?? tierRank(label),
+        });
+      }
+    }
+  }
+  return Array.from(tierPrograms.entries())
+    .map(([tierProgram, value]) => ({ program: tierProgram, label: value.label, rank: value.rank }))
+    .sort((left, right) => left.rank - right.rank || left.label.localeCompare(right.label))
+    .map(({ program, label }) => ({ program, label }));
 }
 
 function inspectWhereToCreditSegment(segment: ItinerarySegment): WhereToCreditSegmentInsight | null {
@@ -247,8 +319,20 @@ export function estimateSegmentEarnings(
   itinerary: NormalizedItinerary,
   segmentsOrCount: ItinerarySegment[] | number = flattenSegments(itinerary),
   segmentIndex = 0,
+  programTiers: MileageProgramTierPreference = {},
+  currencyRates?: UsdCurrencyRates | null,
 ): EarningsEstimate | null {
-  return estimateSegmentEarningsRows(segment, itinerary, segmentsOrCount, segmentIndex)[0] || null;
+  return (
+    estimateSegmentEarningsRows(
+      segment,
+      itinerary,
+      segmentsOrCount,
+      segmentIndex,
+      [],
+      programTiers,
+      currencyRates,
+    )[0] || null
+  );
 }
 
 function estimateSegmentEarningsRows(
@@ -257,6 +341,8 @@ function estimateSegmentEarningsRows(
   segmentsOrCount: ItinerarySegment[] | number = flattenSegments(itinerary),
   segmentIndex = 0,
   preferredPrograms: string[] = [],
+  programTiers: MileageProgramTierPreference = {},
+  currencyRates?: UsdCurrencyRates | null,
 ): EarningsEstimate[] {
   const segments = Array.isArray(segmentsOrCount) ? segmentsOrCount : flattenSegments(itinerary);
   const segmentCount = Array.isArray(segmentsOrCount) ? segmentsOrCount.length : segmentsOrCount;
@@ -269,11 +355,11 @@ function estimateSegmentEarningsRows(
   if (!airline || !booking) return [];
 
   const distance = segment.distance ?? inferSegmentDistance(itinerary, segment, segments, segmentIndex, segmentCount);
-  const fare = inferSegmentFare(itinerary, segmentCount, segmentIndex);
-  const rows = earningRows(carrier, bookingClass, booking, preferredPrograms);
+  const fare = inferSegmentFare(itinerary, segment, segments, segmentCount);
+  const rows = earningRows(carrier, bookingClass, booking, preferredPrograms, programTiers);
 
   return rows.map((row) => {
-    const computed = computeMiles(row.percent, row.value, distance, fare);
+    const computed = computeMiles(row.percent, row.value, distance, fare, itinerary.currency, currencyRates);
     return {
       segment,
       airlineName: airline.name,
@@ -282,7 +368,9 @@ function estimateSegmentEarningsRows(
       program: row.program,
       estimatedMiles: computed.estimatedMiles,
       formula: computed.formula,
+      displayFare: computed.displayFare,
       basis: computed.basis,
+      approximate: computed.approximate,
       sourceFetchedAt: DATA.fetched_at,
     };
   });
@@ -293,9 +381,16 @@ function earningRows(
   bookingClass: string,
   booking: CompactBookingClass,
   preferredPrograms: string[],
+  programTiers: MileageProgramTierPreference,
 ): SupplementalProgramEarning[] {
   const rows = new Map<string, SupplementalProgramEarning>();
-  if (booking.top_program) {
+  const supplementalRows = SUPPLEMENTAL_PROGRAM_EARNINGS[carrier]?.[bookingClass] || [];
+  const selectedTierProgram = booking.top_program ? selectedProgramTierProgram(booking.top_program, programTiers) : "";
+  const hideGenericProgram =
+    Boolean(booking.top_program) &&
+    Boolean(selectedTierProgram) &&
+    supplementalRows.some((row) => isTieredProgram(booking.top_program || "", row.program));
+  if (booking.top_program && !hideGenericProgram) {
     rows.set(booking.top_program, {
       program: booking.top_program,
       percent: booking.top_redeemable_percent,
@@ -304,12 +399,82 @@ function earningRows(
   }
 
   const preferred = new Set(preferredPrograms);
-  for (const row of SUPPLEMENTAL_PROGRAM_EARNINGS[carrier]?.[bookingClass] || []) {
-    if (preferred.size > 0 && !preferred.has(row.program)) continue;
+  for (const row of supplementalRows) {
+    if (preferred.size > 0 && !matchesPreferredProgram(row.program, preferred)) continue;
+    if (!matchesProgramTier(row.program, programTiers)) continue;
     rows.set(row.program, row);
   }
 
   return Array.from(rows.values());
+}
+
+function matchesPreferredProgram(program: string, preferredPrograms: Set<string>): boolean {
+  if (preferredPrograms.has(program)) return true;
+  for (const preferredProgram of preferredPrograms) {
+    if (program.startsWith(`${preferredProgram} `)) return true;
+  }
+  return false;
+}
+
+function matchesProgramTier(program: string, programTiers: MileageProgramTierPreference): boolean {
+  for (const [parentProgram, selectedTier] of Object.entries(programTiers)) {
+    if (!isTieredProgram(parentProgram, program)) continue;
+    const selectedProgram = selectedProgramTierProgram(parentProgram, { [parentProgram]: selectedTier });
+    return !selectedProgram || program === selectedProgram;
+  }
+  return true;
+}
+
+function selectedProgramTierProgram(program: string, programTiers: MileageProgramTierPreference): string {
+  const selected = programTiers[program];
+  if (!selected) return "";
+  const option = mileageProgramTierOptions(program).find(
+    (tier) => tier.program === selected || tier.label.toLowerCase() === selected.toLowerCase(),
+  );
+  return option?.program || "";
+}
+
+function isTieredProgram(parentProgram: string, program: string): boolean {
+  return program !== parentProgram && program.startsWith(`${parentProgram} `);
+}
+
+function compactTierLabel(parentProgram: string, tierProgram: string): string {
+  const label = tierProgram
+    .slice(parentProgram.length)
+    .trim()
+    .replace(/^Premier\s+/i, "")
+    .replace(/^Status\s+/i, "")
+    .trim();
+  return removeTierBrandPrefix(parentProgram, label);
+}
+
+function removeTierBrandPrefix(parentProgram: string, label: string): string {
+  const programTokens = tierLabelTokens(parentProgram);
+  const labelTokens = label.split(/\s+/).filter(Boolean);
+  while (labelTokens.length > 1 && programTokens.has(labelTokens[0]?.toLowerCase() || "")) {
+    labelTokens.shift();
+  }
+  return labelTokens.join(" ") || label;
+}
+
+function tierLabelTokens(value: string): Set<string> {
+  return new Set(
+    value
+      .split(/[^A-Za-z0-9+&]+/)
+      .map((token) => token.toLowerCase())
+      .filter((token) => token.length >= 4 || token === "jmb"),
+  );
+}
+
+function tierRank(label: string): number {
+  const ranks = new Map([
+    ["Member", 0],
+    ["Silver", 1],
+    ["Gold", 2],
+    ["Platinum", 3],
+    ["1K", 4],
+  ]);
+  return ranks.get(label) ?? 100;
 }
 
 function computeMiles(
@@ -317,7 +482,9 @@ function computeMiles(
   value: string | null,
   distance: number | undefined,
   fare: number | undefined,
-): Pick<EarningsEstimate, "estimatedMiles" | "formula" | "basis"> {
+  fareCurrency: string | undefined,
+  currencyRates: UsdCurrencyRates | null | undefined,
+): Pick<EarningsEstimate, "estimatedMiles" | "formula" | "displayFare" | "basis" | "approximate"> {
   if (finiteNumber(percent) && finiteNumber(distance)) {
     return {
       estimatedMiles: Math.round(distance * (percent / 100)),
@@ -327,10 +494,32 @@ function computeMiles(
   }
 
   const revenueMultiplier = parseRevenueMultiplier(value);
-  if (finiteNumber(revenueMultiplier) && finiteNumber(fare)) {
+  if (revenueMultiplier && finiteNumber(fare)) {
+    const effectiveFareCurrency = (fareCurrency || revenueMultiplier.currency).toUpperCase();
+    const convertedFare = convertCurrency(fare, effectiveFareCurrency, revenueMultiplier.currency, currencyRates);
+    if (convertedFare) {
+      const displayFare =
+        effectiveFareCurrency === revenueMultiplier.currency
+          ? formatCurrencyWithCode(fare, effectiveFareCurrency)
+          : `${formatCurrencyWithCode(fare, effectiveFareCurrency)} ~ ${formatDisplayCurrencyWithCode(convertedFare.amount, revenueMultiplier.currency)}`;
+      return {
+        estimatedMiles: Math.round(convertedFare.amount * revenueMultiplier.multiplier),
+        formula: `${displayFare} x ${revenueMultiplier.multiplier} miles/${revenueMultiplier.currency}${convertedFare.approximate ? " (cached FX estimate)" : ""}`,
+        displayFare,
+        basis: "revenue-multiplier",
+        approximate: convertedFare.approximate,
+      };
+    }
+    if (effectiveFareCurrency !== revenueMultiplier.currency) {
+      return {
+        formula: `${formatCurrencyWithCode(fare, effectiveFareCurrency)} cannot be used with ${revenueMultiplier.multiplier} miles/${revenueMultiplier.currency} without FX conversion`,
+        basis: "unknown",
+      };
+    }
     return {
-      estimatedMiles: Math.round(fare * revenueMultiplier),
-      formula: `${formatCurrency(fare)} x ${revenueMultiplier} miles per currency unit`,
+      estimatedMiles: Math.round(fare * revenueMultiplier.multiplier),
+      formula: `${formatCurrencyWithCode(fare, effectiveFareCurrency)} x ${revenueMultiplier.multiplier} miles/${revenueMultiplier.currency}`,
+      displayFare: formatCurrencyWithCode(fare, effectiveFareCurrency),
       basis: "revenue-multiplier",
     };
   }
@@ -347,6 +536,23 @@ function computeMiles(
   return {
     formula: value || "Open Where to Credit for details",
     basis: "unknown",
+  };
+}
+
+function convertCurrency(
+  amount: number,
+  fromCurrency: string,
+  toCurrency: string,
+  currencyRates: UsdCurrencyRates | null | undefined,
+): { amount: number; approximate: boolean } | null {
+  if (fromCurrency === toCurrency) return { amount, approximate: false };
+  if (!currencyRates) return null;
+  const fromRate = currencyRates.rates[fromCurrency];
+  const toRate = currencyRates.rates[toCurrency];
+  if (!finiteNumber(fromRate) || !finiteNumber(toRate) || fromRate <= 0 || toRate <= 0) return null;
+  return {
+    amount: (amount / fromRate) * toRate,
+    approximate: true,
   };
 }
 
@@ -400,9 +606,17 @@ function inferReciprocalRoundTripDistance(
 
 function inferSegmentFare(
   itinerary: NormalizedItinerary,
+  segment: ItinerarySegment | undefined,
+  segments: ItinerarySegment[],
   segmentCount: number,
-  _segmentIndex: number,
 ): number | undefined {
+  if (finiteNumber(segment?.farePrice)) {
+    if (!segment.fareComponentKey) return segment.farePrice;
+    const componentSegmentCount = segments.filter(
+      (candidate) => candidate.fareComponentKey === segment.fareComponentKey,
+    ).length;
+    return componentSegmentCount > 1 ? segment.farePrice / componentSegmentCount : segment.farePrice;
+  }
   if (!finiteNumber(itinerary.totalPrice)) return undefined;
   const passengerCount =
     finiteNumber(itinerary.passengerCount) && itinerary.passengerCount > 0 ? itinerary.passengerCount : 1;
@@ -423,11 +637,12 @@ function finiteNumber(value: number | null | undefined): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-function parseRevenueMultiplier(value: string | null): number | undefined {
-  const match = value?.match(/([\d.]+)\s*Miles\/(?:USD|EUR|GBP|CAD|AUD|JPY|[A-Z]{3})/i);
+function parseRevenueMultiplier(value: string | null): RevenueMultiplier | undefined {
+  const match = value?.match(/([\d.]+)\s*Miles\/(USD|EUR|GBP|CAD|AUD|JPY|[A-Z]{3})/i);
   if (!match) return undefined;
   const parsed = Number(match[1]);
-  return Number.isFinite(parsed) ? parsed : undefined;
+  const currency = match[2]?.toUpperCase() || "";
+  return Number.isFinite(parsed) && currency ? { multiplier: parsed, currency } : undefined;
 }
 
 function parseFixedMiles(value: string | null): number | undefined {
@@ -443,6 +658,15 @@ function formatPercent(value: number): string {
 
 function formatCurrency(value: number): string {
   return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
+}
+
+function formatCurrencyWithCode(value: number, currency: string): string {
+  return `${formatCurrency(value)} ${currency}`;
+}
+
+function formatDisplayCurrencyWithCode(value: number, currency: string): string {
+  if (currency === "USD") return `$${formatCurrency(value)} USD`;
+  return formatCurrencyWithCode(value, currency);
 }
 
 function formatNumber(value: number): string {

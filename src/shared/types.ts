@@ -12,6 +12,8 @@ export type ItinerarySegment = {
   bookingClass?: string;
   fareBasis?: string;
   fareCarrier?: string;
+  farePrice?: number;
+  fareComponentKey?: string;
   duration?: number;
   cabin: Cabin;
   departure?: string;
@@ -62,8 +64,12 @@ export type ExtensionSettings = {
   hiddenProviderIds: string[];
   preferredProviderIds: string[];
   preferredFrequentFlyerPrograms: string[];
+  frequentFlyerProgramTiers: Record<string, string>;
   affiliateOptOut: boolean;
   debugMode: boolean;
+  googleFlights: {
+    countryCodes: string[];
+  };
   airportHelper: {
     region: string;
     continent: string;

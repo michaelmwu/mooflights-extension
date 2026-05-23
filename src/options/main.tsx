@@ -8,15 +8,25 @@ import {
   uniqueAirportRegions,
   uniqueAirportValues,
 } from "../shared/airports";
+import {
+  DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES,
+  normalizeGoogleFlightsCountryCodes,
+  parseGoogleFlightsCountryInput,
+} from "../shared/googleFlightsBooking";
+import {
+  type MileageProgramOption,
+  mileageProgramTierOptions,
+  uniqueMileageProgramOptions,
+} from "../shared/mileageEarnings";
 import { LOCAL_PROVIDERS, providerConfidence } from "../shared/providers";
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from "../shared/storage";
 import type { ExtensionSettings } from "../shared/types";
-import { type MileageProgramOption, uniqueMileageProgramOptions } from "../shared/wheretocredit";
 import "./options.css";
 
 function Options(): React.ReactElement {
   const [settings, setSettings] = useState<ExtensionSettings>(DEFAULT_SETTINGS);
   const [programSearch, setProgramSearch] = useState("");
+  const [googleFlightsCountrySearch, setGoogleFlightsCountrySearch] = useState("");
   const [saved, setSaved] = useState(false);
   const countries = useMemo(() => uniqueAirportCountries(), []);
   const continents = useMemo(() => uniqueAirportValues("continent"), []);
@@ -47,9 +57,58 @@ function Options(): React.ReactElement {
   function togglePreferredProgram(program: string): void {
     const values = new Set(settings.preferredFrequentFlyerPrograms);
     values.has(program) ? values.delete(program) : values.add(program);
+    const frequentFlyerProgramTiers = { ...settings.frequentFlyerProgramTiers };
+    if (!values.has(program)) delete frequentFlyerProgramTiers[program];
     void persist({
       ...settings,
       preferredFrequentFlyerPrograms: Array.from(values),
+      frequentFlyerProgramTiers,
+    });
+  }
+
+  function setProgramTier(program: string, tier: string): void {
+    const frequentFlyerProgramTiers = { ...settings.frequentFlyerProgramTiers };
+    if (tier) {
+      frequentFlyerProgramTiers[program] = tier;
+    } else {
+      delete frequentFlyerProgramTiers[program];
+    }
+    const preferredPrograms = new Set(settings.preferredFrequentFlyerPrograms);
+    if (tier) preferredPrograms.add(program);
+    void persist({
+      ...settings,
+      preferredFrequentFlyerPrograms: Array.from(preferredPrograms),
+      frequentFlyerProgramTiers,
+    });
+  }
+
+  function addGoogleFlightsCountry(): void {
+    const country =
+      countryCodeFromSearchValue(googleFlightsCountrySearch) ||
+      parseGoogleFlightsCountryInput(googleFlightsCountrySearch)[0] ||
+      "";
+    if (!country) return;
+    setGoogleFlightsCountrySearch("");
+    void persist({
+      ...settings,
+      googleFlights: {
+        ...settings.googleFlights,
+        countryCodes: normalizeGoogleFlightsCountryCodes([...settings.googleFlights.countryCodes, country]),
+      },
+    });
+  }
+
+  function removeGoogleFlightsCountry(country: string): void {
+    const countryCodes = normalizeGoogleFlightsCountryCodes(
+      settings.googleFlights.countryCodes.filter((code) => code !== country),
+      [],
+    );
+    void persist({
+      ...settings,
+      googleFlights: {
+        ...settings.googleFlights,
+        countryCodes,
+      },
     });
   }
 
@@ -77,7 +136,9 @@ function Options(): React.ReactElement {
                     <span className="status-dot" aria-hidden="true" />
                     {reliability.label} · {categoryLabel(provider.category)}
                   </small>
-                  <small>{provider.knownIssues || reliability.help}</small>
+                  {provider.knownIssues || reliability.help ? (
+                    <small>{provider.knownIssues || reliability.help}</small>
+                  ) : null}
                 </div>
                 <label>
                   <input
@@ -116,23 +177,42 @@ function Options(): React.ReactElement {
         <fieldset className="program-list">
           <legend>Preferred frequent flyer programs</legend>
           <div className="program-list-scroll">
-            {visibleMileagePrograms.map((program) => (
-              <label className="program-row" key={program.program}>
-                <input
-                  type="checkbox"
-                  checked={settings.preferredFrequentFlyerPrograms.includes(program.program)}
-                  onChange={() => togglePreferredProgram(program.program)}
-                />
-                {program.carrierCodes[0] ? (
-                  <img
-                    src={chrome.runtime.getURL(`assets/carriers64/light/${program.carrierCodes[0]}.png`)}
-                    alt=""
-                    aria-hidden="true"
-                  />
-                ) : null}
-                <span>{program.label}</span>
-              </label>
-            ))}
+            {visibleMileagePrograms.map((program) => {
+              const tierOptions = mileageProgramTierOptions(program.program);
+              return (
+                <div className={`program-row ${tierOptions.length > 0 ? "with-tier" : ""}`} key={program.program}>
+                  <label className="program-choice">
+                    <input
+                      type="checkbox"
+                      checked={settings.preferredFrequentFlyerPrograms.includes(program.program)}
+                      onChange={() => togglePreferredProgram(program.program)}
+                    />
+                    {program.carrierCodes[0] ? (
+                      <img
+                        src={chrome.runtime.getURL(`assets/carriers64/light/${program.carrierCodes[0]}.png`)}
+                        alt=""
+                        aria-hidden="true"
+                      />
+                    ) : null}
+                    <span>{program.label}</span>
+                  </label>
+                  {tierOptions.length > 0 ? (
+                    <select
+                      aria-label={`${program.program} status level`}
+                      value={settings.frequentFlyerProgramTiers[program.program] || ""}
+                      onChange={(event) => setProgramTier(program.program, event.currentTarget.value)}
+                    >
+                      <option value="">All levels</option>
+                      {tierOptions.map((tier) => (
+                        <option key={tier.program} value={tier.program}>
+                          {tier.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         </fieldset>
         {visibleMileagePrograms.length === 0 ? (
@@ -140,11 +220,75 @@ function Options(): React.ReactElement {
         ) : settings.preferredFrequentFlyerPrograms.length > 0 ? (
           <div className="selected-summary">
             {settings.preferredFrequentFlyerPrograms.length} selected
-            <button type="button" onClick={() => void persist({ ...settings, preferredFrequentFlyerPrograms: [] })}>
+            <button
+              type="button"
+              onClick={() =>
+                void persist({ ...settings, preferredFrequentFlyerPrograms: [], frequentFlyerProgramTiers: {} })
+              }
+            >
               Clear
             </button>
           </div>
         ) : null}
+      </section>
+
+      <section>
+        <h2>Google Flights Country Check</h2>
+        <p className="note">Default countries for booking-page price comparisons.</p>
+        <div className="country-picker">
+          <label>
+            Add country
+            <input
+              type="search"
+              list="google-country-options"
+              value={googleFlightsCountrySearch}
+              placeholder="Search country or enter code"
+              onChange={(event) => setGoogleFlightsCountrySearch(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                addGoogleFlightsCountry();
+              }}
+            />
+            <datalist id="google-country-options">
+              {countries.map((country) => (
+                <option key={country.code} value={country.searchValue} />
+              ))}
+            </datalist>
+          </label>
+          <button type="button" className="secondary" onClick={addGoogleFlightsCountry}>
+            Add
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() =>
+              void persist({
+                ...settings,
+                googleFlights: {
+                  ...settings.googleFlights,
+                  countryCodes: [...DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES],
+                },
+              })
+            }
+          >
+            Reset
+          </button>
+        </div>
+        <div className="country-list">
+          {settings.googleFlights.countryCodes.map((country) => (
+            <span className="country-chip" key={country}>
+              {countrySearchValue(country) || country}
+              <button
+                type="button"
+                aria-label={`Remove ${country}`}
+                onClick={() => removeGoogleFlightsCountry(country)}
+              >
+                Remove
+              </button>
+            </span>
+          ))}
+        </div>
       </section>
 
       <section>
@@ -216,10 +360,6 @@ function Options(): React.ReactElement {
           />
           Opt out of affiliate routing when configured.
         </label>
-        <p className="note">
-          The public extension works locally. Hosted Mu Travel services are optional and configured only in dev builds
-          for now.
-        </p>
       </section>
 
       {__MU_TRAVEL_DEV_BUILD__ ? (
@@ -325,13 +465,12 @@ function Select(props: {
   );
 }
 
-function providerReliabilityCopy(score: number): { tone: "high" | "medium" | "low"; label: string; help: string } {
+function providerReliabilityCopy(score: number): { tone: "high" | "medium" | "low"; label: string; help?: string } {
   const confidence = providerConfidence(score);
   if (confidence === "high") {
     return {
       tone: "high",
       label: "Reliable",
-      help: "Usually opens the right route and date.",
     };
   }
   if (confidence === "medium") {

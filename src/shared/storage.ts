@@ -1,11 +1,16 @@
+import { DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES, normalizeGoogleFlightsCountryCodes } from "./googleFlightsBooking";
 import type { ExtensionSettings } from "./types";
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   hiddenProviderIds: [],
   preferredProviderIds: ["where-to-credit", "google-flights", "kayak"],
   preferredFrequentFlyerPrograms: [],
+  frequentFlyerProgramTiers: {},
   affiliateOptOut: false,
   debugMode: false,
+  googleFlights: {
+    countryCodes: [...DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES],
+  },
   airportHelper: {
     region: "",
     continent: "",
@@ -42,6 +47,10 @@ export async function patchSettings(patch: Partial<ExtensionSettings>): Promise<
       ...current.backend,
       ...(patch.backend || {}),
     },
+    googleFlights: {
+      ...current.googleFlights,
+      ...(patch.googleFlights || {}),
+    },
   });
   await saveSettings(next);
   return next;
@@ -51,6 +60,7 @@ export function mergeSettings(value: unknown): ExtensionSettings {
   const candidate = isRecord(value) ? value : {};
   const airportHelper = isRecord(candidate.airportHelper) ? candidate.airportHelper : {};
   const backend = isRecord(candidate.backend) ? candidate.backend : {};
+  const googleFlights = isRecord(candidate.googleFlights) ? candidate.googleFlights : {};
 
   return {
     hiddenProviderIds: stringArray(candidate.hiddenProviderIds, DEFAULT_SETTINGS.hiddenProviderIds),
@@ -59,8 +69,12 @@ export function mergeSettings(value: unknown): ExtensionSettings {
       candidate.preferredFrequentFlyerPrograms,
       DEFAULT_SETTINGS.preferredFrequentFlyerPrograms,
     ),
+    frequentFlyerProgramTiers: stringRecord(candidate.frequentFlyerProgramTiers),
     affiliateOptOut: booleanValue(candidate.affiliateOptOut, DEFAULT_SETTINGS.affiliateOptOut),
     debugMode: booleanValue(candidate.debugMode, DEFAULT_SETTINGS.debugMode),
+    googleFlights: {
+      countryCodes: googleFlightsCountryCodes(googleFlights.countryCodes),
+    },
     airportHelper: {
       region: stringValue(airportHelper.region, DEFAULT_SETTINGS.airportHelper.region),
       continent: stringValue(airportHelper.continent, DEFAULT_SETTINGS.airportHelper.continent),
@@ -80,6 +94,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function stringArray(value: unknown, fallback: string[]): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : fallback;
+}
+
+function googleFlightsCountryCodes(value: unknown): string[] {
+  if (Array.isArray(value) && value.length === 0) return [];
+  return normalizeGoogleFlightsCountryCodes(value, DEFAULT_SETTINGS.googleFlights.countryCodes);
+}
+
+function stringRecord(value: unknown): Record<string, string> {
+  if (!isRecord(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+  );
 }
 
 function booleanValue(value: unknown, fallback: boolean): boolean {

@@ -25,8 +25,15 @@ describe("settings", () => {
         hiddenProviderIds: null,
         preferredProviderIds: "kayak",
         preferredFrequentFlyerPrograms: ["Air Canada Aeroplan", 123, "British Airways Club"],
+        frequentFlyerProgramTiers: {
+          "United MileagePlus": "United MileagePlus Premier Gold",
+          bad: 123,
+        },
         affiliateOptOut: "yes",
         debugMode: 1,
+        googleFlights: {
+          countryCodes: ["jp", "MY", "not-a-country", null, "JP"],
+        },
         airportHelper: {
           region: 7,
           continent: 123,
@@ -43,11 +50,37 @@ describe("settings", () => {
     ).toEqual({
       ...DEFAULT_SETTINGS,
       preferredFrequentFlyerPrograms: ["Air Canada Aeroplan", "British Airways Club"],
+      frequentFlyerProgramTiers: {
+        "United MileagePlus": "United MileagePlus Premier Gold",
+      },
+      googleFlights: {
+        countryCodes: ["JP", "MY"],
+      },
       airportHelper: {
         ...DEFAULT_SETTINGS.airportHelper,
         countries: ["US"],
         exclusions: ["JFK"],
       },
     });
+  });
+
+  it("preserves an intentionally empty Google Flights country list", () => {
+    expect(
+      mergeSettings({
+        googleFlights: {
+          countryCodes: [],
+        },
+      }).googleFlights.countryCodes,
+    ).toEqual([]);
+  });
+
+  it("restores Google Flights country defaults when a stored list has no valid codes", () => {
+    expect(
+      mergeSettings({
+        googleFlights: {
+          countryCodes: ["bad", 123],
+        },
+      }).googleFlights.countryCodes,
+    ).toEqual(DEFAULT_SETTINGS.googleFlights.countryCodes);
   });
 });

@@ -6,7 +6,12 @@ The extension targets Manifest V3 and currently requests:
 
 - `storage`
 - `clipboardWrite`
+- `tabs`
 - required host access for `https://matrix.itasoftware.com/*`
+- required host access for Google Flights pages on `https://www.google.com/travel/flights*` and
+  `https://google.com/travel/flights*`
+- required host access for daily cached public USD FX rates from `https://cdn.jsdelivr.net/*` and
+  `https://api.fxratesapi.com/*`
 - optional host access for `https://travel.mu-travel.com/*`
 
 Dev builds also add required host access for `https://travel.mu-travel.com/*`, `http://localhost/*`, and
@@ -21,6 +26,21 @@ Dev builds also add required host access for `https://travel.mu-travel.com/*`, `
 - Supports manual JSON paste fallback.
 - Renders ranked provider links.
 - Provides airport-code filtering, insert, and copy actions.
+- Auto-submits ITA Matrix `/search` only when a Mu Travel handoff URL includes `muTravelAutoSearch=1` and the
+  prefilled form has enabled the native Search button.
+
+`src/content/googleFlightsContent.ts` runs on Google Flights pages so it can survive Google Flights SPA navigation. It
+only injects the visible panel on booking pages. It:
+
+- Parses visible booking options, prices, and direct-airline markers from the current booking page.
+- Lets the user start an opt-in country price comparison.
+- Builds ITA Matrix `/search?search=...&muTravelAutoSearch=1` handoff URLs from Google Flights booking-page data.
+- Asks the background service worker to open temporary inactive Google Flights tabs with different `gl` country codes
+  while preserving the current itinerary URL and currency.
+- Shows the cheapest offer, direct-airline offer, option count, and sparse-result retry status by country.
+
+`src/background/serviceWorker.ts` runs the country checks with bounded concurrency, retries sparse country results once
+when the baseline page is dense, and closes temporary tabs after parsing.
 
 ## Popup
 
@@ -37,7 +57,8 @@ Dev builds also add required host access for `https://travel.mu-travel.com/*`, `
 - `airports.ts`: airport filtering helpers.
 - `storage.ts`: settings defaults and persistence.
 - `backendClient.ts`: optional hosted metadata client with silent fallback.
-- `wheretocredit.ts`: compact offline earnings estimates plus outbound Where to Credit link helpers.
+- `currencyRates.ts`: public USD FX-rate fetch/cache helper for approximate revenue-based mileage conversion.
+- `mileageEarnings.ts`: compact offline earnings estimates plus outbound Where to Credit link helpers.
 
 ## Mileage Earning Snapshot
 
@@ -46,7 +67,8 @@ The extension bundles a compact generated snapshot at `src/shared/data/mileage-e
 It is used to show rough earning estimates such as:
 
 - distance x earning percentage
-- fare x revenue multiplier
+- fare x revenue multiplier, with non-USD base fares converted through a one-day cached public FX snapshot and labeled
+  as approximate
 - fixed miles
 
 This snapshot should be generated only from approved airline/program public earning charts, licensed datasets, or curated

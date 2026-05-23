@@ -185,12 +185,23 @@ button.secondary {
 
 .program-row {
   display: grid;
-  grid-template-columns: auto 28px 1fr;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 10px;
   min-height: 42px;
   padding: 9px 12px;
   border-bottom: 1px solid #e2e8f0;
+}
+
+.program-row.with-tier {
+  grid-template-columns: minmax(0, 1fr) 150px;
+}
+
+.program-choice {
+  display: grid;
+  grid-template-columns: auto 28px 1fr;
+  align-items: center;
+  gap: 10px;
   cursor: pointer;
 }
 
@@ -202,16 +213,21 @@ button.secondary {
   background: #f8fafc;
 }
 
-.program-row input {
+.program-choice input {
   min-height: 18px;
   width: 18px;
   padding: 0;
 }
 
-.program-row img {
+.program-choice img {
   width: 24px;
   height: 24px;
   object-fit: contain;
+}
+
+.program-row select {
+  min-height: 32px;
+  padding: 5px 8px;
 }
 
 .selected-summary {
@@ -228,6 +244,40 @@ button.secondary {
   background: #e2e8f0;
   color: #334155;
   padding: 3px 7px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.country-picker {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.country-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.country-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #f8fafc;
+  padding: 5px 8px 5px 10px;
+}
+
+.country-chip button {
+  border: 0;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #334155;
+  padding: 2px 7px;
   font: inherit;
   cursor: pointer;
 }
@@ -256,7 +306,8 @@ button.secondary {
 
 @media (max-width: 720px) {
   .grid,
-  .provider {
+  .provider,
+  .country-picker {
     grid-template-columns: 1fr;
   }
 }

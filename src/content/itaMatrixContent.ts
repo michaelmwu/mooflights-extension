@@ -9,16 +9,17 @@ import {
   uniqueAirportValues,
 } from "../shared/airports";
 import { fetchRemoteProviderMetadata } from "../shared/backendClient";
+import { loadUsdCurrencyRates, type UsdCurrencyRates } from "../shared/currencyRates";
 import { flattenSegments, parseItaBookingDetails, parseItineraryJson } from "../shared/itinerary";
-import { rankProviderLinks, summarizeItinerary } from "../shared/providers";
-import { loadSettings, saveSettings } from "../shared/storage";
-import type { ExtensionSettings, ItinerarySegment, NormalizedItinerary, RankedProviderLink } from "../shared/types";
 import {
   type EarningsEstimate,
   estimateEarnings,
   estimateSegmentEarnings,
   inspectWhereToCreditSegments,
-} from "../shared/wheretocredit";
+} from "../shared/mileageEarnings";
+import { rankProviderLinks, summarizeItinerary } from "../shared/providers";
+import { loadSettings, saveSettings } from "../shared/storage";
+import type { ExtensionSettings, ItinerarySegment, NormalizedItinerary, RankedProviderLink } from "../shared/types";
 
 type PanelState = {
   settings: ExtensionSettings | null;
@@ -30,7 +31,10 @@ type PanelState = {
   autoCaptureAttempted: boolean;
   captureInFlight: boolean;
   activeCaptureId: string;
+  bookingDetailsSignature: string;
   locationKey: string;
+  showAllMileagePrograms: boolean;
+  currencyRates: UsdCurrencyRates | null;
 };
 
 type ResultMileageSummary = {
@@ -56,8 +60,14 @@ const PANEL_ID = "mu-travel-flights-panel";
 const BRIDGE_ID = "mu-travel-flights-page-bridge";
 const MESSAGE_SOURCE = "mu-travel-flights";
 const AUTO_CAPTURE_DEBOUNCE_MS = 150;
+const AUTO_SEARCH_DEBOUNCE_MS = 250;
+const AUTO_SEARCH_TIMEOUT_MS = 15_000;
 let autoCaptureCheckTimer: number | undefined;
 let flightResultAnnotationTimer: number | undefined;
+let autoSearchTimer: number | undefined;
+let autoSearchStartedAt = 0;
+let autoSearchDone = false;
+let autoSearchLocationKey = "";
 
 const state: PanelState = {
   settings: null,
@@ -69,7 +79,10 @@ const state: PanelState = {
   autoCaptureAttempted: false,
   captureInFlight: false,
   activeCaptureId: "",
+  bookingDetailsSignature: "",
   locationKey: currentLocationKey(),
+  showAllMileagePrograms: false,
+  currencyRates: null,
 };
 
 const AIRPORT_REGION_OPTIONS = uniqueAirportRegions();
@@ -84,11 +97,18 @@ async function init(): Promise<void> {
   window.addEventListener("message", onBridgeMessage);
   state.settings = await loadSettings();
   state.airportPreview = airportCodes(state.settings.airportHelper).slice(0, 120);
+  void loadUsdCurrencyRates().then((rates) => {
+    state.currencyRates = rates;
+    if (state.itinerary) render();
+    annotateFlightResultsSoon();
+  });
   render();
   installAutoCaptureObserver();
   installFlightResultObserver();
+  installSearchAutoSubmitObserver();
   maybeAutoCapture();
   annotateFlightResultsSoon();
+  scheduleAutoSubmitMatrixSearch();
 }
 
 function render(): void {
@@ -107,7 +127,7 @@ function render(): void {
         </div>
       </header>
 
-      ${state.error ? `<p class="message error">${escapeHtml(state.error)}</p>` : `<p class="message">${escapeHtml(state.status)}</p>`}
+      ${renderStatusMessage()}
 
       ${isItineraryPage() ? renderItineraryPanel() : ""}
       ${isItineraryPage() ? renderLinksPanel() : ""}
@@ -120,6 +140,12 @@ function render(): void {
   `;
 
   bind(shadow);
+}
+
+function renderStatusMessage(): string {
+  if (state.error) return `<p class="message error">${escapeHtml(state.error)}</p>`;
+  if (isItineraryPage() && state.itinerary && state.status === "Itinerary captured.") return "";
+  return `<p class="message">${escapeHtml(state.status)}</p>`;
 }
 
 function renderItineraryPanel(): string {
@@ -175,6 +201,10 @@ function bind(root: ShadowRoot): void {
   });
   root.querySelector('[data-action="options"]')?.addEventListener("click", () => {
     void chrome.runtime.sendMessage({ command: "openOptionsPage" });
+  });
+  root.querySelector('[data-action="show-all-mileage"]')?.addEventListener("click", () => {
+    state.showAllMileagePrograms = true;
+    render();
   });
 
   root.querySelectorAll<HTMLSelectElement>("select[data-setting]").forEach((select) => {
@@ -232,21 +262,58 @@ function isActiveCapture(captureId: string, locationKey: string): boolean {
 async function parseAndSetItinerary(text: string, expectedLocationKey = state.locationKey): Promise<void> {
   try {
     const itinerary = parseItineraryJson(text);
-    const settings = state.settings || (await loadSettings());
-    if (expectedLocationKey !== state.locationKey) return;
-    state.settings = settings;
-    const remoteMetadata = await fetchRemoteProviderMetadata(settings);
-    if (expectedLocationKey !== state.locationKey) return;
-    state.itinerary = itinerary;
-    state.links = applyPageLinkOverrides(rankProviderLinks(itinerary, settings, remoteMetadata));
-    state.error = "";
-    setStatus("Itinerary captured.");
+    await setCapturedItinerary(itinerary, expectedLocationKey);
   } catch (error) {
     if (expectedLocationKey !== state.locationKey) return;
     state.itinerary = null;
     state.links = [];
     setError(`Could not parse ITA JSON: ${error instanceof Error ? error.message : String(error)}`);
   }
+}
+
+async function parseAndSetBookingDetails(value: unknown, expectedLocationKey = state.locationKey): Promise<void> {
+  try {
+    const signature = bookingDetailsSignature(value);
+    if (signature && signature === state.bookingDetailsSignature) return;
+    const itinerary = parseItaBookingDetails(value);
+    await setCapturedItinerary(itinerary, expectedLocationKey, signature);
+  } catch {
+    // Ignore non-itinerary Alkali payloads.
+  }
+}
+
+async function setCapturedItinerary(
+  itinerary: NormalizedItinerary,
+  expectedLocationKey = state.locationKey,
+  bookingSignature = "",
+): Promise<void> {
+  const settings = state.settings || (await loadSettings());
+  if (expectedLocationKey !== state.locationKey) return;
+  state.settings = settings;
+  const remoteMetadata = await fetchRemoteProviderMetadata(settings);
+  if (expectedLocationKey !== state.locationKey) return;
+  state.itinerary = itinerary;
+  state.links = applyPageLinkOverrides(rankProviderLinks(itinerary, settings, remoteMetadata));
+  state.error = "";
+  state.autoCaptureAttempted = true;
+  if (bookingSignature) state.bookingDetailsSignature = bookingSignature;
+  setStatus("Itinerary captured.");
+}
+
+function bookingDetailsSignature(value: unknown): string {
+  if (!value || typeof value !== "object") return "";
+  const data = value as {
+    id?: unknown;
+    displayTotal?: unknown;
+    itinerary?: { slices?: unknown };
+    tickets?: unknown;
+  };
+  return JSON.stringify({
+    id: typeof data.id === "string" ? data.id : "",
+    displayTotal: typeof data.displayTotal === "string" ? data.displayTotal : "",
+    slices: data.itinerary?.slices || null,
+    tickets: data.tickets || null,
+  });
 }
 
 function applyPageLinkOverrides(links: RankedProviderLink[]): RankedProviderLink[] {
@@ -371,6 +438,9 @@ function onBridgeMessage(event: MessageEvent): void {
     state.status = event.data.error || state.status;
   }
   if (event.data.type === "alkali-booking-details") {
+    if (isItineraryPage()) {
+      void parseAndSetBookingDetails(event.data.data);
+    }
     annotateBookingDetailsResult(event.data.data);
   }
 }
@@ -397,6 +467,15 @@ function installFlightResultObserver(): void {
   window.addEventListener("hashchange", annotateFlightResultsSoon);
 }
 
+function installSearchAutoSubmitObserver(): void {
+  const observer = new MutationObserver(() => {
+    if (isSearchPage()) scheduleAutoSubmitMatrixSearch();
+  });
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+  window.addEventListener("popstate", scheduleAutoSubmitMatrixSearch);
+  window.addEventListener("hashchange", scheduleAutoSubmitMatrixSearch);
+}
+
 function scheduleAutoCaptureCheck(): void {
   if (autoCaptureCheckTimer) window.clearTimeout(autoCaptureCheckTimer);
   autoCaptureCheckTimer = window.setTimeout(() => {
@@ -404,6 +483,63 @@ function scheduleAutoCaptureCheck(): void {
     resetForLocationChange();
     maybeAutoCapture(false);
   }, AUTO_CAPTURE_DEBOUNCE_MS);
+}
+
+function scheduleAutoSubmitMatrixSearch(): void {
+  if (autoSearchTimer) window.clearTimeout(autoSearchTimer);
+  autoSearchTimer = window.setTimeout(() => {
+    autoSearchTimer = undefined;
+    maybeAutoSubmitMatrixSearch();
+  }, AUTO_SEARCH_DEBOUNCE_MS);
+}
+
+function maybeAutoSubmitMatrixSearch(): void {
+  if (!shouldAutoSubmitMatrixSearch()) {
+    autoSearchStartedAt = 0;
+    autoSearchDone = false;
+    autoSearchLocationKey = "";
+    return;
+  }
+
+  const locationKey = currentLocationKey();
+  if (autoSearchLocationKey !== locationKey) {
+    autoSearchLocationKey = locationKey;
+    autoSearchStartedAt = Date.now();
+    autoSearchDone = false;
+  }
+  if (autoSearchDone) return;
+
+  const button = matrixSearchButton();
+  if (button && !isDisabledButton(button)) {
+    autoSearchDone = true;
+    setStatus("Searching prefilled Matrix form...");
+    button.click();
+    return;
+  }
+
+  if (Date.now() - autoSearchStartedAt < AUTO_SEARCH_TIMEOUT_MS) scheduleAutoSubmitMatrixSearch();
+}
+
+function shouldAutoSubmitMatrixSearch(): boolean {
+  if (!isSearchPage()) return false;
+  const url = new URL(window.location.href);
+  return url.searchParams.get("muTravelAutoSearch") === "1" && Boolean(url.searchParams.get("search"));
+}
+
+function matrixSearchButton(): HTMLButtonElement | null {
+  return (
+    document.querySelector<HTMLButtonElement>("button[type='submit'].search-button") ||
+    document.querySelector<HTMLButtonElement>("button[type='submit']")
+  );
+}
+
+function isDisabledButton(button: HTMLButtonElement): boolean {
+  return (
+    button.disabled ||
+    button.getAttribute("aria-disabled") === "true" ||
+    button.classList.contains("mat-mdc-button-disabled") ||
+    button.classList.contains("mdc-button--disabled")
+  );
 }
 
 function annotateFlightResultsSoon(): void {
@@ -434,7 +570,7 @@ function annotateFlightResults(): void {
       const index = segmentIndex;
       segmentIndex++;
       if (item.querySelector(".mu-mileage-earnings")) return;
-      const estimate = estimateSegmentEarnings(segment, itinerary, segments, index);
+      const estimate = estimateSegmentEarnings(segment, itinerary, segments, index, {}, state.currencyRates);
       const target = item.querySelector<HTMLElement>(".info-grid");
       if (!target) return;
       target.appendChild(renderResultMileageLine(segment, estimate));
@@ -586,7 +722,12 @@ function resultRowForGrid(grid: HTMLElement): HTMLTableRowElement | null {
 
 function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSummary {
   const preferredPrograms = state.settings?.preferredFrequentFlyerPrograms || [];
-  const estimates = estimateEarnings(itinerary, preferredPrograms);
+  const estimates = estimateEarnings(
+    itinerary,
+    preferredPrograms,
+    state.settings?.frequentFlyerProgramTiers || {},
+    state.currencyRates,
+  );
   const preferredProgramRanks = new Map(preferredPrograms.map((program, index) => [program, index]));
   const byProgram = new Map<string, { miles: number; formulas: MileageFormula[] }>();
   for (const estimate of estimates) {
@@ -603,13 +744,16 @@ function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSumm
   }
 
   const programs = Array.from(byProgram.entries())
-    .map(([program, value]) => ({
-      program,
-      miles: value.miles,
-      formulas: value.formulas,
-      preferenceRank: preferredProgramRanks.get(program) ?? Number.POSITIVE_INFINITY,
-      preferred: preferredProgramRanks.has(program),
-    }))
+    .map(([program, value]) => {
+      const preferenceRank = mileageProgramPreferenceRank(program, preferredProgramRanks);
+      return {
+        program,
+        miles: value.miles,
+        formulas: value.formulas,
+        preferenceRank,
+        preferred: preferenceRank !== Number.POSITIVE_INFINITY,
+      };
+    })
     .sort((left, right) => {
       if (left.preferred !== right.preferred) return left.preferred ? -1 : 1;
       if (left.preferenceRank !== right.preferenceRank) return left.preferenceRank - right.preferenceRank;
@@ -693,6 +837,15 @@ function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSumm
     title: "No mileage estimate available for this result.",
     status: "missing",
   };
+}
+
+function mileageProgramPreferenceRank(program: string, preferredProgramRanks: Map<string, number>): number {
+  const exact = preferredProgramRanks.get(program);
+  if (typeof exact === "number") return exact;
+  for (const [preferredProgram, rank] of preferredProgramRanks.entries()) {
+    if (program.startsWith(`${preferredProgram} `)) return rank;
+  }
+  return Number.POSITIVE_INFINITY;
 }
 
 function updateResultRowMileage(row: HTMLTableRowElement, summary: ResultMileageSummary): void {
@@ -831,9 +984,8 @@ function maybeAutoCapture(shouldResetLocation = true): void {
   if (shouldResetLocation) resetForLocationChange();
   if (state.itinerary || state.captureInFlight || state.autoCaptureAttempted) return;
   if (!isItineraryPage()) return;
-  if (!hasCopyJsonButton()) return;
   state.autoCaptureAttempted = true;
-  void captureItinerary(true);
+  setStatus("Waiting for ITA itinerary data...");
 }
 
 function resetForLocationChange(): void {
@@ -844,20 +996,16 @@ function resetForLocationChange(): void {
   state.links = [];
   state.error = "";
   state.status = "Ready";
+  state.showAllMileagePrograms = false;
   state.autoCaptureAttempted = false;
   state.captureInFlight = false;
   state.activeCaptureId = "";
+  state.bookingDetailsSignature = "";
   render();
 }
 
 function currentLocationKey(): string {
   return `${window.location.pathname}${window.location.search}${window.location.hash}`;
-}
-
-function hasCopyJsonButton(): boolean {
-  return Array.from(document.querySelectorAll("button, [role='button']")).some((candidate) =>
-    /copy\s+itinerary\s+as\s+json/i.test(candidate.textContent || ""),
-  );
 }
 
 function isItineraryPage(): boolean {
@@ -963,10 +1111,18 @@ function providerConfidenceCopy(link: RankedProviderLink): { label: string } {
 
 function renderMileageCredit(itinerary: NormalizedItinerary): string {
   const preferredProgramList = state.settings?.preferredFrequentFlyerPrograms || [];
-  const estimates = estimateEarnings(itinerary, preferredProgramList);
+  const estimates = estimateEarnings(
+    itinerary,
+    preferredProgramList,
+    state.settings?.frequentFlyerProgramTiers || {},
+    state.currencyRates,
+  );
   const preferredPrograms = new Set(preferredProgramList);
   const visibleEstimates =
-    preferredPrograms.size > 0 ? estimates.filter((estimate) => preferredPrograms.has(estimate.program)) : estimates;
+    preferredPrograms.size > 0 && !state.showAllMileagePrograms
+      ? estimates.filter((estimate) => matchesPreferredMileageProgram(estimate.program, preferredPrograms))
+      : estimates;
+  const sortedVisibleEstimates = sortMileageEstimatesByPreference(visibleEstimates, preferredProgramList);
   const hiddenEstimateCount = estimates.length - visibleEstimates.length;
   const insights = inspectWhereToCreditSegments(itinerary);
   const estimatedKeys = new Set(estimates.map((estimate) => creditSegmentKey(estimate.segment, estimate.bookingClass)));
@@ -977,26 +1133,21 @@ function renderMileageCredit(itinerary: NormalizedItinerary): string {
   return `
     <div class="segment-links">
       <strong>Miles credit</strong>
-      ${
-        visibleEstimates.length
-          ? visibleEstimates
-              .map(
-                (estimate) => `
-                  <a href="${escapeHtml(estimate.url)}" target="_blank" rel="noopener noreferrer" class="earning">
-                    <span>${escapeHtml(`${estimate.segment.origin}-${estimate.segment.destination} ${estimate.segment.fareCarrier || estimate.segment.carrier} ${estimate.bookingClass}`)}</span>
-                    <em>${escapeHtml(estimate.program)}</em>
-                    <small>${typeof estimate.estimatedMiles === "number" ? `${estimate.estimatedMiles.toLocaleString()} miles · ` : ""}${escapeHtml(estimate.formula)}</small>
-                  </a>
-                `,
-              )
-              .join("")
-          : ""
-      }
+      ${sortedVisibleEstimates.length ? renderMileageEstimateEntries(sortedVisibleEstimates, preferredProgramList) : ""}
       ${
         hiddenEstimateCount > 0 && visibleEstimates.length === 0
           ? `<div class="earning notice">
               <span>No preferred program match</span>
               <small>Local top earning rows exist, but they are not in your preferred programs.</small>
+              <button type="button" class="inline-button" data-action="show-all-mileage">Show all</button>
+            </div>`
+          : ""
+      }
+      ${
+        hiddenEstimateCount > 0 && visibleEstimates.length > 0
+          ? `<div class="earning more-earnings">
+              <small>${hiddenEstimateCount.toLocaleString()} more earning row(s) hidden by preferred programs.</small>
+              <button type="button" class="inline-button" data-action="show-all-mileage">Show all</button>
             </div>`
           : ""
       }
@@ -1013,6 +1164,210 @@ function renderMileageCredit(itinerary: NormalizedItinerary): string {
         .join("")}
     </div>
   `;
+}
+
+function sortMileageEstimatesByPreference(
+  estimates: EarningsEstimate[],
+  preferredProgramList: string[],
+): EarningsEstimate[] {
+  const preferredProgramRanks = new Map(preferredProgramList.map((program, index) => [program, index]));
+  return [...estimates].sort((left, right) => {
+    const leftRank = mileageProgramPreferenceRank(left.program, preferredProgramRanks);
+    const rightRank = mileageProgramPreferenceRank(right.program, preferredProgramRanks);
+    if (leftRank !== rightRank) return leftRank - rightRank;
+    return (
+      creditSegmentKey(left.segment, left.bookingClass).localeCompare(
+        creditSegmentKey(right.segment, right.bookingClass),
+      ) ||
+      (right.estimatedMiles ?? -1) - (left.estimatedMiles ?? -1) ||
+      left.program.localeCompare(right.program)
+    );
+  });
+}
+
+function renderMileageEstimateEntries(estimates: EarningsEstimate[], preferredProgramList: string[]): string {
+  const bySegment = new Map<string, EarningsEstimate[]>();
+  for (const estimate of estimates) {
+    const key = creditSegmentKey(estimate.segment, estimate.bookingClass);
+    bySegment.set(key, [...(bySegment.get(key) || []), estimate]);
+  }
+
+  if (bySegment.size <= 1) return renderMileageEstimateSegmentEntries(estimates, preferredProgramList, false);
+  return Array.from(bySegment.values())
+    .map((segmentEstimates) => {
+      const firstEstimate = segmentEstimates[0];
+      return `
+        <div class="earning segment-group">
+          ${firstEstimate ? `<span>${escapeHtml(mileageSegmentLabel(firstEstimate))}</span>` : ""}
+          ${renderMileageEstimateSegmentEntries(segmentEstimates, preferredProgramList, false)}
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function renderMileageEstimateSegmentEntries(
+  estimates: EarningsEstimate[],
+  preferredProgramList: string[],
+  showSegmentLabel: boolean,
+): string {
+  const tierGroups = mileageTierGroups(estimates, preferredProgramList);
+  const renderedGroups = new Set<string>();
+  return estimates
+    .map((estimate) => {
+      const groupKey = mileageTierGroupKey(estimate, preferredProgramList);
+      if (!groupKey) return renderMileageEstimateEntry(estimate, showSegmentLabel);
+      const group = tierGroups.get(groupKey);
+      if (!group || group.estimates.length <= 1) return renderMileageEstimateEntry(estimate, showSegmentLabel);
+      if (renderedGroups.has(groupKey)) return "";
+      renderedGroups.add(groupKey);
+      return renderMileageTierGroup(group, showSegmentLabel);
+    })
+    .join("");
+}
+
+function renderMileageEstimateEntry(estimate: EarningsEstimate, showSegmentLabel: boolean): string {
+  return `
+    <a href="${escapeHtml(estimate.url)}" target="_blank" rel="noopener noreferrer" class="earning">
+      ${showSegmentLabel ? `<span>${escapeHtml(mileageSegmentLabel(estimate))}</span>` : ""}
+      <em>${escapeHtml(estimate.program)}</em>
+      <small>${typeof estimate.estimatedMiles === "number" ? `${estimate.estimatedMiles.toLocaleString()} miles · ` : ""}${escapeHtml(estimate.formula)}</small>
+    </a>
+  `;
+}
+
+function renderMileageTierGroup(
+  group: {
+    parentProgram: string;
+    segmentLabel: string;
+    url: string;
+    estimates: EarningsEstimate[];
+  },
+  showSegmentLabel: boolean,
+): string {
+  const estimates = sortTierEstimates(group.parentProgram, group.estimates);
+  const parsedFormulas = estimates.map((estimate) => parseRevenueMileageFormula(estimate.formula));
+  const baseFare = commonValue(estimates.map((estimate) => estimate.displayFare || ""));
+  const isApproximate = estimates.some((estimate) => estimate.approximate);
+  return `
+    <div class="earning tier-group">
+      ${showSegmentLabel ? `<span>${escapeHtml(group.segmentLabel)}</span>` : ""}
+      <a href="${escapeHtml(group.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(group.parentProgram)}</a>
+      ${baseFare ? `<small>Base fare ${escapeHtml(baseFare)}</small>` : ""}
+      ${isApproximate ? `<small>FX conversion is approximate.</small>` : ""}
+      <table>
+        <tbody>
+          ${estimates
+            .map((estimate, index) => {
+              const parsedFormula = parsedFormulas[index];
+              return `
+                <tr title="${escapeHtml(estimate.formula)}">
+                  <th>${escapeHtml(compactTierName(group.parentProgram, estimate.program))}</th>
+                  <td>${escapeHtml(typeof estimate.estimatedMiles === "number" ? estimate.estimatedMiles.toLocaleString() : "")}</td>
+                  <td>${escapeHtml(parsedFormula?.rate || estimate.formula)}</td>
+                </tr>
+              `;
+            })
+            .join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function sortTierEstimates(parentProgram: string, estimates: EarningsEstimate[]): EarningsEstimate[] {
+  return [...estimates].sort((left, right) => {
+    const leftRank = mileageTierDisplayRank(parentProgram, left.program);
+    const rightRank = mileageTierDisplayRank(parentProgram, right.program);
+    if (leftRank !== rightRank) return leftRank - rightRank;
+    return compactTierName(parentProgram, left.program).localeCompare(compactTierName(parentProgram, right.program));
+  });
+}
+
+function mileageTierDisplayRank(parentProgram: string, program: string): number {
+  const label = compactTierName(parentProgram, program);
+  const ranks = new Map([
+    ["Member", 0],
+    ["Silver", 1],
+    ["Gold", 2],
+    ["Platinum", 3],
+    ["Titanium", 4],
+    ["1K", 5],
+  ]);
+  return ranks.get(label) ?? 100;
+}
+
+function parseRevenueMileageFormula(formula: string): { baseFare: string; rate: string } | null {
+  const match = formula.match(/^(.+\s[A-Z]{3})\s+x\s+([\d.]+\s+miles\/[A-Z]{3})(?:\s+\(.+\))?$/);
+  if (!match) return null;
+  return {
+    baseFare: match[1]?.trim() || "",
+    rate: match[2]?.trim() || "",
+  };
+}
+
+function commonValue(values: string[]): string {
+  const nonEmptyValues = values.filter(Boolean);
+  if (nonEmptyValues.length === 0) return "";
+  return nonEmptyValues.every((value) => value === nonEmptyValues[0]) ? nonEmptyValues[0] : "";
+}
+
+function mileageTierGroups(
+  estimates: EarningsEstimate[],
+  preferredProgramList: string[],
+): Map<string, { parentProgram: string; segmentLabel: string; url: string; estimates: EarningsEstimate[] }> {
+  const groups = new Map<
+    string,
+    { parentProgram: string; segmentLabel: string; url: string; estimates: EarningsEstimate[] }
+  >();
+  for (const estimate of estimates) {
+    const groupKey = mileageTierGroupKey(estimate, preferredProgramList);
+    if (!groupKey) continue;
+    const parentProgram = mileageTierParentProgram(estimate.program, preferredProgramList) || estimate.program;
+    const current = groups.get(groupKey) || {
+      parentProgram,
+      segmentLabel: mileageSegmentLabel(estimate),
+      url: estimate.url,
+      estimates: [],
+    };
+    current.estimates.push(estimate);
+    groups.set(groupKey, current);
+  }
+  return groups;
+}
+
+function mileageTierGroupKey(estimate: EarningsEstimate, preferredProgramList: string[]): string {
+  const parentProgram = mileageTierParentProgram(estimate.program, preferredProgramList);
+  if (!parentProgram) return "";
+  return `${parentProgram}:${creditSegmentKey(estimate.segment, estimate.bookingClass)}`;
+}
+
+function mileageTierParentProgram(program: string, preferredProgramList: string[]): string {
+  for (const preferredProgram of preferredProgramList) {
+    if (program !== preferredProgram && program.startsWith(`${preferredProgram} `)) return preferredProgram;
+  }
+  return "";
+}
+
+function mileageSegmentLabel(estimate: EarningsEstimate): string {
+  return `${estimate.segment.origin}-${estimate.segment.destination} ${estimate.segment.fareCarrier || estimate.segment.carrier} ${estimate.bookingClass}`;
+}
+
+function compactTierName(parentProgram: string, program: string): string {
+  return program
+    .slice(parentProgram.length)
+    .trim()
+    .replace(/^Premier\s+/i, "")
+    .replace(/^Status\s+/i, "")
+    .trim();
+}
+
+function matchesPreferredMileageProgram(program: string, preferredPrograms: Set<string>): boolean {
+  if (preferredPrograms.has(program)) return true;
+  for (const preferredProgram of preferredPrograms) {
+    if (program.startsWith(`${preferredProgram} `)) return true;
+  }
+  return false;
 }
 
 function creditSegmentKey(
@@ -1114,10 +1469,22 @@ function styles(): string {
     .links { display: grid; gap: 8px; margin-top: 10px; }
     .segment-links { display: grid; gap: 6px; margin-top: 10px; padding: 8px; border-radius: 6px; background: #f0fdfa; }
     .segment-links .earning { display: grid; gap: 2px; }
+    .segment-links .tier-group { gap: 5px; }
+    .segment-links .segment-group { gap: 5px; padding-top: 4px; border-top: 1px solid #ccfbf1; }
+    .segment-links .segment-group:first-of-type { padding-top: 0; border-top: 0; }
     .segment-links .notice { padding: 6px; border-radius: 6px; background: #fff7ed; color: #7c2d12; }
+    .segment-links .more-earnings { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 4px; border-top: 1px solid #ccfbf1; }
+    .segment-links .more-earnings small { min-width: 0; }
     .segment-links em { font-style: normal; color: #115e59; }
     .segment-links a { color: #0f766e; text-decoration: none; }
     .segment-links a:hover { text-decoration: underline; }
+    .segment-links table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .segment-links th, .segment-links td { padding: 2px 4px 2px 0; text-align: left; vertical-align: top; }
+    .segment-links th { width: 62px; color: #115e59; font-weight: 650; }
+    .segment-links td:nth-child(2) { width: 64px; color: #162033; font-weight: 650; text-align: right; }
+    .segment-links td:nth-child(3) { color: #64748b; }
+    .segment-links .inline-button { width: fit-content; margin-top: 4px; border-color: #fed7aa; background: #ffffff; color: #9a3412; padding: 4px 7px; white-space: nowrap; }
+    .segment-links .more-earnings .inline-button { flex: 0 0 auto; margin-top: 0; }
     .provider { display: grid; gap: 2px; padding: 8px; border: 1px solid #cbd5e1; border-left-width: 4px; border-radius: 6px; color: inherit; text-decoration: none; }
     .provider.high { border-left-color: #059669; }
     .provider.medium { border-left-color: #d97706; }

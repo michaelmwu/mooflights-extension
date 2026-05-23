@@ -116,11 +116,114 @@ describe("ITA itinerary parsing", () => {
     expect(itinerary.slices[0]?.segments[0]).toMatchObject({
       fareCarrier: "AA",
       fareBasis: "FIRSTFARE",
+      farePrice: undefined,
     });
     expect(itinerary.slices[1]?.segments[0]).toMatchObject({
       fareCarrier: "BA",
       fareBasis: "SECONDFARE",
     });
+  });
+
+  it("keeps ITA adjusted fare price on the matching segment", () => {
+    const itinerary = parseItaBookingDetails({
+      displayTotal: "USD 600.00",
+      passengerCount: 1,
+      itinerary: {
+        slices: [repeatedSlice("2026-08-10T10:00:00", "100")],
+      },
+      tickets: [
+        {
+          pricings: [
+            {
+              fares: [
+                { ...(repeatedFare("UA", "SNAA0BC") as Record<string, unknown>), displayAdjustedPrice: "USD 450.00" },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(itinerary.slices[0]?.segments[0]).toMatchObject({
+      fareCarrier: "UA",
+      fareBasis: "SNAA0BC",
+      farePrice: 450,
+      fareComponentKey: "ticket:0:pricing:0:fare:0",
+    });
+  });
+
+  it("keeps the same fare component key on legs generated from one ITA fare component", () => {
+    const itinerary = parseItaBookingDetails({
+      displayTotal: "USD 600.00",
+      passengerCount: 1,
+      itinerary: {
+        slices: [
+          {
+            origin: { code: "TPE" },
+            destination: { code: "SFO" },
+            segments: [
+              {
+                origin: { code: "TPE" },
+                destination: { code: "SFO" },
+                carrier: { code: "UA" },
+                flight: { number: 872 },
+                bookingInfos: [{ bookingCode: "S", cabin: "COACH" }],
+                legs: [
+                  {
+                    origin: { code: "TPE" },
+                    destination: { code: "NRT" },
+                  },
+                  {
+                    origin: { code: "NRT" },
+                    destination: { code: "SFO" },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      tickets: [
+        {
+          pricings: [
+            {
+              fares: [
+                {
+                  key: "0/0",
+                  carrier: "UA",
+                  code: "SNAA0BC",
+                  displayAdjustedPrice: "USD 450.00",
+                  bookingInfos: [
+                    {
+                      bookingCode: "S",
+                      segment: {
+                        origin: "TPE",
+                        destination: "SFO",
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(itinerary.slices[0]?.segments).toEqual([
+      expect.objectContaining({
+        origin: "TPE",
+        destination: "NRT",
+        farePrice: 450,
+        fareComponentKey: "ticket:0:pricing:0:fare:0/0",
+      }),
+      expect.objectContaining({
+        origin: "NRT",
+        destination: "SFO",
+        farePrice: 450,
+        fareComponentKey: "ticket:0:pricing:0:fare:0/0",
+      }),
+    ]);
   });
 
   it("keeps ITA carrier display names when present", () => {

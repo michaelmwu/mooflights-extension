@@ -1,3 +1,4 @@
+import { buildValidatedWhereToCreditUrl } from "./mileageEarnings";
 import type {
   ExtensionSettings,
   ItinerarySegment,
@@ -6,7 +7,6 @@ import type {
   RankedProviderLink,
   RemoteProviderMetadata,
 } from "./types";
-import { buildValidatedWhereToCreditUrl } from "./wheretocredit";
 
 export const PROVIDER_CONFIDENCE_THRESHOLDS = {
   high: 85,

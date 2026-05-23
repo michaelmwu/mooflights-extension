@@ -15,10 +15,21 @@
     {
       "matches": ["https://matrix.itasoftware.com/*"],
       "js": ["content/itaMatrixContent.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://www.google.com/travel/flights*", "https://google.com/travel/flights*"],
+      "js": ["content/googleFlightsContent.js"],
       "run_at": "document_idle"
     }
   ],
-  "host_permissions": ["https://matrix.itasoftware.com/*"],
-  "permissions": ["storage", "clipboardWrite", "permissions"],
+  "host_permissions": [
+    "https://matrix.itasoftware.com/*",
+    "https://www.google.com/travel/flights*",
+    "https://google.com/travel/flights*",
+    "https://cdn.jsdelivr.net/*",
+    "https://api.fxratesapi.com/*"
+  ],
+  "permissions": ["storage", "clipboardWrite", "permissions", "tabs"],
   "options_page": "options/index.html"
 }
