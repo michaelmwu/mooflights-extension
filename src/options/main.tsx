@@ -136,7 +136,9 @@ function Options(): React.ReactElement {
                     <span className="status-dot" aria-hidden="true" />
                     {reliability.label} · {categoryLabel(provider.category)}
                   </small>
-                  <small>{provider.knownIssues || reliability.help}</small>
+                  {provider.knownIssues || reliability.help ? (
+                    <small>{provider.knownIssues || reliability.help}</small>
+                  ) : null}
                 </div>
                 <label>
                   <input
@@ -358,10 +360,6 @@ function Options(): React.ReactElement {
           />
           Opt out of affiliate routing when configured.
         </label>
-        <p className="note">
-          The public extension works locally. Hosted Mu Travel services are optional and configured only in dev builds
-          for now.
-        </p>
       </section>
 
       {__MU_TRAVEL_DEV_BUILD__ ? (
@@ -467,13 +465,12 @@ function Select(props: {
   );
 }
 
-function providerReliabilityCopy(score: number): { tone: "high" | "medium" | "low"; label: string; help: string } {
+function providerReliabilityCopy(score: number): { tone: "high" | "medium" | "low"; label: string; help?: string } {
   const confidence = providerConfidence(score);
   if (confidence === "high") {
     return {
       tone: "high",
       label: "Reliable",
-      help: "Usually opens the right route and date.",
     };
   }
   if (confidence === "medium") {
