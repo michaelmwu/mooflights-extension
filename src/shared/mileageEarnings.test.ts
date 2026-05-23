@@ -582,6 +582,53 @@ describe("Mileage earning estimates", () => {
     ]);
   });
 
+  it("displays the selected Air Canada Aeroplan revenue tier", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "one-way",
+      currency: "CAD",
+      totalPrice: 237,
+      passengerCount: 1,
+      carriers: ["UA"],
+      fareBases: ["NNAA0BC"],
+      slices: [
+        {
+          origin: "HNL",
+          destination: "SFO",
+          segments: [
+            {
+              origin: "HNL",
+              destination: "SFO",
+              carrier: "UA",
+              bookingClass: "N",
+              farePrice: 237,
+              cabin: "economy",
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(
+      estimateEarnings(itinerary, ["Air Canada Aeroplan"], {
+        "Air Canada Aeroplan": "Air Canada Aeroplan 25K",
+      })
+        .filter((estimate) => estimate.program.startsWith("Air Canada Aeroplan"))
+        .map((estimate) => ({
+          program: estimate.program,
+          miles: estimate.estimatedMiles,
+          formula: estimate.formula,
+        })),
+    ).toEqual([
+      {
+        program: "Air Canada Aeroplan 25K",
+        miles: 474,
+        formula: "237 CAD x 2 miles/CAD",
+      },
+    ]);
+  });
+
   it("apportions one fare component across multiple legs before revenue mileage math", () => {
     const itinerary: NormalizedItinerary = {
       source: "ita-matrix",

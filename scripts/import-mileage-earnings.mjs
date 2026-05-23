@@ -31,12 +31,17 @@ await writeFile(outPath, `${JSON.stringify(compact)}\n`);
 function compactRows(rows) {
   const seen = new Set();
   const compactRows = [];
+  const hasAeroplanRevenueRows = rows.some((row) => {
+    const base = row.base || {};
+    return normalizedProgram(row.program) === "Air Canada Aeroplan" && isAeroplanRevenueValue(base.value);
+  });
   for (const row of rows) {
     const base = row.base || {};
     const value = typeof base.value === "string" ? base.value : null;
     const percent = typeof base.percent === "number" ? base.percent : null;
     const program = normalizedProgram(row.program);
     if (!program || (!value && percent === null)) continue;
+    if (program === "Air Canada Aeroplan" && hasAeroplanRevenueRows && !isAeroplanRevenueValue(value)) continue;
     if (percent === 0 || value === "0%" || value === "0 Miles") continue;
     const key = [program, percent ?? "", value ?? ""].join("|");
     if (seen.has(key)) continue;
@@ -49,6 +54,10 @@ function compactRows(rows) {
 function normalizedProgram(program) {
   if (program === "Air Canada Aeroplan 2026") return "Air Canada Aeroplan";
   return program || "";
+}
+
+function isAeroplanRevenueValue(value) {
+  return typeof value === "string" && /\bMiles\/CAD\b/i.test(value);
 }
 
 function programIndex(program) {

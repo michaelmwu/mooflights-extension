@@ -379,11 +379,42 @@ function earningRows(
   );
   for (const row of [...booking.redeemable_miles, ...supplementalRows]) {
     if (supplementalTierParents.has(row.program)) continue;
-    if (!matchesDisplayedProgramTier(row.program, programTiers)) continue;
-    rows.set(earningRowKey(row), row);
+    const displayRow = displayEarningRowForTier(row, programTiers);
+    if (!matchesDisplayedProgramTier(displayRow.program, programTiers)) continue;
+    rows.set(earningRowKey(displayRow), displayRow);
   }
 
   return Array.from(rows.values());
+}
+
+function displayEarningRowForTier(
+  row: CompactProgramEarning,
+  programTiers: MileageProgramTierPreference,
+): CompactProgramEarning {
+  if (row.program !== "Air Canada Aeroplan" || !isAeroplanRevenueValue(row.value)) return row;
+  const tierProgram =
+    selectedProgramTierProgram("Air Canada Aeroplan", programTiers) || lowestProgramTierProgram("Air Canada Aeroplan");
+  return {
+    program: tierProgram || row.program,
+    percent: null,
+    value: `${aeroplanRevenueMultiplier(tierProgram)} Miles/CAD`,
+  };
+}
+
+function aeroplanRevenueMultiplier(tierProgram: string): number {
+  const multipliers = new Map([
+    ["Air Canada Aeroplan Member", 1],
+    ["Air Canada Aeroplan 25K", 2],
+    ["Air Canada Aeroplan 35K", 3],
+    ["Air Canada Aeroplan 50K", 4],
+    ["Air Canada Aeroplan 75K", 5],
+    ["Air Canada Aeroplan Super Elite", 6],
+  ]);
+  return multipliers.get(tierProgram) || 1;
+}
+
+function isAeroplanRevenueValue(value: string | null): boolean {
+  return /\bMiles\/CAD\b/i.test(value || "");
 }
 
 function earningRowKey(row: CompactProgramEarning): string {
