@@ -12,6 +12,12 @@ The first MVP helps with:
 
 The extension is AGPL-3.0-only open-source software owned by Mu Travel LLC. The optional hosted Mu Travel backend is separate closed-source infrastructure.
 
+## ITA Matrix Mileage Earnings
+
+On ITA Matrix itinerary pages, the extension estimates mileage earning from the captured booking class, fare, and local earning snapshot. Revenue-based programs can use cached FX estimates when ITA prices the fare in a non-USD currency.
+
+![Mu Travel ITA Matrix mileage earnings panel](./docs/assets/ita-matrix-mileage-earnings.png)
+
 ## Google Flights Country Comparison
 
 On Google Flights booking pages, the extension can compare booking offers across your selected country markets while keeping the displayed currency fixed. This helps surface cases where the same itinerary is cheaper from another country page, while still showing the direct airline price for comparison.
