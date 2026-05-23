@@ -200,7 +200,7 @@ function bind(root: ShadowRoot): void {
     void copyAirportPreview("Copied airport codes.");
   });
   root.querySelector('[data-action="options"]')?.addEventListener("click", () => {
-    void chrome.runtime.sendMessage({ command: "openOptionsPage" });
+    sendRuntimeMessage({ command: "openOptionsPage" });
   });
   root.querySelector('[data-action="show-all-mileage"]')?.addEventListener("click", () => {
     state.showAllMileagePrograms = true;
@@ -393,11 +393,29 @@ function insertAirportCodes(codes: string[]): boolean {
 
 function injectPageBridge(): void {
   if (document.getElementById(BRIDGE_ID)) return;
+  const bridgeUrl = runtimeUrl("content/itaMatrixPageBridge.js");
+  if (!bridgeUrl) return;
   const script = document.createElement("script");
   script.id = BRIDGE_ID;
-  script.src = chrome.runtime.getURL("content/itaMatrixPageBridge.js");
+  script.src = bridgeUrl;
   script.async = false;
   (document.head || document.documentElement).appendChild(script);
+}
+
+function runtimeUrl(path: string): string | null {
+  try {
+    return chrome.runtime.getURL(path);
+  } catch {
+    return null;
+  }
+}
+
+function sendRuntimeMessage(message: unknown): void {
+  try {
+    void chrome.runtime.sendMessage(message);
+  } catch {
+    // Content scripts can outlive their extension context after reload/update.
+  }
 }
 
 function captureViaPageBridge(): Promise<string> {

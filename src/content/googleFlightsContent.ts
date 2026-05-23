@@ -378,8 +378,16 @@ function render(): void {
     window.open(matrixSearch.matrixUrl, "_blank", "noopener,noreferrer");
   });
   shadow.querySelector('[data-action="open-options"]')?.addEventListener("click", () => {
-    void chrome.runtime.sendMessage({ command: "openOptionsPage" });
+    sendRuntimeMessage({ command: "openOptionsPage" });
   });
+}
+
+function sendRuntimeMessage(message: unknown): void {
+  try {
+    void chrome.runtime.sendMessage(message);
+  } catch {
+    // Content scripts can outlive their extension context after reload/update.
+  }
 }
 
 function renderBaseline(result: GoogleFlightsCountryResult): string {

@@ -1,6 +1,6 @@
 # Mu Travel Flights Extension
 
-Offline-first Chrome/Arc extension for ITA Matrix power users.
+Offline-first Chrome extension for ITA Matrix power users.
 
 The first MVP helps with:
 

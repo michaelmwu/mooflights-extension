@@ -30,6 +30,6 @@
     "https://cdn.jsdelivr.net/*",
     "https://api.fxratesapi.com/*"
   ],
-  "permissions": ["storage", "clipboardWrite", "permissions", "tabs"],
+  "permissions": ["storage", "clipboardWrite", "tabs"],
   "options_page": "options/index.html"
 }
