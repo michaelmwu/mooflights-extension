@@ -186,13 +186,8 @@ async function captureJson(requestId: string): Promise<void> {
     window.clearTimeout(timeoutId);
     restoreWriteText(clipboard, originalWriteText);
     postResult({ requestId, ok: true, data });
-    try {
-      return originalWriteText(data).then(() => {
-        dismissCopyConfirmationSoon();
-      });
-    } catch (error) {
-      return Promise.reject(error);
-    }
+    dismissCopyConfirmationSoon();
+    return Promise.resolve();
   };
 
   try {

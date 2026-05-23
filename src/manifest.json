@@ -15,7 +15,7 @@
     {
       "matches": ["https://matrix.itasoftware.com/*"],
       "js": ["content/itaMatrixContent.js"],
-      "run_at": "document_idle"
+      "run_at": "document_start"
     },
     {
       "matches": ["https://www.google.com/travel/flights/booking*", "https://google.com/travel/flights/booking*"],

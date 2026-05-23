@@ -246,21 +246,38 @@ function isActiveCapture(captureId: string, locationKey: string): boolean {
 async function parseAndSetItinerary(text: string, expectedLocationKey = state.locationKey): Promise<void> {
   try {
     const itinerary = parseItineraryJson(text);
-    const settings = state.settings || (await loadSettings());
-    if (expectedLocationKey !== state.locationKey) return;
-    state.settings = settings;
-    const remoteMetadata = await fetchRemoteProviderMetadata(settings);
-    if (expectedLocationKey !== state.locationKey) return;
-    state.itinerary = itinerary;
-    state.links = applyPageLinkOverrides(rankProviderLinks(itinerary, settings, remoteMetadata));
-    state.error = "";
-    setStatus("Itinerary captured.");
+    await setCapturedItinerary(itinerary, expectedLocationKey);
   } catch (error) {
     if (expectedLocationKey !== state.locationKey) return;
     state.itinerary = null;
     state.links = [];
     setError(`Could not parse ITA JSON: ${error instanceof Error ? error.message : String(error)}`);
   }
+}
+
+async function parseAndSetBookingDetails(value: unknown, expectedLocationKey = state.locationKey): Promise<void> {
+  try {
+    const itinerary = parseItaBookingDetails(value);
+    await setCapturedItinerary(itinerary, expectedLocationKey);
+  } catch {
+    // Ignore non-itinerary Alkali payloads.
+  }
+}
+
+async function setCapturedItinerary(
+  itinerary: NormalizedItinerary,
+  expectedLocationKey = state.locationKey,
+): Promise<void> {
+  const settings = state.settings || (await loadSettings());
+  if (expectedLocationKey !== state.locationKey) return;
+  state.settings = settings;
+  const remoteMetadata = await fetchRemoteProviderMetadata(settings);
+  if (expectedLocationKey !== state.locationKey) return;
+  state.itinerary = itinerary;
+  state.links = applyPageLinkOverrides(rankProviderLinks(itinerary, settings, remoteMetadata));
+  state.error = "";
+  state.autoCaptureAttempted = true;
+  setStatus("Itinerary captured.");
 }
 
 function applyPageLinkOverrides(links: RankedProviderLink[]): RankedProviderLink[] {
@@ -385,6 +402,9 @@ function onBridgeMessage(event: MessageEvent): void {
     state.status = event.data.error || state.status;
   }
   if (event.data.type === "alkali-booking-details") {
+    if (isItineraryPage() && !state.itinerary) {
+      void parseAndSetBookingDetails(event.data.data);
+    }
     annotateBookingDetailsResult(event.data.data);
   }
 }
@@ -923,9 +943,8 @@ function maybeAutoCapture(shouldResetLocation = true): void {
   if (shouldResetLocation) resetForLocationChange();
   if (state.itinerary || state.captureInFlight || state.autoCaptureAttempted) return;
   if (!isItineraryPage()) return;
-  if (!hasCopyJsonButton()) return;
   state.autoCaptureAttempted = true;
-  void captureItinerary(true);
+  setStatus("Waiting for ITA itinerary data...");
 }
 
 function resetForLocationChange(): void {
@@ -945,12 +964,6 @@ function resetForLocationChange(): void {
 
 function currentLocationKey(): string {
   return `${window.location.pathname}${window.location.search}${window.location.hash}`;
-}
-
-function hasCopyJsonButton(): boolean {
-  return Array.from(document.querySelectorAll("button, [role='button']")).some((candidate) =>
-    /copy\s+itinerary\s+as\s+json/i.test(candidate.textContent || ""),
-  );
 }
 
 function isItineraryPage(): boolean {
