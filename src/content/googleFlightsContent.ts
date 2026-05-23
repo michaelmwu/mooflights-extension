@@ -1,3 +1,4 @@
+import { sendRuntimeMessage } from "../shared/chromeRuntime";
 import {
   DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES,
   type GoogleFlightsCountryResult,
@@ -378,7 +379,7 @@ function render(): void {
     window.open(matrixSearch.matrixUrl, "_blank", "noopener,noreferrer");
   });
   shadow.querySelector('[data-action="open-options"]')?.addEventListener("click", () => {
-    void chrome.runtime.sendMessage({ command: "openOptionsPage" });
+    sendRuntimeMessage({ command: "openOptionsPage" });
   });
 }
 

@@ -9,6 +9,7 @@ import {
   uniqueAirportValues,
 } from "../shared/airports";
 import { fetchRemoteProviderMetadata } from "../shared/backendClient";
+import { runtimeUrl, safeChromeCall, sendRuntimeMessage } from "../shared/chromeRuntime";
 import { loadUsdCurrencyRates, type UsdCurrencyRates } from "../shared/currencyRates";
 import { flattenSegments, parseItaBookingDetails, parseItineraryJson } from "../shared/itinerary";
 import {
@@ -16,9 +17,11 @@ import {
   estimateEarnings,
   estimateSegmentEarnings,
   inspectWhereToCreditSegments,
+  mileageProgramTierOptions,
+  uniqueMileagePrograms,
 } from "../shared/mileageEarnings";
 import { rankProviderLinks, summarizeItinerary } from "../shared/providers";
-import { loadSettings, saveSettings } from "../shared/storage";
+import { DEFAULT_SETTINGS, loadSettings, saveSettings } from "../shared/storage";
 import type { ExtensionSettings, ItinerarySegment, NormalizedItinerary, RankedProviderLink } from "../shared/types";
 
 type PanelState = {
@@ -34,6 +37,8 @@ type PanelState = {
   bookingDetailsSignature: string;
   locationKey: string;
   showAllMileagePrograms: boolean;
+  mileageSortMode: MileageSortMode;
+  groupPreferredMileage: boolean;
   currencyRates: UsdCurrencyRates | null;
 };
 
@@ -56,18 +61,30 @@ type MileageFormula = {
   formula: string;
 };
 
+type MileageSortMode = "miles" | "name";
+
 const PANEL_ID = "mu-travel-flights-panel";
 const BRIDGE_ID = "mu-travel-flights-page-bridge";
 const MESSAGE_SOURCE = "mu-travel-flights";
 const AUTO_CAPTURE_DEBOUNCE_MS = 150;
 const AUTO_SEARCH_DEBOUNCE_MS = 250;
 const AUTO_SEARCH_TIMEOUT_MS = 15_000;
+const AUTO_OPEN_DEBOUNCE_MS = 300;
+const AUTO_OPEN_TIMEOUT_MS = 15_000;
+const AUTO_OPEN_STORAGE_KEY = "muTravelMatrixAutoOpen";
+let mileageProgramsByLengthCache: string[] | undefined;
 let autoCaptureCheckTimer: number | undefined;
 let flightResultAnnotationTimer: number | undefined;
 let autoSearchTimer: number | undefined;
+let autoOpenTimer: number | undefined;
 let autoSearchStartedAt = 0;
 let autoSearchDone = false;
 let autoSearchLocationKey = "";
+let autoOpenStartedAt = 0;
+let autoOpenDone = false;
+let autoOpenLocationKey = "";
+let autoOpenClickedPrimaryResult = false;
+let autoOpenPrimaryResultRow: HTMLTableRowElement | null = null;
 
 const state: PanelState = {
   settings: null,
@@ -82,6 +99,8 @@ const state: PanelState = {
   bookingDetailsSignature: "",
   locationKey: currentLocationKey(),
   showAllMileagePrograms: false,
+  mileageSortMode: "miles",
+  groupPreferredMileage: true,
   currencyRates: null,
 };
 
@@ -95,7 +114,7 @@ async function init(): Promise<void> {
   injectPageBridge();
   installChipClearShortcut();
   window.addEventListener("message", onBridgeMessage);
-  state.settings = await loadSettings();
+  state.settings = await safeChromeCall(loadSettings, DEFAULT_SETTINGS);
   state.airportPreview = airportCodes(state.settings.airportHelper).slice(0, 120);
   void loadUsdCurrencyRates().then((rates) => {
     state.currencyRates = rates;
@@ -109,6 +128,7 @@ async function init(): Promise<void> {
   maybeAutoCapture();
   annotateFlightResultsSoon();
   scheduleAutoSubmitMatrixSearch();
+  scheduleAutoOpenMatrixResult();
 }
 
 function render(): void {
@@ -200,12 +220,24 @@ function bind(root: ShadowRoot): void {
     void copyAirportPreview("Copied airport codes.");
   });
   root.querySelector('[data-action="options"]')?.addEventListener("click", () => {
-    void chrome.runtime.sendMessage({ command: "openOptionsPage" });
+    sendRuntimeMessage({ command: "openOptionsPage" });
   });
   root.querySelector('[data-action="show-all-mileage"]')?.addEventListener("click", () => {
     state.showAllMileagePrograms = true;
     render();
   });
+  root.querySelectorAll<HTMLButtonElement>('[data-action="mileage-sort"]').forEach((button) => {
+    button.addEventListener("click", () => {
+      state.mileageSortMode = button.dataset.sort === "name" ? "name" : "miles";
+      render();
+    });
+  });
+  root
+    .querySelector<HTMLInputElement>('[data-action="toggle-preferred-mileage-group"]')
+    ?.addEventListener("change", (event) => {
+      state.groupPreferredMileage = event.currentTarget instanceof HTMLInputElement && event.currentTarget.checked;
+      render();
+    });
 
   root.querySelectorAll<HTMLSelectElement>("select[data-setting]").forEach((select) => {
     select.addEventListener("change", () => {
@@ -287,7 +319,7 @@ async function setCapturedItinerary(
   expectedLocationKey = state.locationKey,
   bookingSignature = "",
 ): Promise<void> {
-  const settings = state.settings || (await loadSettings());
+  const settings = state.settings || (await safeChromeCall(loadSettings, DEFAULT_SETTINGS));
   if (expectedLocationKey !== state.locationKey) return;
   state.settings = settings;
   const remoteMetadata = await fetchRemoteProviderMetadata(settings);
@@ -369,7 +401,7 @@ async function updateAirportSetting(key: string, value: string): Promise<void> {
   };
   state.settings = next;
   state.airportPreview = airportCodes(next.airportHelper).slice(0, 120);
-  await saveSettings(next);
+  await safeChromeCall(() => saveSettings(next), undefined);
   render();
 }
 
@@ -393,9 +425,11 @@ function insertAirportCodes(codes: string[]): boolean {
 
 function injectPageBridge(): void {
   if (document.getElementById(BRIDGE_ID)) return;
+  const bridgeUrl = runtimeUrl("content/itaMatrixPageBridge.js");
+  if (!bridgeUrl) return;
   const script = document.createElement("script");
   script.id = BRIDGE_ID;
-  script.src = chrome.runtime.getURL("content/itaMatrixPageBridge.js");
+  script.src = bridgeUrl;
   script.async = false;
   (document.head || document.documentElement).appendChild(script);
 }
@@ -460,11 +494,13 @@ function installAutoCaptureObserver(): void {
 
 function installFlightResultObserver(): void {
   const observer = new MutationObserver(() => {
-    if (isFlightsPage()) annotateFlightResultsSoon();
+    if (!isFlightsPage()) return;
+    annotateFlightResultsSoon();
+    scheduleAutoOpenMatrixResult();
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
-  window.addEventListener("popstate", annotateFlightResultsSoon);
-  window.addEventListener("hashchange", annotateFlightResultsSoon);
+  window.addEventListener("popstate", scheduleFlightResultsWork);
+  window.addEventListener("hashchange", scheduleFlightResultsWork);
 }
 
 function installSearchAutoSubmitObserver(): void {
@@ -493,6 +529,19 @@ function scheduleAutoSubmitMatrixSearch(): void {
   }, AUTO_SEARCH_DEBOUNCE_MS);
 }
 
+function scheduleAutoOpenMatrixResult(): void {
+  if (autoOpenTimer) window.clearTimeout(autoOpenTimer);
+  autoOpenTimer = window.setTimeout(() => {
+    autoOpenTimer = undefined;
+    maybeAutoOpenMatrixResult();
+  }, AUTO_OPEN_DEBOUNCE_MS);
+}
+
+function scheduleFlightResultsWork(): void {
+  annotateFlightResultsSoon();
+  scheduleAutoOpenMatrixResult();
+}
+
 function maybeAutoSubmitMatrixSearch(): void {
   if (!shouldAutoSubmitMatrixSearch()) {
     autoSearchStartedAt = 0;
@@ -512,6 +561,7 @@ function maybeAutoSubmitMatrixSearch(): void {
   const button = matrixSearchButton();
   if (button && !isDisabledButton(button)) {
     autoSearchDone = true;
+    if (shouldAutoOpenMatrixResultAfterSearch()) rememberAutoOpenRequest();
     setStatus("Searching prefilled Matrix form...");
     button.click();
     return;
@@ -526,11 +576,159 @@ function shouldAutoSubmitMatrixSearch(): boolean {
   return url.searchParams.get("muTravelAutoSearch") === "1" && Boolean(url.searchParams.get("search"));
 }
 
+function maybeAutoOpenMatrixResult(): void {
+  if (isItineraryPage()) {
+    resetAutoOpenState();
+    forgetAutoOpenRequest();
+    return;
+  }
+  if (!isFlightsPage()) {
+    if (!isSearchPage()) {
+      resetAutoOpenState();
+      forgetAutoOpenRequest();
+    }
+    return;
+  }
+  if (!shouldAutoOpenMatrixResult()) {
+    resetAutoOpenState();
+    return;
+  }
+
+  const locationKey = currentLocationKey();
+  if (autoOpenLocationKey !== locationKey) {
+    autoOpenLocationKey = locationKey;
+    autoOpenStartedAt = Date.now();
+    autoOpenDone = false;
+    autoOpenClickedPrimaryResult = false;
+  }
+  if (autoOpenDone) return;
+
+  const target = matrixResultOpenTarget();
+  if (target) {
+    const primaryRow = primaryResultRowFor(target);
+    const clickedExpandedControl = autoOpenClickedPrimaryResult;
+    target.dataset.muTravelAutoOpenClicked = "true";
+    if (primaryRow) {
+      primaryRow.dataset.muTravelAutoOpenClicked = "true";
+      autoOpenClickedPrimaryResult = true;
+      autoOpenPrimaryResultRow = primaryRow;
+    }
+    setStatus("Opening first Matrix result...");
+    if (clickedExpandedControl) {
+      autoOpenDone = true;
+      forgetAutoOpenRequest();
+      target.click();
+      return;
+    }
+    target.click();
+    if (primaryRow && !shouldContinueAutoOpenAfterPrimaryClick(target, primaryRow)) {
+      autoOpenDone = true;
+      forgetAutoOpenRequest();
+      return;
+    }
+    if (Date.now() - autoOpenStartedAt < AUTO_OPEN_TIMEOUT_MS) scheduleAutoOpenMatrixResult();
+    return;
+  }
+
+  if (Date.now() - autoOpenStartedAt < AUTO_OPEN_TIMEOUT_MS) {
+    scheduleAutoOpenMatrixResult();
+    return;
+  }
+
+  autoOpenDone = true;
+  forgetAutoOpenRequest();
+}
+
+function shouldAutoOpenMatrixResultAfterSearch(): boolean {
+  const url = new URL(window.location.href);
+  return url.searchParams.get("muTravelAutoOpen") === "1";
+}
+
+function shouldAutoOpenMatrixResult(): boolean {
+  const url = new URL(window.location.href);
+  return url.searchParams.get("muTravelAutoOpen") === "1" || rememberedAutoOpenRequest();
+}
+
+function matrixResultOpenTarget(): HTMLElement | null {
+  const expandedControl = autoOpenClickedPrimaryResult ? firstExpandedResultOpenControl() : null;
+  if (expandedControl) return expandedControl;
+  if (autoOpenClickedPrimaryResult) return null;
+
+  const row = firstVisibleFlightResultRow();
+  if (!row || row.dataset.muTravelAutoOpenClicked === "true") return null;
+  const rowControl = firstResultOpenControl(row);
+  return rowControl || row;
+}
+
+function firstVisibleFlightResultRow(): HTMLTableRowElement | null {
+  return (
+    Array.from(document.querySelectorAll<HTMLTableRowElement>("tr[mat-row].mat-mdc-row:not(.detail-row)")).find(
+      (row) => isVisibleElement(row) && !row.closest(`#${PANEL_ID}`) && normalize(row.textContent || ""),
+    ) || null
+  );
+}
+
+function firstExpandedResultOpenControl(): HTMLElement | null {
+  const scopes = expandedResultScopesFor(autoOpenPrimaryResultRow);
+  for (const scope of scopes) {
+    const control = firstResultOpenControl(scope);
+    if (control) return control;
+  }
+  return null;
+}
+
+function firstResultOpenControl(scope: ParentNode): HTMLElement | null {
+  return (
+    Array.from(scope.querySelectorAll<HTMLElement>("button, a[href], [role='button']")).find(
+      (control) =>
+        !control.closest(`#${PANEL_ID}`) &&
+        control.dataset.muTravelAutoOpenClicked !== "true" &&
+        primaryResultRowFor(control)?.dataset.muTravelAutoOpenClicked !== "true" &&
+        isVisibleElement(control) &&
+        !isDisabledControl(control) &&
+        isResultOpenControl(control),
+    ) || null
+  );
+}
+
+function isResultOpenControl(control: HTMLElement): boolean {
+  const label = controlSearchLabel(control);
+  return (
+    /\b(select|choose|continue|details|view|open|itinerary)\b/.test(label) ||
+    /\b(usd|eur|gbp|jpy|cad|aud|hkd|twd|sgd)\s*[\d,.]+/.test(label) ||
+    /[$€£¥]\s*[\d,.]+/.test(label)
+  );
+}
+
+function shouldContinueAutoOpenAfterPrimaryClick(target: HTMLElement, primaryRow: HTMLTableRowElement): boolean {
+  if (target === primaryRow) return true;
+  const label = controlSearchLabel(target);
+  return /\b(details|view|open|itinerary)\b/.test(label) && !/\b(select|choose|continue)\b/.test(label);
+}
+
+function controlSearchLabel(control: HTMLElement): string {
+  return normalize(
+    [
+      control.getAttribute("aria-label"),
+      control.getAttribute("title"),
+      control.textContent,
+      control instanceof HTMLAnchorElement ? control.href : "",
+    ]
+      .filter(Boolean)
+      .join(" "),
+  ).toLowerCase();
+}
+
 function matrixSearchButton(): HTMLButtonElement | null {
   return (
     document.querySelector<HTMLButtonElement>("button[type='submit'].search-button") ||
     document.querySelector<HTMLButtonElement>("button[type='submit']")
   );
+}
+
+function isDisabledControl(control: HTMLElement): boolean {
+  if (control instanceof HTMLButtonElement && isDisabledButton(control)) return true;
+  return control.getAttribute("aria-disabled") === "true" || control.classList.contains("mat-mdc-button-disabled");
 }
 
 function isDisabledButton(button: HTMLButtonElement): boolean {
@@ -540,6 +738,58 @@ function isDisabledButton(button: HTMLButtonElement): boolean {
     button.classList.contains("mat-mdc-button-disabled") ||
     button.classList.contains("mdc-button--disabled")
   );
+}
+
+function isVisibleElement(element: HTMLElement): boolean {
+  const rect = element.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0 && getComputedStyle(element).visibility !== "hidden";
+}
+
+function primaryResultRowFor(element: HTMLElement): HTMLTableRowElement | null {
+  return element.closest<HTMLTableRowElement>("tr[mat-row].mat-mdc-row:not(.detail-row)");
+}
+
+function expandedResultScopesFor(row: HTMLTableRowElement | null): HTMLElement[] {
+  if (!row?.isConnected) return [];
+  const scopes: HTMLElement[] = [];
+  const nextRow = row.nextElementSibling;
+  if (nextRow instanceof HTMLElement && nextRow.matches("tr.detail-row") && isVisibleElement(nextRow)) {
+    scopes.push(nextRow);
+    scopes.push(...Array.from(nextRow.querySelectorAll<HTMLElement>("matrix-itinerary-grid")).filter(isVisibleElement));
+  }
+  return scopes;
+}
+
+function rememberAutoOpenRequest(): void {
+  try {
+    sessionStorage.setItem(AUTO_OPEN_STORAGE_KEY, "1");
+  } catch {
+    // Session storage is optional; URL flags still drive same-page behavior.
+  }
+}
+
+function rememberedAutoOpenRequest(): boolean {
+  try {
+    return sessionStorage.getItem(AUTO_OPEN_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function forgetAutoOpenRequest(): void {
+  try {
+    sessionStorage.removeItem(AUTO_OPEN_STORAGE_KEY);
+  } catch {
+    // Session storage is optional.
+  }
+}
+
+function resetAutoOpenState(): void {
+  autoOpenStartedAt = 0;
+  autoOpenDone = false;
+  autoOpenLocationKey = "";
+  autoOpenClickedPrimaryResult = false;
+  autoOpenPrimaryResultRow = null;
 }
 
 function annotateFlightResultsSoon(): void {
@@ -743,8 +993,8 @@ function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSumm
     byProgram.set(program, current);
   }
 
-  const programs = Array.from(byProgram.entries())
-    .map(([program, value]) => {
+  const programs = sortResultMileagePrograms(
+    Array.from(byProgram.entries()).map(([program, value]) => {
       const preferenceRank = mileageProgramPreferenceRank(program, preferredProgramRanks);
       return {
         program,
@@ -753,12 +1003,8 @@ function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSumm
         preferenceRank,
         preferred: preferenceRank !== Number.POSITIVE_INFINITY,
       };
-    })
-    .sort((left, right) => {
-      if (left.preferred !== right.preferred) return left.preferred ? -1 : 1;
-      if (left.preferenceRank !== right.preferenceRank) return left.preferenceRank - right.preferenceRank;
-      return right.miles - left.miles || left.program.localeCompare(right.program);
-    });
+    }),
+  );
 
   const hasPreferredPrograms = preferredProgramRanks.size > 0;
   const visiblePrograms = hasPreferredPrograms ? programs.filter((program) => program.preferred) : programs;
@@ -773,7 +1019,7 @@ function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSumm
         },
       ],
       title:
-        "No preferred program matched the local top earning rows. The extension is hiding non-preferred programs to avoid orphan-mile suggestions.",
+        "No preferred program matched the local earning rows. The extension is hiding non-preferred programs to avoid orphan-mile suggestions.",
       status: "fallback",
     };
   }
@@ -1122,7 +1368,7 @@ function renderMileageCredit(itinerary: NormalizedItinerary): string {
     preferredPrograms.size > 0 && !state.showAllMileagePrograms
       ? estimates.filter((estimate) => matchesPreferredMileageProgram(estimate.program, preferredPrograms))
       : estimates;
-  const sortedVisibleEstimates = sortMileageEstimatesByPreference(visibleEstimates, preferredProgramList);
+  const sortedVisibleEstimates = sortMileageEstimates(visibleEstimates, preferredProgramList);
   const hiddenEstimateCount = estimates.length - visibleEstimates.length;
   const insights = inspectWhereToCreditSegments(itinerary);
   const estimatedKeys = new Set(estimates.map((estimate) => creditSegmentKey(estimate.segment, estimate.bookingClass)));
@@ -1133,12 +1379,13 @@ function renderMileageCredit(itinerary: NormalizedItinerary): string {
   return `
     <div class="segment-links">
       <strong>Miles credit</strong>
+      ${visibleEstimates.length > 1 ? renderMileageSortControls(preferredPrograms.size > 0) : ""}
       ${sortedVisibleEstimates.length ? renderMileageEstimateEntries(sortedVisibleEstimates, preferredProgramList) : ""}
       ${
         hiddenEstimateCount > 0 && visibleEstimates.length === 0
           ? `<div class="earning notice">
               <span>No preferred program match</span>
-              <small>Local top earning rows exist, but they are not in your preferred programs.</small>
+              <small>Local earning rows exist, but they are not in your preferred programs.</small>
               <button type="button" class="inline-button" data-action="show-all-mileage">Show all</button>
             </div>`
           : ""
@@ -1166,23 +1413,80 @@ function renderMileageCredit(itinerary: NormalizedItinerary): string {
   `;
 }
 
-function sortMileageEstimatesByPreference(
-  estimates: EarningsEstimate[],
-  preferredProgramList: string[],
-): EarningsEstimate[] {
+function renderMileageSortControls(hasPreferredPrograms: boolean): string {
+  const milesSelected = state.mileageSortMode === "miles";
+  const nameSelected = state.mileageSortMode === "name";
+  return `
+    <div class="mileage-sort-controls">
+      <div class="segmented-control" role="group" aria-label="Sort mileage rows">
+        <button type="button" data-action="mileage-sort" data-sort="miles" aria-pressed="${milesSelected}" aria-label="Sort by miles descending">Miles <span aria-hidden="true">↓</span></button>
+        <button type="button" data-action="mileage-sort" data-sort="name" aria-pressed="${nameSelected}" aria-label="Sort by program name ascending">Name <span aria-hidden="true">↑</span></button>
+      </div>
+      ${
+        hasPreferredPrograms
+          ? `<label><input type="checkbox" data-action="toggle-preferred-mileage-group" ${state.groupPreferredMileage ? "checked" : ""}> Preferred first</label>`
+          : ""
+      }
+    </div>
+  `;
+}
+
+function sortMileageEstimates(estimates: EarningsEstimate[], preferredProgramList: string[]): EarningsEstimate[] {
   const preferredProgramRanks = new Map(preferredProgramList.map((program, index) => [program, index]));
   return [...estimates].sort((left, right) => {
     const leftRank = mileageProgramPreferenceRank(left.program, preferredProgramRanks);
     const rightRank = mileageProgramPreferenceRank(right.program, preferredProgramRanks);
+    const leftPreferred = leftRank !== Number.POSITIVE_INFINITY;
+    const rightPreferred = rightRank !== Number.POSITIVE_INFINITY;
+    if (state.groupPreferredMileage && leftPreferred !== rightPreferred) return leftPreferred ? -1 : 1;
+    const sorted = compareMileageEstimateByMode(left, right);
+    if (sorted !== 0) return sorted;
     if (leftRank !== rightRank) return leftRank - rightRank;
-    return (
-      creditSegmentKey(left.segment, left.bookingClass).localeCompare(
-        creditSegmentKey(right.segment, right.bookingClass),
-      ) ||
-      (right.estimatedMiles ?? -1) - (left.estimatedMiles ?? -1) ||
-      left.program.localeCompare(right.program)
+    return creditSegmentKey(left.segment, left.bookingClass).localeCompare(
+      creditSegmentKey(right.segment, right.bookingClass),
     );
   });
+}
+
+function compareMileageEstimateByMode(left: EarningsEstimate, right: EarningsEstimate): number {
+  if (state.mileageSortMode === "name") {
+    return (
+      left.program.localeCompare(right.program) ||
+      mileageEstimateValue(right) - mileageEstimateValue(left) ||
+      creditSegmentKey(left.segment, left.bookingClass).localeCompare(
+        creditSegmentKey(right.segment, right.bookingClass),
+      )
+    );
+  }
+  return (
+    mileageEstimateValue(right) - mileageEstimateValue(left) ||
+    left.program.localeCompare(right.program) ||
+    creditSegmentKey(left.segment, left.bookingClass).localeCompare(creditSegmentKey(right.segment, right.bookingClass))
+  );
+}
+
+function sortResultMileagePrograms<
+  T extends { program: string; miles: number; preferred: boolean; preferenceRank: number },
+>(programs: T[]): T[] {
+  return [...programs].sort((left, right) => {
+    if (state.groupPreferredMileage && left.preferred !== right.preferred) return left.preferred ? -1 : 1;
+    if (state.mileageSortMode === "name") {
+      return (
+        left.program.localeCompare(right.program) ||
+        right.miles - left.miles ||
+        left.preferenceRank - right.preferenceRank
+      );
+    }
+    return (
+      right.miles - left.miles ||
+      left.program.localeCompare(right.program) ||
+      left.preferenceRank - right.preferenceRank
+    );
+  });
+}
+
+function mileageEstimateValue(estimate: EarningsEstimate): number {
+  return estimate.estimatedMiles ?? -1;
 }
 
 function renderMileageEstimateEntries(estimates: EarningsEstimate[], preferredProgramList: string[]): string {
@@ -1213,22 +1517,30 @@ function renderMileageEstimateSegmentEntries(
 ): string {
   const tierGroups = mileageTierGroups(estimates, preferredProgramList);
   const renderedGroups = new Set<string>();
+  const preferredPrograms = new Set(preferredProgramList);
   return estimates
     .map((estimate) => {
       const groupKey = mileageTierGroupKey(estimate, preferredProgramList);
-      if (!groupKey) return renderMileageEstimateEntry(estimate, showSegmentLabel);
+      if (!groupKey) return renderMileageEstimateEntry(estimate, showSegmentLabel, preferredPrograms);
       const group = tierGroups.get(groupKey);
-      if (!group || group.estimates.length <= 1) return renderMileageEstimateEntry(estimate, showSegmentLabel);
+      if (!group || group.estimates.length <= 1) {
+        return renderMileageEstimateEntry(estimate, showSegmentLabel, preferredPrograms);
+      }
       if (renderedGroups.has(groupKey)) return "";
       renderedGroups.add(groupKey);
-      return renderMileageTierGroup(group, showSegmentLabel);
+      return renderMileageTierGroup(group, showSegmentLabel, preferredPrograms);
     })
     .join("");
 }
 
-function renderMileageEstimateEntry(estimate: EarningsEstimate, showSegmentLabel: boolean): string {
+function renderMileageEstimateEntry(
+  estimate: EarningsEstimate,
+  showSegmentLabel: boolean,
+  preferredPrograms: Set<string>,
+): string {
+  const preferenceClass = mileagePreferenceClass(estimate.program, preferredPrograms);
   return `
-    <a href="${escapeHtml(estimate.url)}" target="_blank" rel="noopener noreferrer" class="earning">
+    <a href="${escapeHtml(estimate.url)}" target="_blank" rel="noopener noreferrer" class="earning ${preferenceClass}">
       ${showSegmentLabel ? `<span>${escapeHtml(mileageSegmentLabel(estimate))}</span>` : ""}
       <em>${escapeHtml(estimate.program)}</em>
       <small>${typeof estimate.estimatedMiles === "number" ? `${estimate.estimatedMiles.toLocaleString()} miles · ` : ""}${escapeHtml(estimate.formula)}</small>
@@ -1244,13 +1556,15 @@ function renderMileageTierGroup(
     estimates: EarningsEstimate[];
   },
   showSegmentLabel: boolean,
+  preferredPrograms: Set<string>,
 ): string {
   const estimates = sortTierEstimates(group.parentProgram, group.estimates);
   const parsedFormulas = estimates.map((estimate) => parseRevenueMileageFormula(estimate.formula));
   const baseFare = commonValue(estimates.map((estimate) => estimate.displayFare || ""));
   const isApproximate = estimates.some((estimate) => estimate.approximate);
+  const preferenceClass = mileagePreferenceClass(group.parentProgram, preferredPrograms);
   return `
-    <div class="earning tier-group">
+    <div class="earning tier-group ${preferenceClass}">
       ${showSegmentLabel ? `<span>${escapeHtml(group.segmentLabel)}</span>` : ""}
       <a href="${escapeHtml(group.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(group.parentProgram)}</a>
       ${baseFare ? `<small>Base fare ${escapeHtml(baseFare)}</small>` : ""}
@@ -1346,7 +1660,18 @@ function mileageTierParentProgram(program: string, preferredProgramList: string[
   for (const preferredProgram of preferredProgramList) {
     if (program !== preferredProgram && program.startsWith(`${preferredProgram} `)) return preferredProgram;
   }
+  for (const parentProgram of mileageProgramsByLength()) {
+    if (program === parentProgram || !program.startsWith(`${parentProgram} `)) continue;
+    if (mileageProgramTierOptions(parentProgram).some((tier) => tier.program === program)) return parentProgram;
+  }
   return "";
+}
+
+function mileageProgramsByLength(): string[] {
+  if (!mileageProgramsByLengthCache) {
+    mileageProgramsByLengthCache = uniqueMileagePrograms().sort((left, right) => right.length - left.length);
+  }
+  return mileageProgramsByLengthCache;
 }
 
 function mileageSegmentLabel(estimate: EarningsEstimate): string {
@@ -1354,6 +1679,8 @@ function mileageSegmentLabel(estimate: EarningsEstimate): string {
 }
 
 function compactTierName(parentProgram: string, program: string): string {
+  const optionLabel = mileageProgramTierOptions(parentProgram).find((tier) => tier.program === program)?.label;
+  if (optionLabel) return optionLabel;
   return program
     .slice(parentProgram.length)
     .trim()
@@ -1363,11 +1690,17 @@ function compactTierName(parentProgram: string, program: string): string {
 }
 
 function matchesPreferredMileageProgram(program: string, preferredPrograms: Set<string>): boolean {
+  if (preferredPrograms.size === 0) return false;
   if (preferredPrograms.has(program)) return true;
   for (const preferredProgram of preferredPrograms) {
     if (program.startsWith(`${preferredProgram} `)) return true;
   }
   return false;
+}
+
+function mileagePreferenceClass(program: string, preferredPrograms: Set<string>): string {
+  if (preferredPrograms.size === 0) return "";
+  return matchesPreferredMileageProgram(program, preferredPrograms) ? "preferred" : "non-preferred";
 }
 
 function creditSegmentKey(
@@ -1468,7 +1801,52 @@ function styles(): string {
     .summary { margin-bottom: 2px; }
     .links { display: grid; gap: 8px; margin-top: 10px; }
     .segment-links { display: grid; gap: 6px; margin-top: 10px; padding: 8px; border-radius: 6px; background: #f0fdfa; }
+    .mileage-sort-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: -2px;
+    }
+    .mileage-sort-controls label {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin: 0;
+      color: #475569;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .mileage-sort-controls input {
+      width: auto;
+      padding: 0;
+    }
+    .segmented-control {
+      display: inline-flex;
+      overflow: hidden;
+      border: 1px solid #99f6e4;
+      border-radius: 6px;
+      background: #ffffff;
+    }
+    .segmented-control button {
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: #0f766e;
+      padding: 3px 7px;
+      font-size: 12px;
+    }
+    .segmented-control button[aria-pressed="true"] {
+      background: #0f766e;
+      color: #ffffff;
+    }
     .segment-links .earning { display: grid; gap: 2px; }
+    .segment-links .earning.non-preferred {
+      margin-left: 6px;
+      padding-left: 8px;
+      border-left: 2px solid #cbd5e1;
+      opacity: 0.78;
+    }
     .segment-links .tier-group { gap: 5px; }
     .segment-links .segment-group { gap: 5px; padding-top: 4px; border-top: 1px solid #ccfbf1; }
     .segment-links .segment-group:first-of-type { padding-top: 0; border-top: 0; }
@@ -1477,10 +1855,13 @@ function styles(): string {
     .segment-links .more-earnings small { min-width: 0; }
     .segment-links em { font-style: normal; color: #115e59; }
     .segment-links a { color: #0f766e; text-decoration: none; }
+    .segment-links .non-preferred em,
+    .segment-links .non-preferred a { color: #475569; }
     .segment-links a:hover { text-decoration: underline; }
     .segment-links table { width: 100%; border-collapse: collapse; font-size: 12px; }
     .segment-links th, .segment-links td { padding: 2px 4px 2px 0; text-align: left; vertical-align: top; }
     .segment-links th { width: 62px; color: #115e59; font-weight: 650; }
+    .segment-links .non-preferred th { color: #475569; }
     .segment-links td:nth-child(2) { width: 64px; color: #162033; font-weight: 650; text-align: right; }
     .segment-links td:nth-child(3) { color: #64748b; }
     .segment-links .inline-button { width: fit-content; margin-top: 4px; border-color: #fed7aa; background: #ffffff; color: #9a3412; padding: 4px 7px; white-space: nowrap; }

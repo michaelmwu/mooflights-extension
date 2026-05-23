@@ -245,7 +245,7 @@ describe("Google Flights booking option parser", () => {
 
     const search = new URL(result?.matrixUrl || "").searchParams.get("search") || "";
     expect(new URL(result?.matrixUrl || "").pathname).toBe("/search");
-    expect(new URL(result?.matrixUrl || "").searchParams.get("muTravelAutoOpen")).toBeNull();
+    expect(new URL(result?.matrixUrl || "").searchParams.get("muTravelAutoOpen")).toBe("1");
     expect(new URL(result?.matrixUrl || "").searchParams.get("muTravelAutoSearch")).toBe("1");
     const decoded = JSON.parse(atob(search));
     expect(decoded).toMatchObject({

@@ -12,7 +12,7 @@ bun install
 bun run build
 ```
 
-Then open Chrome or Arc:
+Then open Chrome or another Chromium-compatible browser:
 
 1. Go to `chrome://extensions`.
 2. Enable Developer Mode.

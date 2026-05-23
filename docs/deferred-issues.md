@@ -1,6 +1,6 @@
 # Deferred GitHub Issues
 
-These items are intentionally out of the ITA Matrix MVP.
+These items are intentionally deferred from the first reviewable extension release.
 
 ## Google Flights Companion
 
@@ -11,7 +11,7 @@ Google Flights search-results miles-crediting annotations near flight cards.
 
 The extension now adds an estimated miles-earning column to first-page `matrix.itasoftware.com/flights` results.
 Follow-up work: improve result matching beyond the first rendered page, add tests for more ITA DOM variants, and use a
-richer mileage snapshot so preferred programs can be evaluated even when they are not the local top earning row.
+richer mileage snapshot so preferred programs can be evaluated across more booking classes.
 
 ## Account Sync
 
@@ -40,6 +40,18 @@ pipeline, but the extension repo still needs deterministic scripts to reproduce 
 The local options page can store preferred frequent-flyer programs and use them to highlight/sort matching local mileage
 rows. Expand the bundled/backend mileage earning snapshot beyond top-program fields so the extension can calculate
 earnings for arbitrary user-selected programs, not only programs that are already present as local top earners.
+
+## Atmos Rewards Earning Rules
+
+The bundled mileage estimate currently reads static earning rows from the local snapshot. Add explicit Alaska/Hawaiian
+Atmos Rewards handling for rules that are not well represented by a simple percentage row:
+
+- base members earn 1 point per mile flown or 500 points, whichever is greater, except Saver fares earn at 30%
+- status bonuses apply by Atmos tier: Silver 25%, Gold 50%, Platinum 100%, Titanium 150%
+- later in 2026, members can choose an earning basis once per year: distance traveled, price paid, or segments flown
+
+Do not model the later 2026 earn-choice behavior until the rule is live and the extension can represent a user-selected
+Atmos earning basis.
 
 ## Opened OTA Page Checks
 

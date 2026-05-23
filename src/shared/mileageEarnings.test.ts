@@ -2,6 +2,7 @@ import type { UsdCurrencyRates } from "./currencyRates";
 import {
   buildValidatedWhereToCreditUrl,
   estimateEarnings,
+  estimateSegmentEarnings,
   inspectWhereToCreditSegments,
   mileageProgramTierOptions,
   uniqueMileageProgramOptions,
@@ -39,7 +40,7 @@ describe("Mileage earning estimates", () => {
       { program: "Air Canada Aeroplan 75K", label: "75K" },
       { program: "Air Canada Aeroplan Super Elite", label: "Super Elite" },
     ]);
-    expect(mileageProgramTierOptions("Air Canada Aeroplan 2026")).toEqual([]);
+    expect(uniqueMileagePrograms()).not.toContain("Air Canada Aeroplan 2026");
   });
 
   it("removes repetitive program branding from imported tier labels", () => {
@@ -82,18 +83,22 @@ describe("Mileage earning estimates", () => {
 
   it("includes curated preferred earning rows that are not the compact top row", () => {
     const thai: NormalizedItinerary = itineraryFor("TG", "W");
-    expect(estimateEarnings(thai, ["United MileagePlus"]).map((estimate) => estimate.program)).toEqual([
-      "Miles&More",
-      "United MileagePlus",
-    ]);
-    expect(estimateEarnings(thai, ["United MileagePlus"]).at(-1)).toMatchObject({
+    expect(estimateEarnings(thai, ["United MileagePlus"]).map((estimate) => estimate.program)).toEqual(
+      expect.arrayContaining([
+        "Air India Maharaja Club",
+        "TAP Miles&Go",
+        "Thai Royal Orchid Plus",
+        "United MileagePlus",
+      ]),
+    );
+    expect(earningForProgram(thai, "United MileagePlus", ["United MileagePlus"])).toMatchObject({
       estimatedMiles: 250,
       formula: "1,000 miles x 25%",
       program: "United MileagePlus",
     });
 
     const asiana: NormalizedItinerary = itineraryFor("OZ", "S");
-    expect(estimateEarnings(asiana, ["Asiana Club"]).at(-1)).toMatchObject({
+    expect(earningForProgram(asiana, "Asiana Club", ["Asiana Club"])).toMatchObject({
       estimatedMiles: 1000,
       formula: "1,000 miles x 100%",
       program: "Asiana Club",
@@ -134,6 +139,20 @@ describe("Mileage earning estimates", () => {
       formula: "1,000 miles x 30%",
       basis: "distance-percent",
       url: "https://wheretocredit.com/en/AS/X",
+    });
+  });
+
+  it("uses the highest-mile row for single segment annotations", () => {
+    const itinerary: NormalizedItinerary = itineraryFor("4Y", "B");
+    const segment = itinerary.slices[0]?.segments[0];
+    if (!segment) throw new Error("Expected itinerary fixture segment");
+
+    expect(estimateSegmentEarnings(segment, itinerary)).toMatchObject({
+      airlineName: "Discover Airlines",
+      bookingClass: "B",
+      program: "Miles&More",
+      estimatedMiles: 1500,
+      formula: "1,000 miles x 150%",
     });
   });
 
@@ -205,7 +224,9 @@ describe("Mileage earning estimates", () => {
       ],
     };
 
-    const estimates = estimateEarnings(itinerary);
+    const estimates = estimateEarnings(itinerary).filter(
+      (estimate) => estimate.program === "Alaska/Hawaiian Atmos Rewards",
+    );
 
     expect(estimates.map((estimate) => estimate.estimatedMiles)).toEqual([90, 210]);
     expect(estimates.map((estimate) => estimate.formula)).toEqual(["300 miles x 30%", "700 miles x 30%"]);
@@ -247,8 +268,8 @@ describe("Mileage earning estimates", () => {
     };
 
     expect(estimateEarnings(itinerary).map((estimate) => estimate.formula)).toEqual([
-      "524 miles x 40%",
-      "1,307 miles x 40%",
+      "524 miles x 40.2%",
+      "1,307 miles x 40.2%",
     ]);
   });
 
@@ -289,7 +310,11 @@ describe("Mileage earning estimates", () => {
       ],
     };
 
-    expect(estimateEarnings(itinerary).map((estimate) => estimate.estimatedMiles)).toEqual([90, 210]);
+    expect(
+      estimateEarnings(itinerary)
+        .filter((estimate) => estimate.program === "Alaska/Hawaiian Atmos Rewards")
+        .map((estimate) => estimate.estimatedMiles),
+    ).toEqual([90, 210]);
   });
 
   it("splits reciprocal round-trip distance evenly even when block times differ", () => {
@@ -333,10 +358,11 @@ describe("Mileage earning estimates", () => {
       ],
     };
 
-    expect(estimateEarnings(itinerary).map((estimate) => estimate.formula)).toEqual([
-      "500 miles x 30%",
-      "500 miles x 30%",
-    ]);
+    expect(
+      estimateEarnings(itinerary)
+        .filter((estimate) => estimate.program === "Alaska/Hawaiian Atmos Rewards")
+        .map((estimate) => estimate.formula),
+    ).toEqual(["500 miles x 30%", "500 miles x 30%"]);
   });
 
   it("estimates revenue-based earnings from per-passenger fare", () => {
@@ -374,7 +400,7 @@ describe("Mileage earning estimates", () => {
     });
   });
 
-  it("shows United MileagePlus status tiers from ITA base fare when United is preferred", () => {
+  it("shows the lowest United MileagePlus status tier from ITA base fare by default", () => {
     const itinerary: NormalizedItinerary = {
       source: "ita-matrix",
       capturedAt: "2026-01-01T00:00:00Z",
@@ -415,30 +441,10 @@ describe("Mileage earning estimates", () => {
         miles: 2250,
         formula: "450 USD x 5 miles/USD",
       },
-      {
-        program: "United MileagePlus Premier Silver",
-        miles: 3150,
-        formula: "450 USD x 7 miles/USD",
-      },
-      {
-        program: "United MileagePlus Premier Gold",
-        miles: 3600,
-        formula: "450 USD x 8 miles/USD",
-      },
-      {
-        program: "United MileagePlus Premier Platinum",
-        miles: 4050,
-        formula: "450 USD x 9 miles/USD",
-      },
-      {
-        program: "United MileagePlus Premier 1K",
-        miles: 4950,
-        formula: "450 USD x 11 miles/USD",
-      },
     ]);
   });
 
-  it("narrows United MileagePlus revenue earnings to the selected status tier", () => {
+  it("uses the selected United MileagePlus status tier when configured", () => {
     const itinerary: NormalizedItinerary = {
       source: "ita-matrix",
       capturedAt: "2026-01-01T00:00:00Z",
@@ -583,10 +589,57 @@ describe("Mileage earning estimates", () => {
     ).toEqual([
       {
         miles: 1971,
-        formula: "27,328 JPY ~ $179.2 USD x 11 miles/USD (cached FX estimate)",
+        formula: "27,328 JPY ~ $179.2 USD x 11 miles/USD (FX estimate)",
         displayFare: "27,328 JPY ~ $179.2 USD",
         approximate: true,
         basis: "revenue-multiplier",
+      },
+    ]);
+  });
+
+  it("displays the selected Air Canada Aeroplan revenue tier", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "one-way",
+      currency: "CAD",
+      totalPrice: 237,
+      passengerCount: 1,
+      carriers: ["UA"],
+      fareBases: ["NNAA0BC"],
+      slices: [
+        {
+          origin: "HNL",
+          destination: "SFO",
+          segments: [
+            {
+              origin: "HNL",
+              destination: "SFO",
+              carrier: "UA",
+              bookingClass: "N",
+              farePrice: 237,
+              cabin: "economy",
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(
+      estimateEarnings(itinerary, ["Air Canada Aeroplan"], {
+        "Air Canada Aeroplan": "Air Canada Aeroplan 25K",
+      })
+        .filter((estimate) => estimate.program.startsWith("Air Canada Aeroplan"))
+        .map((estimate) => ({
+          program: estimate.program,
+          miles: estimate.estimatedMiles,
+          formula: estimate.formula,
+        })),
+    ).toEqual([
+      {
+        program: "Air Canada Aeroplan 25K",
+        miles: 474,
+        formula: "237 CAD x 2 miles/CAD",
       },
     ]);
   });
@@ -813,4 +866,12 @@ function itineraryFor(carrier: string, bookingClass: string): NormalizedItinerar
       },
     ],
   };
+}
+
+function earningForProgram(
+  itinerary: NormalizedItinerary,
+  program: string,
+  preferredPrograms: string[] = [],
+): ReturnType<typeof estimateEarnings>[number] | undefined {
+  return estimateEarnings(itinerary, preferredPrograms).find((estimate) => estimate.program === program);
 }

@@ -1,8 +1,8 @@
 # Mu Travel Flights Extension
 
-Offline-first Chrome/Arc extension for ITA Matrix power users.
+Mu Travel Flights is a Chromium-compatible browser extension for mileage earning estimates, Google Flights country price checks, and ITA Matrix workflows.
 
-The first MVP helps with:
+It helps with:
 
 - Show estimated mileage earnings in the ITA companion panel and first-page search results.
 - Compare Google Flights booking-page offers across selected countries while keeping currency fixed.
@@ -20,7 +20,7 @@ On Google Flights booking pages, the extension can compare booking offers across
 
 ## ITA Matrix Mileage Earnings
 
-On ITA Matrix itinerary pages, the extension estimates mileage earning from the captured booking class, fare, and local earning snapshot. Revenue-based programs can use cached FX estimates when ITA prices the fare in a non-USD currency.
+On ITA Matrix itinerary pages, the extension estimates mileage earning from the captured booking class, fare, and local earning snapshot. Revenue-based programs can use FX estimates when ITA prices the fare in a non-USD currency.
 
 ![Mu Travel ITA Matrix mileage earnings panel](./docs/assets/ita-matrix-mileage-earnings.png)
 

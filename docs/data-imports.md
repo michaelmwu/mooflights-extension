@@ -15,9 +15,10 @@ The extension must keep working without the backend, but it should not bundle ev
 
 - `bun run import:airports`: rebuild the compact canonical airport snapshot.
 - `bun run import:airport-coordinates`: compatibility alias for `import:airports`.
+- `bun run import:mileage-earnings -- <path-to-source-json>`: rebuild the compact local mileage earning snapshot.
 
-Planned import scripts for mileage earnings, airline names, and generated-data validation should be added before those
-snapshots become regularly refreshed.
+Planned import scripts for airline names and generated-data validation should be added before those snapshots become
+regularly refreshed.
 
 ## Mileage Earning Sources
 

@@ -139,9 +139,18 @@ function hostPermissionOrigin(baseUrl: string): string {
 }
 
 function openOptionsPage(): void {
+  const openOptionsTab = () => {
+    void chrome.tabs.create({ url: chrome.runtime.getURL("options/index.html") });
+  };
+
+  if (typeof chrome.runtime.openOptionsPage !== "function") {
+    openOptionsTab();
+    return;
+  }
+
   chrome.runtime.openOptionsPage(() => {
     if (!chrome.runtime.lastError) return;
-    void chrome.tabs.create({ url: chrome.runtime.getURL("options/index.html") });
+    openOptionsTab();
   });
 }
 
