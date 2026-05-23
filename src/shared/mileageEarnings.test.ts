@@ -44,14 +44,38 @@ describe("Mileage earning estimates", () => {
   it("removes repetitive program branding from imported tier labels", () => {
     expect(mileageProgramTierOptions("Singapore Airlines KrisFlyer")).toEqual([
       { program: "Singapore Airlines KrisFlyer KrisFlyer", label: "KrisFlyer" },
-      { program: "Singapore Airlines KrisFlyer KrisFlyer Elite Silver", label: "Elite Silver" },
-      { program: "Singapore Airlines KrisFlyer KrisFlyer Elite Gold", label: "Elite Gold" },
+      { program: "Singapore Airlines KrisFlyer KrisFlyer Silver", label: "Silver" },
+      { program: "Singapore Airlines KrisFlyer KrisFlyer Gold", label: "Gold" },
     ]);
     expect(mileageProgramTierOptions("Air Europa Suma")).toEqual([
       { program: "Air Europa Suma SUMA", label: "SUMA" },
       { program: "Air Europa Suma SUMA Silver", label: "Silver" },
       { program: "Air Europa Suma SUMA Gold", label: "Gold" },
       { program: "Air Europa Suma SUMA Platinum", label: "Platinum" },
+    ]);
+    expect(mileageProgramTierOptions("Alaska/Hawaiian Atmos Rewards")).toEqual([
+      { program: "Alaska/Hawaiian Atmos Rewards Member", label: "Member" },
+      { program: "Alaska/Hawaiian Atmos Rewards Atmos Silver", label: "Silver" },
+      { program: "Alaska/Hawaiian Atmos Rewards Atmos Gold", label: "Gold" },
+      { program: "Alaska/Hawaiian Atmos Rewards Atmos Platinum", label: "Platinum" },
+      { program: "Alaska/Hawaiian Atmos Rewards Atmos Titanium", label: "Titanium" },
+    ]);
+    expect(mileageProgramTierOptions("Japan Airlines Mileage Bank")).toEqual([
+      { program: "Japan Airlines Mileage Bank Crystal", label: "Crystal" },
+      { program: "Japan Airlines Mileage Bank Sapphire", label: "Sapphire" },
+      { program: "Japan Airlines Mileage Bank JGC Premier", label: "JGC Premier" },
+      { program: "Japan Airlines Mileage Bank Diamond", label: "Diamond" },
+    ]);
+    expect(mileageProgramTierOptions("Korean Air Skypass")).toEqual([
+      { program: "Korean Air Skypass Standard", label: "Standard" },
+      { program: "Korean Air Skypass Premium", label: "Premium" },
+      { program: "Korean Air Skypass Million Miler", label: "Million Miler" },
+    ]);
+    expect(mileageProgramTierOptions("British Airways Club")).toEqual([
+      { program: "British Airways Club Blue", label: "Blue" },
+      { program: "British Airways Club Bronze", label: "Bronze" },
+      { program: "British Airways Club Silver", label: "Silver" },
+      { program: "British Airways Club Gold", label: "Gold" },
     ]);
   });
 

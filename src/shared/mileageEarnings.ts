@@ -444,7 +444,7 @@ function tierLabelTokens(value: string): Set<string> {
     value
       .split(/[^A-Za-z0-9+&]+/)
       .map((token) => token.toLowerCase())
-      .filter((token) => token.length >= 4),
+      .filter((token) => token.length >= 4 || token === "jmb"),
   );
 }
 
