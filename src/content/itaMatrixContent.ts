@@ -9,6 +9,7 @@ import {
   uniqueAirportValues,
 } from "../shared/airports";
 import { fetchRemoteProviderMetadata } from "../shared/backendClient";
+import { runtimeUrl, safeChromeCall, sendRuntimeMessage } from "../shared/chromeRuntime";
 import { loadUsdCurrencyRates, type UsdCurrencyRates } from "../shared/currencyRates";
 import { flattenSegments, parseItaBookingDetails, parseItineraryJson } from "../shared/itinerary";
 import {
@@ -18,7 +19,7 @@ import {
   inspectWhereToCreditSegments,
 } from "../shared/mileageEarnings";
 import { rankProviderLinks, summarizeItinerary } from "../shared/providers";
-import { loadSettings, saveSettings } from "../shared/storage";
+import { DEFAULT_SETTINGS, loadSettings, saveSettings } from "../shared/storage";
 import type { ExtensionSettings, ItinerarySegment, NormalizedItinerary, RankedProviderLink } from "../shared/types";
 
 type PanelState = {
@@ -62,12 +63,20 @@ const MESSAGE_SOURCE = "mu-travel-flights";
 const AUTO_CAPTURE_DEBOUNCE_MS = 150;
 const AUTO_SEARCH_DEBOUNCE_MS = 250;
 const AUTO_SEARCH_TIMEOUT_MS = 15_000;
+const AUTO_OPEN_DEBOUNCE_MS = 300;
+const AUTO_OPEN_TIMEOUT_MS = 15_000;
+const AUTO_OPEN_STORAGE_KEY = "muTravelMatrixAutoOpen";
 let autoCaptureCheckTimer: number | undefined;
 let flightResultAnnotationTimer: number | undefined;
 let autoSearchTimer: number | undefined;
+let autoOpenTimer: number | undefined;
 let autoSearchStartedAt = 0;
 let autoSearchDone = false;
 let autoSearchLocationKey = "";
+let autoOpenStartedAt = 0;
+let autoOpenDone = false;
+let autoOpenLocationKey = "";
+let autoOpenClickedPrimaryResult = false;
 
 const state: PanelState = {
   settings: null,
@@ -95,7 +104,7 @@ async function init(): Promise<void> {
   injectPageBridge();
   installChipClearShortcut();
   window.addEventListener("message", onBridgeMessage);
-  state.settings = await loadSettings();
+  state.settings = await safeChromeCall(loadSettings, DEFAULT_SETTINGS);
   state.airportPreview = airportCodes(state.settings.airportHelper).slice(0, 120);
   void loadUsdCurrencyRates().then((rates) => {
     state.currencyRates = rates;
@@ -109,6 +118,7 @@ async function init(): Promise<void> {
   maybeAutoCapture();
   annotateFlightResultsSoon();
   scheduleAutoSubmitMatrixSearch();
+  scheduleAutoOpenMatrixResult();
 }
 
 function render(): void {
@@ -287,7 +297,7 @@ async function setCapturedItinerary(
   expectedLocationKey = state.locationKey,
   bookingSignature = "",
 ): Promise<void> {
-  const settings = state.settings || (await loadSettings());
+  const settings = state.settings || (await safeChromeCall(loadSettings, DEFAULT_SETTINGS));
   if (expectedLocationKey !== state.locationKey) return;
   state.settings = settings;
   const remoteMetadata = await fetchRemoteProviderMetadata(settings);
@@ -369,7 +379,7 @@ async function updateAirportSetting(key: string, value: string): Promise<void> {
   };
   state.settings = next;
   state.airportPreview = airportCodes(next.airportHelper).slice(0, 120);
-  await saveSettings(next);
+  await safeChromeCall(() => saveSettings(next), undefined);
   render();
 }
 
@@ -400,22 +410,6 @@ function injectPageBridge(): void {
   script.src = bridgeUrl;
   script.async = false;
   (document.head || document.documentElement).appendChild(script);
-}
-
-function runtimeUrl(path: string): string | null {
-  try {
-    return chrome.runtime.getURL(path);
-  } catch {
-    return null;
-  }
-}
-
-function sendRuntimeMessage(message: unknown): void {
-  try {
-    void chrome.runtime.sendMessage(message);
-  } catch {
-    // Content scripts can outlive their extension context after reload/update.
-  }
 }
 
 function captureViaPageBridge(): Promise<string> {
@@ -478,11 +472,13 @@ function installAutoCaptureObserver(): void {
 
 function installFlightResultObserver(): void {
   const observer = new MutationObserver(() => {
-    if (isFlightsPage()) annotateFlightResultsSoon();
+    if (!isFlightsPage()) return;
+    annotateFlightResultsSoon();
+    scheduleAutoOpenMatrixResult();
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
-  window.addEventListener("popstate", annotateFlightResultsSoon);
-  window.addEventListener("hashchange", annotateFlightResultsSoon);
+  window.addEventListener("popstate", scheduleFlightResultsWork);
+  window.addEventListener("hashchange", scheduleFlightResultsWork);
 }
 
 function installSearchAutoSubmitObserver(): void {
@@ -511,6 +507,19 @@ function scheduleAutoSubmitMatrixSearch(): void {
   }, AUTO_SEARCH_DEBOUNCE_MS);
 }
 
+function scheduleAutoOpenMatrixResult(): void {
+  if (autoOpenTimer) window.clearTimeout(autoOpenTimer);
+  autoOpenTimer = window.setTimeout(() => {
+    autoOpenTimer = undefined;
+    maybeAutoOpenMatrixResult();
+  }, AUTO_OPEN_DEBOUNCE_MS);
+}
+
+function scheduleFlightResultsWork(): void {
+  annotateFlightResultsSoon();
+  scheduleAutoOpenMatrixResult();
+}
+
 function maybeAutoSubmitMatrixSearch(): void {
   if (!shouldAutoSubmitMatrixSearch()) {
     autoSearchStartedAt = 0;
@@ -530,6 +539,7 @@ function maybeAutoSubmitMatrixSearch(): void {
   const button = matrixSearchButton();
   if (button && !isDisabledButton(button)) {
     autoSearchDone = true;
+    if (shouldAutoOpenMatrixResultAfterSearch()) rememberAutoOpenRequest();
     setStatus("Searching prefilled Matrix form...");
     button.click();
     return;
@@ -544,11 +554,130 @@ function shouldAutoSubmitMatrixSearch(): boolean {
   return url.searchParams.get("muTravelAutoSearch") === "1" && Boolean(url.searchParams.get("search"));
 }
 
+function maybeAutoOpenMatrixResult(): void {
+  if (isItineraryPage()) {
+    resetAutoOpenState();
+    forgetAutoOpenRequest();
+    return;
+  }
+  if (!isFlightsPage()) {
+    if (!isSearchPage()) resetAutoOpenState();
+    return;
+  }
+  if (!shouldAutoOpenMatrixResult()) {
+    resetAutoOpenState();
+    return;
+  }
+
+  const locationKey = currentLocationKey();
+  if (autoOpenLocationKey !== locationKey) {
+    autoOpenLocationKey = locationKey;
+    autoOpenStartedAt = Date.now();
+    autoOpenDone = false;
+    autoOpenClickedPrimaryResult = false;
+  }
+  if (autoOpenDone) return;
+
+  const target = matrixResultOpenTarget();
+  if (target) {
+    target.dataset.muTravelAutoOpenClicked = "true";
+    if (isPrimaryResultRow(target)) autoOpenClickedPrimaryResult = true;
+    setStatus("Opening first Matrix result...");
+    target.click();
+    if (Date.now() - autoOpenStartedAt < AUTO_OPEN_TIMEOUT_MS) scheduleAutoOpenMatrixResult();
+    return;
+  }
+
+  if (Date.now() - autoOpenStartedAt < AUTO_OPEN_TIMEOUT_MS) {
+    scheduleAutoOpenMatrixResult();
+    return;
+  }
+
+  autoOpenDone = true;
+  forgetAutoOpenRequest();
+}
+
+function shouldAutoOpenMatrixResultAfterSearch(): boolean {
+  const url = new URL(window.location.href);
+  return url.searchParams.get("muTravelAutoOpen") === "1";
+}
+
+function shouldAutoOpenMatrixResult(): boolean {
+  const url = new URL(window.location.href);
+  return url.searchParams.get("muTravelAutoOpen") === "1" || rememberedAutoOpenRequest();
+}
+
+function matrixResultOpenTarget(): HTMLElement | null {
+  const expandedControl = autoOpenClickedPrimaryResult ? firstExpandedResultOpenControl() : null;
+  if (expandedControl) return expandedControl;
+  if (autoOpenClickedPrimaryResult) return null;
+
+  const row = firstVisibleFlightResultRow();
+  if (!row || row.dataset.muTravelAutoOpenClicked === "true") return null;
+  const rowControl = firstResultOpenControl(row);
+  return rowControl || row;
+}
+
+function firstVisibleFlightResultRow(): HTMLTableRowElement | null {
+  return (
+    Array.from(document.querySelectorAll<HTMLTableRowElement>("tr[mat-row].mat-mdc-row:not(.detail-row)")).find(
+      (row) => isVisibleElement(row) && !row.closest(`#${PANEL_ID}`) && normalize(row.textContent || ""),
+    ) || null
+  );
+}
+
+function firstExpandedResultOpenControl(): HTMLElement | null {
+  const scopes = Array.from(document.querySelectorAll<HTMLElement>("tr.detail-row, matrix-itinerary-grid")).filter(
+    isVisibleElement,
+  );
+  for (const scope of scopes) {
+    const control = firstResultOpenControl(scope);
+    if (control) return control;
+  }
+  return null;
+}
+
+function firstResultOpenControl(scope: ParentNode): HTMLElement | null {
+  return (
+    Array.from(scope.querySelectorAll<HTMLElement>("button, a[href], [role='button']")).find(
+      (control) =>
+        !control.closest(`#${PANEL_ID}`) &&
+        control.dataset.muTravelAutoOpenClicked !== "true" &&
+        isVisibleElement(control) &&
+        !isDisabledControl(control) &&
+        isResultOpenControl(control),
+    ) || null
+  );
+}
+
+function isResultOpenControl(control: HTMLElement): boolean {
+  const label = normalize(
+    [
+      control.getAttribute("aria-label"),
+      control.getAttribute("title"),
+      control.textContent,
+      control instanceof HTMLAnchorElement ? control.href : "",
+    ]
+      .filter(Boolean)
+      .join(" "),
+  ).toLowerCase();
+  return (
+    /\b(select|choose|continue|details|view|open|itinerary)\b/.test(label) ||
+    /\b(usd|eur|gbp|jpy|cad|aud|hkd|twd|sgd)\s*[\d,.]+/.test(label) ||
+    /[$€£¥]\s*[\d,.]+/.test(label)
+  );
+}
+
 function matrixSearchButton(): HTMLButtonElement | null {
   return (
     document.querySelector<HTMLButtonElement>("button[type='submit'].search-button") ||
     document.querySelector<HTMLButtonElement>("button[type='submit']")
   );
+}
+
+function isDisabledControl(control: HTMLElement): boolean {
+  if (control instanceof HTMLButtonElement && isDisabledButton(control)) return true;
+  return control.getAttribute("aria-disabled") === "true" || control.classList.contains("mat-mdc-button-disabled");
 }
 
 function isDisabledButton(button: HTMLButtonElement): boolean {
@@ -558,6 +687,46 @@ function isDisabledButton(button: HTMLButtonElement): boolean {
     button.classList.contains("mat-mdc-button-disabled") ||
     button.classList.contains("mdc-button--disabled")
   );
+}
+
+function isVisibleElement(element: HTMLElement): boolean {
+  const rect = element.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0 && getComputedStyle(element).visibility !== "hidden";
+}
+
+function isPrimaryResultRow(element: HTMLElement): boolean {
+  return element.matches("tr[mat-row].mat-mdc-row:not(.detail-row)");
+}
+
+function rememberAutoOpenRequest(): void {
+  try {
+    sessionStorage.setItem(AUTO_OPEN_STORAGE_KEY, "1");
+  } catch {
+    // Session storage is optional; URL flags still drive same-page behavior.
+  }
+}
+
+function rememberedAutoOpenRequest(): boolean {
+  try {
+    return sessionStorage.getItem(AUTO_OPEN_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function forgetAutoOpenRequest(): void {
+  try {
+    sessionStorage.removeItem(AUTO_OPEN_STORAGE_KEY);
+  } catch {
+    // Session storage is optional.
+  }
+}
+
+function resetAutoOpenState(): void {
+  autoOpenStartedAt = 0;
+  autoOpenDone = false;
+  autoOpenLocationKey = "";
+  autoOpenClickedPrimaryResult = false;
 }
 
 function annotateFlightResultsSoon(): void {

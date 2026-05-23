@@ -28,13 +28,16 @@ Dev builds also add required host access for `https://travel.mu-travel.com/*`, `
 - Provides airport-code filtering, insert, and copy actions.
 - Auto-submits ITA Matrix `/search` only when a Mu Travel handoff URL includes `muTravelAutoSearch=1` and the
   prefilled form has enabled the native Search button.
+- Attempts to open the first visible ITA Matrix `/flights` result only when a Mu Travel handoff URL includes
+  `muTravelAutoOpen=1`.
 
 `src/content/googleFlightsContent.ts` runs on Google Flights pages so it can survive Google Flights SPA navigation. It
 only injects the visible panel on booking pages. It:
 
 - Parses visible booking options, prices, and direct-airline markers from the current booking page.
 - Lets the user start an opt-in country price comparison.
-- Builds ITA Matrix `/search?search=...&muTravelAutoSearch=1` handoff URLs from Google Flights booking-page data.
+- Builds ITA Matrix `/search?search=...&muTravelAutoSearch=1&muTravelAutoOpen=1` handoff URLs from Google Flights
+  booking-page data.
 - Asks the background service worker to open temporary inactive Google Flights tabs with different `gl` country codes
   while preserving the current itinerary URL and currency.
 - Shows the cheapest offer, direct-airline offer, option count, and sparse-result retry status by country.

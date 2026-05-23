@@ -1,3 +1,4 @@
+import { sendRuntimeMessage } from "../shared/chromeRuntime";
 import {
   DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES,
   type GoogleFlightsCountryResult,
@@ -380,14 +381,6 @@ function render(): void {
   shadow.querySelector('[data-action="open-options"]')?.addEventListener("click", () => {
     sendRuntimeMessage({ command: "openOptionsPage" });
   });
-}
-
-function sendRuntimeMessage(message: unknown): void {
-  try {
-    void chrome.runtime.sendMessage(message);
-  } catch {
-    // Content scripts can outlive their extension context after reload/update.
-  }
 }
 
 function renderBaseline(result: GoogleFlightsCountryResult): string {
