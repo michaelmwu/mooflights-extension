@@ -19,6 +19,11 @@ type SupplementalProgramEarning = {
   value: string | null;
 };
 
+type RevenueMultiplier = {
+  multiplier: number;
+  currency: string;
+};
+
 type CompactAirline = {
   iata: string;
   name: string;
@@ -315,7 +320,7 @@ function estimateSegmentEarningsRows(
   const rows = earningRows(carrier, bookingClass, booking, preferredPrograms, programTiers);
 
   return rows.map((row) => {
-    const computed = computeMiles(row.percent, row.value, distance, fare);
+    const computed = computeMiles(row.percent, row.value, distance, fare, itinerary.currency);
     return {
       segment,
       airlineName: airline.name,
@@ -417,6 +422,7 @@ function computeMiles(
   value: string | null,
   distance: number | undefined,
   fare: number | undefined,
+  fareCurrency: string | undefined,
 ): Pick<EarningsEstimate, "estimatedMiles" | "formula" | "basis"> {
   if (finiteNumber(percent) && finiteNumber(distance)) {
     return {
@@ -427,10 +433,10 @@ function computeMiles(
   }
 
   const revenueMultiplier = parseRevenueMultiplier(value);
-  if (finiteNumber(revenueMultiplier) && finiteNumber(fare)) {
+  if (revenueMultiplier && finiteNumber(fare)) {
     return {
-      estimatedMiles: Math.round(fare * revenueMultiplier),
-      formula: `${formatCurrency(fare)} x ${revenueMultiplier} miles per currency unit`,
+      estimatedMiles: Math.round(fare * revenueMultiplier.multiplier),
+      formula: `${formatCurrencyWithCode(fare, fareCurrency || revenueMultiplier.currency)} x ${revenueMultiplier.multiplier} miles/${revenueMultiplier.currency}`,
       basis: "revenue-multiplier",
     };
   }
@@ -531,11 +537,12 @@ function finiteNumber(value: number | null | undefined): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-function parseRevenueMultiplier(value: string | null): number | undefined {
-  const match = value?.match(/([\d.]+)\s*Miles\/(?:USD|EUR|GBP|CAD|AUD|JPY|[A-Z]{3})/i);
+function parseRevenueMultiplier(value: string | null): RevenueMultiplier | undefined {
+  const match = value?.match(/([\d.]+)\s*Miles\/(USD|EUR|GBP|CAD|AUD|JPY|[A-Z]{3})/i);
   if (!match) return undefined;
   const parsed = Number(match[1]);
-  return Number.isFinite(parsed) ? parsed : undefined;
+  const currency = match[2]?.toUpperCase() || "";
+  return Number.isFinite(parsed) && currency ? { multiplier: parsed, currency } : undefined;
 }
 
 function parseFixedMiles(value: string | null): number | undefined {
@@ -551,6 +558,10 @@ function formatPercent(value: number): string {
 
 function formatCurrency(value: number): string {
   return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
+}
+
+function formatCurrencyWithCode(value: number, currency: string): string {
+  return `${formatCurrency(value)} ${currency}`;
 }
 
 function formatNumber(value: number): string {

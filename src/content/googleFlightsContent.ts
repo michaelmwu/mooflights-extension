@@ -75,6 +75,11 @@ function currentCountryCode(): string {
   return new URL(window.location.href).searchParams.get("gl")?.toUpperCase() || "CURRENT";
 }
 
+function currentComparableCountryCode(): string {
+  const country = new URL(window.location.href).searchParams.get("gl")?.toUpperCase();
+  return /^[A-Z]{2}$/.test(country || "") ? country || "" : DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES[0] || "US";
+}
+
 function parseCurrentBookingPage(): GoogleFlightsCountryResult {
   return parseGoogleFlightsBookingOptions(document, currentCountryCode(), window.location.href);
 }
@@ -292,10 +297,10 @@ async function compareCountries(): Promise<void> {
   state.baseline = hasComparableCurrency ? parseCurrentBookingPage() : null;
   const comparePageKey = state.pageKey;
   const baseline = state.baseline;
-  const baseUrl = googleFlightsCountryUrl(window.location.href, currentCountryCode());
+  const baseUrl = googleFlightsCountryUrl(window.location.href, currentComparableCountryCode());
   render();
 
-  const currentCountry = currentCountryCode();
+  const currentCountry = currentComparableCountryCode();
   const countries = selectedCountries.filter((country) => !hasComparableCurrency || country !== currentCountry);
   try {
     const response = (await chrome.runtime.sendMessage({

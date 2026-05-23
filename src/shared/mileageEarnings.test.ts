@@ -322,7 +322,7 @@ describe("Mileage earning estimates", () => {
       airlineName: "JetSmart",
       bookingClass: "Y",
       estimatedMiles: 200,
-      formula: "100 x 2 miles per currency unit",
+      formula: "100 USD x 2 miles/USD",
       basis: "revenue-multiplier",
     });
   });
@@ -366,27 +366,27 @@ describe("Mileage earning estimates", () => {
       {
         program: "United MileagePlus Member",
         miles: 2250,
-        formula: "450 x 5 miles per currency unit",
+        formula: "450 USD x 5 miles/USD",
       },
       {
         program: "United MileagePlus Premier Silver",
         miles: 3150,
-        formula: "450 x 7 miles per currency unit",
+        formula: "450 USD x 7 miles/USD",
       },
       {
         program: "United MileagePlus Premier Gold",
         miles: 3600,
-        formula: "450 x 8 miles per currency unit",
+        formula: "450 USD x 8 miles/USD",
       },
       {
         program: "United MileagePlus Premier Platinum",
         miles: 4050,
-        formula: "450 x 9 miles per currency unit",
+        formula: "450 USD x 9 miles/USD",
       },
       {
         program: "United MileagePlus Premier 1K",
         miles: 4950,
-        formula: "450 x 11 miles per currency unit",
+        formula: "450 USD x 11 miles/USD",
       },
     ]);
   });
@@ -486,12 +486,12 @@ describe("Mileage earning estimates", () => {
       {
         segment: "TPE-NRT",
         miles: 1800,
-        formula: "225 x 8 miles per currency unit",
+        formula: "225 USD x 8 miles/USD",
       },
       {
         segment: "NRT-SFO",
         miles: 1800,
-        formula: "225 x 8 miles per currency unit",
+        formula: "225 USD x 8 miles/USD",
       },
     ]);
   });

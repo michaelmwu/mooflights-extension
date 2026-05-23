@@ -63,4 +63,14 @@ describe("settings", () => {
       },
     });
   });
+
+  it("preserves an intentionally empty Google Flights country list", () => {
+    expect(
+      mergeSettings({
+        googleFlights: {
+          countryCodes: [],
+        },
+      }).googleFlights.countryCodes,
+    ).toEqual([]);
+  });
 });

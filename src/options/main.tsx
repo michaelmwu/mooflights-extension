@@ -99,13 +99,15 @@ function Options(): React.ReactElement {
   }
 
   function removeGoogleFlightsCountry(country: string): void {
+    const countryCodes = normalizeGoogleFlightsCountryCodes(
+      settings.googleFlights.countryCodes.filter((code) => code !== country),
+      [],
+    );
     void persist({
       ...settings,
       googleFlights: {
         ...settings.googleFlights,
-        countryCodes: normalizeGoogleFlightsCountryCodes(
-          settings.googleFlights.countryCodes.filter((code) => code !== country),
-        ),
+        countryCodes,
       },
     });
   }

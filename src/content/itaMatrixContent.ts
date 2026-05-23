@@ -1072,21 +1072,7 @@ function renderMileageCredit(itinerary: NormalizedItinerary): string {
   return `
     <div class="segment-links">
       <strong>Miles credit</strong>
-      ${
-        visibleEstimates.length
-          ? visibleEstimates
-              .map(
-                (estimate) => `
-                  <a href="${escapeHtml(estimate.url)}" target="_blank" rel="noopener noreferrer" class="earning">
-                    <span>${escapeHtml(`${estimate.segment.origin}-${estimate.segment.destination} ${estimate.segment.fareCarrier || estimate.segment.carrier} ${estimate.bookingClass}`)}</span>
-                    <em>${escapeHtml(estimate.program)}</em>
-                    <small>${typeof estimate.estimatedMiles === "number" ? `${estimate.estimatedMiles.toLocaleString()} miles · ` : ""}${escapeHtml(estimate.formula)}</small>
-                  </a>
-                `,
-              )
-              .join("")
-          : ""
-      }
+      ${visibleEstimates.length ? renderMileageEstimateEntries(visibleEstimates, preferredProgramList) : ""}
       ${
         hiddenEstimateCount > 0 && visibleEstimates.length === 0
           ? `<div class="earning notice">
@@ -1109,6 +1095,111 @@ function renderMileageCredit(itinerary: NormalizedItinerary): string {
         .join("")}
     </div>
   `;
+}
+
+function renderMileageEstimateEntries(estimates: EarningsEstimate[], preferredProgramList: string[]): string {
+  const tierGroups = mileageTierGroups(estimates, preferredProgramList);
+  const renderedGroups = new Set<string>();
+  return estimates
+    .map((estimate) => {
+      const groupKey = mileageTierGroupKey(estimate, preferredProgramList);
+      if (!groupKey) return renderMileageEstimateEntry(estimate);
+      const group = tierGroups.get(groupKey);
+      if (!group || group.estimates.length <= 1) return renderMileageEstimateEntry(estimate);
+      if (renderedGroups.has(groupKey)) return "";
+      renderedGroups.add(groupKey);
+      return renderMileageTierGroup(group);
+    })
+    .join("");
+}
+
+function renderMileageEstimateEntry(estimate: EarningsEstimate): string {
+  return `
+    <a href="${escapeHtml(estimate.url)}" target="_blank" rel="noopener noreferrer" class="earning">
+      <span>${escapeHtml(mileageSegmentLabel(estimate))}</span>
+      <em>${escapeHtml(estimate.program)}</em>
+      <small>${typeof estimate.estimatedMiles === "number" ? `${estimate.estimatedMiles.toLocaleString()} miles · ` : ""}${escapeHtml(estimate.formula)}</small>
+    </a>
+  `;
+}
+
+function renderMileageTierGroup(group: {
+  parentProgram: string;
+  segmentLabel: string;
+  url: string;
+  estimates: EarningsEstimate[];
+}): string {
+  return `
+    <div class="earning tier-group">
+      <span>${escapeHtml(group.segmentLabel)}</span>
+      <a href="${escapeHtml(group.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(group.parentProgram)}</a>
+      <table>
+        <tbody>
+          ${group.estimates
+            .map(
+              (estimate) => `
+                <tr>
+                  <th>${escapeHtml(compactTierName(group.parentProgram, estimate.program))}</th>
+                  <td>${escapeHtml(typeof estimate.estimatedMiles === "number" ? estimate.estimatedMiles.toLocaleString() : "")}</td>
+                  <td>${escapeHtml(estimate.formula)}</td>
+                </tr>
+              `,
+            )
+            .join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function mileageTierGroups(
+  estimates: EarningsEstimate[],
+  preferredProgramList: string[],
+): Map<string, { parentProgram: string; segmentLabel: string; url: string; estimates: EarningsEstimate[] }> {
+  const groups = new Map<
+    string,
+    { parentProgram: string; segmentLabel: string; url: string; estimates: EarningsEstimate[] }
+  >();
+  for (const estimate of estimates) {
+    const groupKey = mileageTierGroupKey(estimate, preferredProgramList);
+    if (!groupKey) continue;
+    const parentProgram = mileageTierParentProgram(estimate.program, preferredProgramList) || estimate.program;
+    const current = groups.get(groupKey) || {
+      parentProgram,
+      segmentLabel: mileageSegmentLabel(estimate),
+      url: estimate.url,
+      estimates: [],
+    };
+    current.estimates.push(estimate);
+    groups.set(groupKey, current);
+  }
+  return groups;
+}
+
+function mileageTierGroupKey(estimate: EarningsEstimate, preferredProgramList: string[]): string {
+  const parentProgram = mileageTierParentProgram(estimate.program, preferredProgramList);
+  if (!parentProgram) return "";
+  return `${parentProgram}:${creditSegmentKey(estimate.segment, estimate.bookingClass)}`;
+}
+
+function mileageTierParentProgram(program: string, preferredProgramList: string[]): string {
+  for (const preferredProgram of preferredProgramList) {
+    if (program !== preferredProgram && program.startsWith(`${preferredProgram} `)) return preferredProgram;
+  }
+  return "";
+}
+
+function mileageSegmentLabel(estimate: EarningsEstimate): string {
+  return `${estimate.segment.origin}-${estimate.segment.destination} ${estimate.segment.fareCarrier || estimate.segment.carrier} ${estimate.bookingClass}`;
+}
+
+function compactTierName(parentProgram: string, program: string): string {
+  return program
+    .slice(parentProgram.length)
+    .trim()
+    .replace(/^Premier\s+/i, "")
+    .replace(/^Status\s+/i, "")
+    .trim();
 }
 
 function matchesPreferredMileageProgram(program: string, preferredPrograms: Set<string>): boolean {
@@ -1218,10 +1309,16 @@ function styles(): string {
     .links { display: grid; gap: 8px; margin-top: 10px; }
     .segment-links { display: grid; gap: 6px; margin-top: 10px; padding: 8px; border-radius: 6px; background: #f0fdfa; }
     .segment-links .earning { display: grid; gap: 2px; }
+    .segment-links .tier-group { gap: 5px; }
     .segment-links .notice { padding: 6px; border-radius: 6px; background: #fff7ed; color: #7c2d12; }
     .segment-links em { font-style: normal; color: #115e59; }
     .segment-links a { color: #0f766e; text-decoration: none; }
     .segment-links a:hover { text-decoration: underline; }
+    .segment-links table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .segment-links th, .segment-links td { padding: 2px 4px 2px 0; text-align: left; vertical-align: top; }
+    .segment-links th { width: 62px; color: #115e59; font-weight: 650; }
+    .segment-links td:nth-child(2) { width: 64px; color: #162033; font-weight: 650; text-align: right; }
+    .segment-links td:nth-child(3) { color: #64748b; }
     .segment-links .inline-button { width: fit-content; margin-top: 4px; border-color: #fed7aa; background: #ffffff; color: #9a3412; padding: 4px 7px; }
     .provider { display: grid; gap: 2px; padding: 8px; border: 1px solid #cbd5e1; border-left-width: 4px; border-radius: 6px; color: inherit; text-decoration: none; }
     .provider.high { border-left-color: #059669; }

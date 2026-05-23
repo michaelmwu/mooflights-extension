@@ -75,7 +75,7 @@ export function mergeSettings(value: unknown): ExtensionSettings {
     googleFlights: {
       countryCodes: normalizeGoogleFlightsCountryCodes(
         googleFlights.countryCodes,
-        DEFAULT_SETTINGS.googleFlights.countryCodes,
+        Array.isArray(googleFlights.countryCodes) ? [] : DEFAULT_SETTINGS.googleFlights.countryCodes,
       ),
     },
     airportHelper: {
