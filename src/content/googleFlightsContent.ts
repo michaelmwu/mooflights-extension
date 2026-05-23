@@ -30,6 +30,7 @@ const PANEL_ID = "mu-travel-google-flights-panel";
 const BOOKING_PATH_RE = /^\/travel\/flights\/booking/;
 const RESULT_CACHE_TTL_MS = 60 * 60 * 1000;
 let regionDisplayNames: Intl.DisplayNames | null | undefined;
+let countryCodeByDisplayName: Map<string, string> | null | undefined;
 
 const state: CompareState = {
   comparing: false,
@@ -91,12 +92,19 @@ function isBookingPage(): boolean {
 }
 
 function currentCountryCode(): string {
-  return new URL(window.location.href).searchParams.get("gl")?.toUpperCase() || "CURRENT";
+  const country = urlCountryCode();
+  if (country) return country;
+  const visibleCountry = visibleGoogleFlightsLocation();
+  return countryCodeFromDisplayName(visibleCountry) || visibleCountry || "CURRENT";
 }
 
 function currentComparableCountryCode(): string {
-  const country = new URL(window.location.href).searchParams.get("gl")?.toUpperCase();
-  return /^[A-Z]{2}$/.test(country || "") ? country || "" : DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES[0] || "US";
+  return (
+    urlCountryCode() ||
+    countryCodeFromDisplayName(visibleGoogleFlightsLocation()) ||
+    DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES[0] ||
+    "US"
+  );
 }
 
 function parseCurrentBookingPage(): GoogleFlightsCountryResult {
@@ -322,13 +330,55 @@ function googleFlightsResultSignature(result: GoogleFlightsCountryResult): strin
 
 function countryDisplayName(country: string): string {
   const code = country.toUpperCase();
-  if (!/^[A-Z]{2}$/.test(code)) return "Current country";
+  if (country === "CURRENT") return "Current country";
+  if (!/^[A-Z]{2}$/.test(code)) return country;
   const displayNames = getRegionDisplayNames();
   if (displayNames) {
     const label = displayNames.of(code);
     return label || code;
   }
   return code;
+}
+
+function urlCountryCode(): string {
+  const country = new URL(window.location.href).searchParams.get("gl")?.toUpperCase() || "";
+  return /^[A-Z]{2}$/.test(country) ? country : "";
+}
+
+function visibleGoogleFlightsLocation(): string {
+  const locationLabel = Array.from(document.querySelectorAll<HTMLElement>(".twocKe"))
+    .map((element) => ({
+      value: normalizeText(element.textContent || ""),
+      context: normalizeText(element.parentElement?.textContent || ""),
+    }))
+    .find((entry) => entry.value && /\bLocation\b/i.test(entry.context));
+  return locationLabel?.value || "";
+}
+
+function countryCodeFromDisplayName(value: string): string {
+  const normalized = normalizeCountryName(value);
+  if (!normalized) return "";
+  return getCountryCodeByDisplayName()?.get(normalized) || "";
+}
+
+function getCountryCodeByDisplayName(): Map<string, string> | null {
+  if (countryCodeByDisplayName !== undefined) return countryCodeByDisplayName;
+  const displayNames = getRegionDisplayNames();
+  if (!displayNames) {
+    countryCodeByDisplayName = null;
+    return countryCodeByDisplayName;
+  }
+
+  countryCodeByDisplayName = new Map<string, string>();
+  for (let first = 65; first <= 90; first += 1) {
+    for (let second = 65; second <= 90; second += 1) {
+      const code = `${String.fromCharCode(first)}${String.fromCharCode(second)}`;
+      const label = displayNames.of(code);
+      if (!label || label === code) continue;
+      countryCodeByDisplayName.set(normalizeCountryName(label), code);
+    }
+  }
+  return countryCodeByDisplayName;
 }
 
 function getRegionDisplayNames(): Intl.DisplayNames | null {
@@ -339,6 +389,14 @@ function getRegionDisplayNames(): Intl.DisplayNames | null {
     regionDisplayNames = null;
   }
   return regionDisplayNames;
+}
+
+function normalizeText(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function normalizeCountryName(value: string): string {
+  return normalizeText(value).toLocaleLowerCase("en-US");
 }
 
 async function compareCountries(): Promise<void> {
