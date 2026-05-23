@@ -45,6 +45,12 @@ describe("Google Flights booking option parser", () => {
     expect(url).toBe("https://www.google.com/travel/flights/booking?tfs=abc&curr=USD&gl=MY");
   });
 
+  it("adds a default currency when building comparable country URLs", () => {
+    const url = googleFlightsCountryUrl("https://www.google.com/travel/flights/booking?tfs=abc&gl=TW", "MY");
+
+    expect(url).toBe("https://www.google.com/travel/flights/booking?tfs=abc&gl=MY&curr=USD");
+  });
+
   it("parses non-USD booking prices while preserving visible price text", () => {
     document.body.innerHTML = `
       <div class="gN1nAc">
@@ -73,6 +79,38 @@ describe("Google Flights booking option parser", () => {
         currency: "JPY",
         priceText: "¥21,000",
         isDirect: true,
+      },
+    ]);
+  });
+
+  it("keeps localized direct markers and unmapped currency prices", () => {
+    document.body.innerHTML = `
+      <div class="gN1nAc">
+        <div class="ogfYpf">Book with Swiss<div class="EA71Tc">Fluggesellschaft</div></div>
+        <span aria-label="155 Swiss francs" role="text">CHF 155</span>
+      </div>
+      <div class="gN1nAc">
+        <div class="ogfYpf">Book with Nordic OTA</div>
+        <span aria-label="1,240 Norwegian kroner" role="text">NOK 1,240</span>
+      </div>
+    `;
+
+    const result = parseGoogleFlightsBookingOptions(document, "CH", "https://www.google.com/travel/flights/booking");
+
+    expect(result.options).toEqual([
+      {
+        provider: "Swiss",
+        price: 155,
+        currency: "CHF",
+        priceText: "CHF 155",
+        isDirect: true,
+      },
+      {
+        provider: "Nordic OTA",
+        price: 1240,
+        currency: "NOK",
+        priceText: "NOK 1,240",
+        isDirect: false,
       },
     ]);
   });
@@ -159,6 +197,10 @@ describe("Google Flights booking option parser", () => {
         cabin: "COACH",
       },
     });
+  });
+
+  it("returns null for invalid Matrix search input URLs", () => {
+    expect(parseGoogleFlightsMatrixSearch("not a url")).toBeNull();
   });
 
   it("splits Google Flights airport-change segments into Matrix multi-city slices", () => {
@@ -266,6 +308,34 @@ describe("Google Flights booking option parser", () => {
           routingRet: "CI922 CI220",
           dates: {
             departureDate: "2026-05-29",
+            returnDate: "2026-06-03",
+          },
+        },
+      ],
+    });
+  });
+
+  it("treats same-day reciprocal slices as round trips", () => {
+    const result = parseGoogleFlightsMatrixSearch(
+      `https://www.google.com/travel/flights/booking?tfs=${encodeTfsText([
+        tfsSlice(tfsSegment("2026-06-03", "HKG", "TPE", "CI", "922")),
+        tfsSlice(tfsSegment("2026-06-03", "TPE", "HKG", "CI", "921")),
+      ])}`,
+    );
+
+    expect(result?.tripType).toBe("round-trip");
+    const search = new URL(result?.matrixUrl || "").searchParams.get("search") || "";
+    const decoded = JSON.parse(atob(search));
+    expect(decoded).toMatchObject({
+      type: "round-trip",
+      slices: [
+        {
+          origin: ["HKG"],
+          dest: ["TPE"],
+          routing: "F:CI922",
+          routingRet: "F:CI921",
+          dates: {
+            departureDate: "2026-06-03",
             returnDate: "2026-06-03",
           },
         },

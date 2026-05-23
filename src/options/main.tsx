@@ -216,7 +216,7 @@ function Options(): React.ReactElement {
                 ...settings,
                 googleFlights: {
                   ...settings.googleFlights,
-                  countryCodes: DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES,
+                  countryCodes: [...DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES],
                 },
               })
             }

@@ -8,7 +8,7 @@ The extension targets Manifest V3 and currently requests:
 - `clipboardWrite`
 - `tabs`
 - required host access for `https://matrix.itasoftware.com/*`
-- required host access for `https://www.google.com/travel/flights/*`
+- required host access for `https://www.google.com/travel/flights/booking*`
 - optional host access for `https://travel.mu-travel.com/*`
 
 Dev builds also add required host access for `https://travel.mu-travel.com/*`, `http://localhost/*`, and

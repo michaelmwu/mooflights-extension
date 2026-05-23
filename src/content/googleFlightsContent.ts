@@ -2,6 +2,7 @@ import {
   DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES,
   type GoogleFlightsCountryResult,
   type GoogleFlightsMatrixSearch,
+  googleFlightsCountryUrl,
   parseGoogleFlightsBookingOptions,
   parseGoogleFlightsCountryInput,
   parseGoogleFlightsMatrixSearch,
@@ -27,6 +28,7 @@ type CompareResponse = {
 const PANEL_ID = "mu-travel-google-flights-panel";
 const BOOKING_PATH_RE = /^\/travel\/flights\/booking/;
 const RESULT_CACHE_TTL_MS = 60 * 60 * 1000;
+let regionDisplayNames: Intl.DisplayNames | null | undefined;
 
 const state: CompareState = {
   comparing: false,
@@ -89,7 +91,24 @@ function installObserver(): void {
   };
   const observer = new MutationObserver(schedule);
   observer.observe(document.documentElement, { childList: true, subtree: true });
-  window.setInterval(schedule, 1000);
+  installNavigationObserver(schedule);
+}
+
+function installNavigationObserver(schedule: () => void): void {
+  window.addEventListener("popstate", schedule);
+  window.addEventListener("hashchange", schedule);
+  const originalPushState = history.pushState;
+  const originalReplaceState = history.replaceState;
+  history.pushState = function pushState(...args) {
+    const result = originalPushState.apply(this, args);
+    schedule();
+    return result;
+  };
+  history.replaceState = function replaceState(...args) {
+    const result = originalReplaceState.apply(this, args);
+    schedule();
+    return result;
+  };
 }
 
 function scheduleRender(): void {
@@ -109,6 +128,7 @@ function scheduleRender(): void {
   if (state.pageKey !== pageKey) {
     state.pageKey = pageKey;
     state.error = "";
+    state.comparing = false;
     const cached = resultCache.get(pageKey);
     state.results = cached && Date.now() - cached.cachedAt <= RESULT_CACHE_TTL_MS ? cached.results : [];
   }
@@ -238,12 +258,22 @@ function renderCheapest(result: GoogleFlightsCountryResult): string {
 function countryDisplayName(country: string): string {
   const code = country.toUpperCase();
   if (!/^[A-Z]{2}$/.test(code)) return "Current country";
-  try {
-    const label = new Intl.DisplayNames(["en"], { type: "region" }).of(code);
+  const displayNames = getRegionDisplayNames();
+  if (displayNames) {
+    const label = displayNames.of(code);
     return label ? `${label} (${code})` : code;
-  } catch {
-    return code;
   }
+  return code;
+}
+
+function getRegionDisplayNames(): Intl.DisplayNames | null {
+  if (regionDisplayNames !== undefined) return regionDisplayNames;
+  try {
+    regionDisplayNames = new Intl.DisplayNames(["en"], { type: "region" });
+  } catch {
+    regionDisplayNames = null;
+  }
+  return regionDisplayNames;
 }
 
 async function compareCountries(): Promise<void> {
@@ -257,24 +287,26 @@ async function compareCountries(): Promise<void> {
   state.comparing = true;
   state.error = "";
   state.results = [];
-  state.baseline = parseCurrentBookingPage();
+  const currentUrl = new URL(window.location.href);
+  const hasComparableCurrency = currentUrl.searchParams.has("curr");
+  state.baseline = hasComparableCurrency ? parseCurrentBookingPage() : null;
   const comparePageKey = state.pageKey;
   const baseline = state.baseline;
-  const baseUrl = window.location.href;
+  const baseUrl = googleFlightsCountryUrl(window.location.href, currentCountryCode());
   render();
 
   const currentCountry = currentCountryCode();
-  const countries = selectedCountries.filter((country) => country !== currentCountry);
+  const countries = selectedCountries.filter((country) => !hasComparableCurrency || country !== currentCountry);
   try {
     const response = (await chrome.runtime.sendMessage({
       command: "compareGoogleFlightsCountries",
       baseUrl,
       countries,
-      baselineOptionCount: baseline.options.length,
+      baselineOptionCount: baseline?.options.length ?? 0,
     })) as CompareResponse;
     if (state.pageKey !== comparePageKey) return;
     if (!response?.ok) throw new Error(response?.error || "Country comparison failed.");
-    state.results = [baseline, ...(response.results || [])];
+    state.results = baseline ? [baseline, ...(response.results || [])] : response.results || [];
     if (comparePageKey) {
       resultCache.set(comparePageKey, {
         results: state.results,
@@ -288,6 +320,9 @@ async function compareCountries(): Promise<void> {
     if (state.pageKey === comparePageKey) {
       state.comparing = false;
       render();
+    } else {
+      state.comparing = false;
+      scheduleRender();
     }
   }
 }

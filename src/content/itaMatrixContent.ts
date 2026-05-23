@@ -59,9 +59,6 @@ const MESSAGE_SOURCE = "mu-travel-flights";
 const AUTO_CAPTURE_DEBOUNCE_MS = 150;
 let autoCaptureCheckTimer: number | undefined;
 let flightResultAnnotationTimer: number | undefined;
-let autoOpenFirstResultTimer: number | undefined;
-let autoOpenFirstResultStartedAt = 0;
-let autoOpenFirstResultDone = false;
 
 const state: PanelState = {
   settings: null,
@@ -94,7 +91,6 @@ async function init(): Promise<void> {
   installFlightResultObserver();
   maybeAutoCapture();
   annotateFlightResultsSoon();
-  scheduleAutoOpenFirstFlightResult();
 }
 
 function render(): void {
@@ -421,49 +417,7 @@ function annotateFlightResultsSoon(): void {
   flightResultAnnotationTimer = window.setTimeout(() => {
     flightResultAnnotationTimer = undefined;
     annotateFlightResults();
-    scheduleAutoOpenFirstFlightResult();
   }, 150);
-}
-
-function scheduleAutoOpenFirstFlightResult(): void {
-  if (autoOpenFirstResultTimer) window.clearTimeout(autoOpenFirstResultTimer);
-  autoOpenFirstResultTimer = window.setTimeout(() => {
-    autoOpenFirstResultTimer = undefined;
-    maybeAutoOpenFirstFlightResult();
-  }, 250);
-}
-
-function maybeAutoOpenFirstFlightResult(): void {
-  if (!shouldAutoOpenFirstFlightResult()) {
-    autoOpenFirstResultDone = false;
-    autoOpenFirstResultStartedAt = 0;
-    return;
-  }
-
-  if (autoOpenFirstResultDone) return;
-  if (!autoOpenFirstResultStartedAt) autoOpenFirstResultStartedAt = Date.now();
-
-  const row = firstFlightResultRow();
-  if (row) {
-    autoOpenFirstResultDone = true;
-    row.click();
-    return;
-  }
-
-  if (Date.now() - autoOpenFirstResultStartedAt < 30_000) scheduleAutoOpenFirstFlightResult();
-}
-
-function shouldAutoOpenFirstFlightResult(): boolean {
-  if (!isFlightsPage()) return false;
-  return new URL(window.location.href).searchParams.get("muTravelAutoOpen") === "1";
-}
-
-function firstFlightResultRow(): HTMLElement | null {
-  return (
-    document.querySelector<HTMLElement>("tr[mat-row].mat-mdc-row:not(.detail-row)") ||
-    document.querySelector<HTMLElement>("tr[mat-row]:not(.detail-row)") ||
-    document.querySelector<HTMLElement>("mat-row:not(.detail-row)")
-  );
 }
 
 function annotateFlightResults(): void {
@@ -655,13 +609,16 @@ function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSumm
   }
 
   const programs = Array.from(byProgram.entries())
-    .map(([program, value]) => ({
-      program,
-      miles: value.miles,
-      formulas: value.formulas,
-      preferenceRank: mileageProgramPreferenceRank(program, preferredProgramRanks),
-      preferred: mileageProgramPreferenceRank(program, preferredProgramRanks) !== Number.POSITIVE_INFINITY,
-    }))
+    .map(([program, value]) => {
+      const preferenceRank = mileageProgramPreferenceRank(program, preferredProgramRanks);
+      return {
+        program,
+        miles: value.miles,
+        formulas: value.formulas,
+        preferenceRank,
+        preferred: preferenceRank !== Number.POSITIVE_INFINITY,
+      };
+    })
     .sort((left, right) => {
       if (left.preferred !== right.preferred) return left.preferred ? -1 : 1;
       if (left.preferenceRank !== right.preferenceRank) return left.preferenceRank - right.preferenceRank;

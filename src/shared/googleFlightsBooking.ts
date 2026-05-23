@@ -1,4 +1,5 @@
 export const DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES = ["US", "CA", "GB", "JP", "TW", "HK", "SG", "KR", "AU", "MY"];
+const DEFAULT_GOOGLE_FLIGHTS_CURRENCY = "USD";
 
 export type GoogleFlightsBookingOption = {
   provider: string;
@@ -44,6 +45,7 @@ export type GoogleFlightsMatrixSearch = {
 export function googleFlightsCountryUrl(baseUrl: string, country: string): string {
   const url = new URL(baseUrl);
   url.searchParams.set("gl", country);
+  if (!url.searchParams.has("curr")) url.searchParams.set("curr", DEFAULT_GOOGLE_FLIGHTS_CURRENCY);
   return url.toString();
 }
 
@@ -70,7 +72,13 @@ export function parseGoogleFlightsCountryInput(value: string): string[] {
 }
 
 export function parseGoogleFlightsMatrixSearch(url: string): GoogleFlightsMatrixSearch | null {
-  const tfs = new URL(url).searchParams.get("tfs");
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return null;
+  }
+  const tfs = parsedUrl.searchParams.get("tfs");
   if (!tfs) return null;
   const segments = parseGoogleFlightsTfsSegments(tfs);
   if (segments.length === 0) return null;
@@ -220,12 +228,7 @@ function groupGoogleFlightsSegments(segments: GoogleFlightsFlightSegment[]): Goo
 function googleFlightsTripType(slices: GoogleFlightsMatrixSearch["slices"]): GoogleFlightsMatrixSearch["tripType"] {
   if (slices.length === 1) return "one-way";
   const [first, second] = slices;
-  if (
-    slices.length === 2 &&
-    first?.origin === second?.destination &&
-    first?.destination === second?.origin &&
-    first.departureDate !== second.departureDate
-  ) {
+  if (slices.length === 2 && first?.origin === second?.destination && first?.destination === second?.origin) {
     return "round-trip";
   }
   return "multi-city";
@@ -343,9 +346,7 @@ function providerLabel(row: Element): { provider: string; isDirect: boolean } | 
     ) || normalizedText(labelElement?.textContent || "");
   if (!rawLabel) return null;
 
-  const isDirect = Array.from(row.querySelectorAll(".EA71Tc")).some((element) =>
-    /^Airline$/i.test(normalizedText(element.textContent || "")),
-  );
+  const isDirect = Boolean(row.querySelector(".EA71Tc"));
   const provider = cleanProviderLabel(rawLabel);
 
   return provider ? { provider, isDirect } : null;
@@ -378,7 +379,10 @@ function parsePriceText(
   const ariaText = normalizedText(ariaLabel);
   const parsedAria = ariaText ? parsePriceAmount(ariaText) : null;
   const parsedVisible = visibleText ? parsePriceAmount(visibleText) : null;
-  const parsed = parsedAria || parsedVisible;
+  const parsed =
+    parsedAria?.currency === "UNKNOWN" && parsedVisible && parsedVisible.currency !== "UNKNOWN"
+      ? parsedVisible
+      : parsedAria || parsedVisible;
   if (!parsed) return null;
 
   return {
@@ -394,8 +398,8 @@ function parsePriceAmount(value: string): { price: number; currency: string; pri
   const price = parseLocalizedNumber(amount[1]);
   if (!Number.isFinite(price)) return null;
 
-  const currency = currencyFromText(value);
-  const priceText = priceTextFromValue(value);
+  const currency = currencyFromText(value) || currencyCodeFromText(value);
+  const priceText = priceTextFromValue(value) || priceLikeTextFromValue(value);
   if (!currency && !priceText) return null;
 
   return {
@@ -403,6 +407,20 @@ function parsePriceAmount(value: string): { price: number; currency: string; pri
     currency: currency || "UNKNOWN",
     priceText: priceText || value,
   };
+}
+
+function currencyCodeFromText(value: string): string {
+  return value.match(/\b[A-Z]{3}\b/)?.[0] || "";
+}
+
+function priceLikeTextFromValue(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length > 40 || !/[0-9]/.test(trimmed)) return "";
+  if (currencyCodeFromText(trimmed)) return trimmed;
+  if (/francs?|kron(?:er|a)|pesos?|dollars?|euros?|pounds?|yen|rupees?|won|baht|ringgit|yuan/i.test(trimmed)) {
+    return trimmed;
+  }
+  return "";
 }
 
 function priceTextFromValue(value: string): string {
