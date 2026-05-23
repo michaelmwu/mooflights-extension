@@ -1075,6 +1075,7 @@ function renderMileageCredit(itinerary: NormalizedItinerary): string {
     preferredPrograms.size > 0 && !state.showAllMileagePrograms
       ? estimates.filter((estimate) => matchesPreferredMileageProgram(estimate.program, preferredPrograms))
       : estimates;
+  const sortedVisibleEstimates = sortMileageEstimatesByPreference(visibleEstimates, preferredProgramList);
   const hiddenEstimateCount = estimates.length - visibleEstimates.length;
   const insights = inspectWhereToCreditSegments(itinerary);
   const estimatedKeys = new Set(estimates.map((estimate) => creditSegmentKey(estimate.segment, estimate.bookingClass)));
@@ -1085,7 +1086,7 @@ function renderMileageCredit(itinerary: NormalizedItinerary): string {
   return `
     <div class="segment-links">
       <strong>Miles credit</strong>
-      ${visibleEstimates.length ? renderMileageEstimateEntries(visibleEstimates, preferredProgramList) : ""}
+      ${sortedVisibleEstimates.length ? renderMileageEstimateEntries(sortedVisibleEstimates, preferredProgramList) : ""}
       ${
         hiddenEstimateCount > 0 && visibleEstimates.length === 0
           ? `<div class="earning notice">
@@ -1116,6 +1117,25 @@ function renderMileageCredit(itinerary: NormalizedItinerary): string {
         .join("")}
     </div>
   `;
+}
+
+function sortMileageEstimatesByPreference(
+  estimates: EarningsEstimate[],
+  preferredProgramList: string[],
+): EarningsEstimate[] {
+  const preferredProgramRanks = new Map(preferredProgramList.map((program, index) => [program, index]));
+  return [...estimates].sort((left, right) => {
+    const leftRank = mileageProgramPreferenceRank(left.program, preferredProgramRanks);
+    const rightRank = mileageProgramPreferenceRank(right.program, preferredProgramRanks);
+    if (leftRank !== rightRank) return leftRank - rightRank;
+    return (
+      creditSegmentKey(left.segment, left.bookingClass).localeCompare(
+        creditSegmentKey(right.segment, right.bookingClass),
+      ) ||
+      (right.estimatedMiles ?? -1) - (left.estimatedMiles ?? -1) ||
+      left.program.localeCompare(right.program)
+    );
+  });
 }
 
 function renderMileageEstimateEntries(estimates: EarningsEstimate[], preferredProgramList: string[]): string {
@@ -1382,6 +1402,7 @@ function styles(): string {
     .segment-links .segment-group:first-of-type { padding-top: 0; border-top: 0; }
     .segment-links .notice { padding: 6px; border-radius: 6px; background: #fff7ed; color: #7c2d12; }
     .segment-links .more-earnings { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 4px; border-top: 1px solid #ccfbf1; }
+    .segment-links .more-earnings small { min-width: 0; }
     .segment-links em { font-style: normal; color: #115e59; }
     .segment-links a { color: #0f766e; text-decoration: none; }
     .segment-links a:hover { text-decoration: underline; }
@@ -1390,7 +1411,8 @@ function styles(): string {
     .segment-links th { width: 62px; color: #115e59; font-weight: 650; }
     .segment-links td:nth-child(2) { width: 64px; color: #162033; font-weight: 650; text-align: right; }
     .segment-links td:nth-child(3) { color: #64748b; }
-    .segment-links .inline-button { width: fit-content; margin-top: 4px; border-color: #fed7aa; background: #ffffff; color: #9a3412; padding: 4px 7px; }
+    .segment-links .inline-button { width: fit-content; margin-top: 4px; border-color: #fed7aa; background: #ffffff; color: #9a3412; padding: 4px 7px; white-space: nowrap; }
+    .segment-links .more-earnings .inline-button { flex: 0 0 auto; margin-top: 0; }
     .provider { display: grid; gap: 2px; padding: 8px; border: 1px solid #cbd5e1; border-left-width: 4px; border-radius: 6px; color: inherit; text-decoration: none; }
     .provider.high { border-left-color: #059669; }
     .provider.medium { border-left-color: #d97706; }
