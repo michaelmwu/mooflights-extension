@@ -19,6 +19,7 @@ type CompareState = {
   error: string;
   countryInput: string;
   pageKey: string;
+  cacheKey: string;
 };
 
 type CompareResponse = {
@@ -31,6 +32,7 @@ const PANEL_ID = "mu-travel-google-flights-panel";
 const BOOKING_PATH_RE = /^\/travel\/flights\/booking/;
 const RESULT_CACHE_TTL_MS = 10 * 60 * 1000;
 const RESULT_CACHE_STORAGE_KEY = "muTravelGoogleFlightsCountryResults";
+const STORED_OPTIONS_LIMIT = 24;
 let regionDisplayNames: Intl.DisplayNames | null | undefined;
 let countryCodeByDisplayName: Map<string, string> | null | undefined;
 
@@ -43,6 +45,7 @@ const state: CompareState = {
   error: "",
   countryInput: DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES.join(", "),
   pageKey: "",
+  cacheKey: "",
 };
 
 const resultCache = new Map<
@@ -77,30 +80,30 @@ function applyCachedResults(cached: { results: GoogleFlightsCountryResult[]; cac
   state.resultsCachedAt = cached?.cachedAt || 0;
 }
 
-async function loadStoredCachedResults(pageKey: string, now = Date.now()): Promise<void> {
+async function loadStoredCachedResults(cacheKey: string, now = Date.now()): Promise<void> {
   const cache = await readStoredResultCache();
-  const cached = cache[pageKey];
+  const cached = cache[cacheKey];
   if (!cached) return;
   if (now - cached.cachedAt > RESULT_CACHE_TTL_MS) {
-    delete cache[pageKey];
+    delete cache[cacheKey];
     await writeStoredResultCache(cache);
     return;
   }
-  resultCache.set(pageKey, cached);
-  if (state.pageKey !== pageKey || state.results.length > 0) return;
+  resultCache.set(cacheKey, cached);
+  if (state.cacheKey !== cacheKey || state.results.length > 0) return;
   applyCachedResults(cached);
   render();
 }
 
 async function storeCachedResults(
-  pageKey: string,
+  cacheKey: string,
   results: GoogleFlightsCountryResult[],
   cachedAt = Date.now(),
 ): Promise<void> {
   const cached = { results, cachedAt };
-  resultCache.set(pageKey, cached);
+  resultCache.set(cacheKey, cached);
   const cache = await readStoredResultCache();
-  cache[pageKey] = cached;
+  cache[cacheKey] = { results: sanitizeResultsForStorage(results), cachedAt };
   await writeStoredResultCache(pruneStoredResultCache(cache, cachedAt));
 }
 
@@ -129,7 +132,7 @@ function normalizeStoredResultCache(value: unknown): StoredResultCache {
     const candidate = entry as { results?: unknown; cachedAt?: unknown };
     if (!Array.isArray(candidate.results) || typeof candidate.cachedAt !== "number") continue;
     cache[pageKey] = {
-      results: candidate.results.filter(isGoogleFlightsCountryResult),
+      results: sanitizeResultsForStorage(candidate.results.filter(isGoogleFlightsCountryResult)),
       cachedAt: candidate.cachedAt,
     };
   }
@@ -149,6 +152,28 @@ function isGoogleFlightsCountryResult(value: unknown): value is GoogleFlightsCou
     Array.isArray(candidate.options) &&
     typeof candidate.status === "string"
   );
+}
+
+function sanitizeResultsForStorage(results: GoogleFlightsCountryResult[]): GoogleFlightsCountryResult[] {
+  return results.map(sanitizeResultForStorage);
+}
+
+function sanitizeResultForStorage(result: GoogleFlightsCountryResult): GoogleFlightsCountryResult {
+  const safeOptions = result.options.map((option) => {
+    const { bookingUrl: _bookingUrl, ...safeOption } = option;
+    return safeOption;
+  });
+  const direct = safeOptions.find((option) => option.isDirect);
+  const options = safeOptions.slice(0, STORED_OPTIONS_LIMIT);
+  if (direct && !options.some((option) => bookingOptionKey(option) === bookingOptionKey(direct))) {
+    options.push(direct);
+  }
+  return {
+    ...result,
+    options,
+    cheapest: options[0],
+    direct: options.find((option) => option.isDirect),
+  };
 }
 
 chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
@@ -229,10 +254,12 @@ function installNavigationObserver(schedule: () => void): void {
 
 function scheduleRender(): void {
   const pageKey = currentBookingPageKey();
+  const cacheKey = currentComparisonCacheKey();
   if (!pageKey) {
     if (!state.pageKey && !document.getElementById(PANEL_ID)) return;
     removePanel();
     state.pageKey = "";
+    state.cacheKey = "";
     state.baseline = null;
     state.baselineSignature = "";
     state.results = [];
@@ -248,16 +275,17 @@ function scheduleRender(): void {
   const baselineSignature = googleFlightsResultSignature(baseline);
   if (state.pageKey !== pageKey) {
     state.pageKey = pageKey;
+    state.cacheKey = cacheKey;
     state.baselineSignature = "";
     state.error = "";
     state.comparing = false;
-    applyCachedResults(readCachedResults(pageKey));
-    void loadStoredCachedResults(pageKey);
+    applyCachedResults(readCachedResults(cacheKey));
+    void loadStoredCachedResults(cacheKey);
   } else if (state.baselineSignature && state.baselineSignature !== baselineSignature) {
     if (state.results.length > 0 && !state.resultsCachedAt) {
       state.resultsCachedAt = Date.now();
     } else if (state.results.length === 0) {
-      void loadStoredCachedResults(pageKey);
+      void loadStoredCachedResults(cacheKey);
     }
   }
 
@@ -268,13 +296,23 @@ function scheduleRender(): void {
 }
 
 function currentBookingPageKey(): string {
+  return currentBookingPageKeyForCountry(true);
+}
+
+function currentComparisonCacheKey(): string {
+  return currentBookingPageKeyForCountry(false);
+}
+
+function currentBookingPageKeyForCountry(includeCountry: boolean): string {
   if (!isBookingPage()) return "";
   const url = new URL(window.location.href);
   const params = new URLSearchParams();
-  for (const key of ["tfs", "tfu", "curr"]) {
+  for (const key of ["tfs", "tfu"]) {
     const value = url.searchParams.get(key);
     if (value) params.set(key, value);
   }
+  params.set("curr", url.searchParams.get("curr") || "USD");
+  if (includeCountry) params.set("gl", currentComparableCountryCode());
   return `${url.pathname}?${params.toString()}`;
 }
 
@@ -565,6 +603,7 @@ async function compareCountries(): Promise<void> {
   const hasComparableCurrency = currentUrl.searchParams.has("curr");
   state.baseline = hasComparableCurrency ? parseCurrentBookingPage() : null;
   const comparePageKey = state.pageKey;
+  const compareCacheKey = state.cacheKey;
   const baseline = state.baseline;
   const baseUrl = googleFlightsCountryUrl(window.location.href, currentComparableCountryCode());
   render();
@@ -586,7 +625,7 @@ async function compareCountries(): Promise<void> {
     state.resultsCachedAt = merged.retained ? previousCachedAt || Date.now() : 0;
     if (comparePageKey) {
       pruneExpiredResultCache();
-      void storeCachedResults(comparePageKey, state.results);
+      void storeCachedResults(compareCacheKey || comparePageKey, state.results);
     }
   } catch (error) {
     if (state.pageKey !== comparePageKey) return;

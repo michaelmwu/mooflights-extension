@@ -40,7 +40,7 @@ chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) =
 async function compareGoogleFlightsCountries(payload: RuntimeMessage): Promise<GoogleFlightsCountryResult[]> {
   const baseUrl = payload.baseUrl || "";
   if (!baseUrl) throw new Error("Missing Google Flights URL.");
-  const countries = (payload.countries || []).filter((country) => /^[A-Z]{2}$/.test(country));
+  const countries = Array.from(new Set((payload.countries || []).filter((country) => /^[A-Z]{2}$/.test(country))));
   const baselineOptionCount = payload.baselineOptionCount || 0;
   return mapWithConcurrency(countries, 3, (country) =>
     compareGoogleFlightsCountry(baseUrl, country, baselineOptionCount),
