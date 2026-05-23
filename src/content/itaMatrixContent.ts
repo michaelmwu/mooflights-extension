@@ -1419,8 +1419,8 @@ function renderMileageSortControls(hasPreferredPrograms: boolean): string {
   return `
     <div class="mileage-sort-controls">
       <div class="segmented-control" role="group" aria-label="Sort mileage rows">
-        <button type="button" data-action="mileage-sort" data-sort="miles" aria-pressed="${milesSelected}">Miles</button>
-        <button type="button" data-action="mileage-sort" data-sort="name" aria-pressed="${nameSelected}">Name</button>
+        <button type="button" data-action="mileage-sort" data-sort="miles" aria-pressed="${milesSelected}" aria-label="Sort by miles descending">Miles <span aria-hidden="true">↓</span></button>
+        <button type="button" data-action="mileage-sort" data-sort="name" aria-pressed="${nameSelected}" aria-label="Sort by program name ascending">Name <span aria-hidden="true">↑</span></button>
       </div>
       ${
         hasPreferredPrograms
