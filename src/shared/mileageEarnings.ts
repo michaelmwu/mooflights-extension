@@ -421,12 +421,31 @@ function isTieredProgram(parentProgram: string, program: string): boolean {
 }
 
 function compactTierLabel(parentProgram: string, tierProgram: string): string {
-  return tierProgram
+  const label = tierProgram
     .slice(parentProgram.length)
     .trim()
     .replace(/^Premier\s+/i, "")
     .replace(/^Status\s+/i, "")
     .trim();
+  return removeTierBrandPrefix(parentProgram, label);
+}
+
+function removeTierBrandPrefix(parentProgram: string, label: string): string {
+  const programTokens = tierLabelTokens(parentProgram);
+  const labelTokens = label.split(/\s+/).filter(Boolean);
+  while (labelTokens.length > 1 && programTokens.has(labelTokens[0]?.toLowerCase() || "")) {
+    labelTokens.shift();
+  }
+  return labelTokens.join(" ") || label;
+}
+
+function tierLabelTokens(value: string): Set<string> {
+  return new Set(
+    value
+      .split(/[^A-Za-z0-9+&]+/)
+      .map((token) => token.toLowerCase())
+      .filter((token) => token.length >= 4),
+  );
 }
 
 function tierRank(label: string): number {

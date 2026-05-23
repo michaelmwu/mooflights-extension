@@ -41,6 +41,20 @@ describe("Mileage earning estimates", () => {
     expect(mileageProgramTierOptions("Air Canada Aeroplan 2026")).toEqual([]);
   });
 
+  it("removes repetitive program branding from imported tier labels", () => {
+    expect(mileageProgramTierOptions("Singapore Airlines KrisFlyer")).toEqual([
+      { program: "Singapore Airlines KrisFlyer KrisFlyer", label: "KrisFlyer" },
+      { program: "Singapore Airlines KrisFlyer KrisFlyer Elite Silver", label: "Elite Silver" },
+      { program: "Singapore Airlines KrisFlyer KrisFlyer Elite Gold", label: "Elite Gold" },
+    ]);
+    expect(mileageProgramTierOptions("Air Europa Suma")).toEqual([
+      { program: "Air Europa Suma SUMA", label: "SUMA" },
+      { program: "Air Europa Suma SUMA Silver", label: "Silver" },
+      { program: "Air Europa Suma SUMA Gold", label: "Gold" },
+      { program: "Air Europa Suma SUMA Platinum", label: "Platinum" },
+    ]);
+  });
+
   it("includes curated preferred earning rows that are not the compact top row", () => {
     const thai: NormalizedItinerary = itineraryFor("TG", "W");
     expect(estimateEarnings(thai, ["United MileagePlus"]).map((estimate) => estimate.program)).toEqual([
