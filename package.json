@@ -9,9 +9,11 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "build:dev": "node scripts/build.mjs --dev",
+    "build:stable": "node scripts/build.mjs --stable-dist",
     "clean": "rimraf dist",
     "check": "biome check .",
     "dev": "node scripts/build.mjs --watch",
+    "dev:stable": "node scripts/build.mjs --watch --stable-dist",
     "format": "biome format --write .",
     "import:mileage-earnings": "node scripts/import-mileage-earnings.mjs",
     "import:airport-coordinates": "node scripts/import-airports.mjs",

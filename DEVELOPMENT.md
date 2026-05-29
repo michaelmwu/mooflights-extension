@@ -101,6 +101,16 @@ developer account and store automation credentials, store submission remains man
 
 Neither workflow needs backend secrets. The extension build must not read `.env`.
 
+## Stable Unpacked Extension Path
+
+Chrome keys unpacked-extension storage to the loaded extension identity, and loading `dist/` from a different Conductor workspace can make Chrome treat it as a different extension. To keep settings while archiving and recreating workspaces, use the stable build target:
+
+```sh
+bun run dev:stable
+```
+
+In a linked worktree, this writes to the canonical repo root `dist/` instead of the workspace `dist/`. Load that canonical `dist/` once in Chrome's extension page and reload it after workspace builds. The checked-in Conductor Run script uses `bun run dev:stable` and is marked non-concurrent so two workspaces do not race to write the same extension directory.
+
 ## Chrome Extension Notes
 
 - `src/manifest.json` is copied into `dist/manifest.json`.
