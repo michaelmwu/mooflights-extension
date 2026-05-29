@@ -21,6 +21,8 @@ type CompareState = {
   countryInput: string;
   pageKey: string;
   cacheKey: string;
+  panelMinimized: boolean;
+  panelPosition: PanelPosition;
 };
 
 type CompareResponse = {
@@ -29,13 +31,28 @@ type CompareResponse = {
   error?: string;
 };
 
+type PanelEdge = "top" | "right" | "bottom" | "left";
+
+type PanelPosition = {
+  edge: PanelEdge;
+  ratio: number;
+};
+
 const PANEL_ID = "mu-travel-google-flights-panel";
 const BOOKING_PATH_RE = /^\/travel\/flights\/booking/;
 const RESULT_CACHE_TTL_MS = 10 * 60 * 1000;
 const RESULT_CACHE_STORAGE_KEY = "muTravelGoogleFlightsCountryResults";
+const PANEL_UI_STORAGE_KEY = "muTravelGoogleFlightsPanelUi";
+const DEFAULT_PANEL_POSITION: PanelPosition = { edge: "right", ratio: 1 };
+const PANEL_EDGE_OFFSET_PX = 16;
+const GOOGLE_FLIGHTS_HEADER_HEIGHT_PX = 64;
+const GOOGLE_FLIGHTS_HEADER_BUFFER_PX = 12;
+const PANEL_CORNER_SNAP_PX = 96;
 const STORED_OPTIONS_LIMIT = 24;
 let regionDisplayNames: Intl.DisplayNames | null | undefined;
 let countryCodeByDisplayName: Map<string, string> | null | undefined;
+let suppressPanelRestoreClick = false;
+const panelUi = loadPanelUiState();
 
 const state: CompareState = {
   comparing: false,
@@ -47,6 +64,8 @@ const state: CompareState = {
   countryInput: DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES.join(", "),
   pageKey: "",
   cacheKey: "",
+  panelMinimized: panelUi.minimized,
+  panelPosition: panelUi.position,
 };
 
 const resultCache = new Map<
@@ -343,29 +362,53 @@ function render(): void {
 
   shadow.innerHTML = `
     <style>${styles()}</style>
-    <section class="panel" aria-label="Mu Travel country price comparison">
-      <header>
-        <strong>Mu Travel</strong>
-        <span>Country price check</span>
-      </header>
-      ${renderBaseline(baseline)}
-      ${renderMilesEstimatePrompt(matrixSearch)}
-      <label class="country-input">
-        Countries
-        <input type="text" value="${escapeHtml(state.countryInput)}" data-role="country-input" spellcheck="false" />
-      </label>
-      <div class="actions">
-        <button type="button" ${state.comparing ? "disabled" : ""} data-action="compare-countries">
-          ${state.comparing ? "Checking..." : "Compare countries"}
-        </button>
-        ${matrixSearch ? '<button type="button" class="secondary" data-action="open-matrix">Search Matrix</button>' : ""}
-        <button type="button" class="secondary" data-action="open-options">Options</button>
-      </div>
-      ${state.error ? `<p class="error">${escapeHtml(state.error)}</p>` : ""}
-      ${renderCacheNotice()}
-      ${renderResults(state.results)}
+    <section class="panel ${state.panelMinimized ? "minimized" : ""}" style="${panelPositionStyle(state.panelPosition)}" aria-label="Mu Travel country price comparison">
+      ${
+        state.panelMinimized
+          ? `<button type="button" class="panel-icon" data-action="restore-panel" aria-label="Expand Mu Travel panel">Mu</button>`
+          : `<header data-role="panel-header">
+              <div>
+                <strong>Mu Travel</strong>
+                <span>Country price check</span>
+              </div>
+              <button type="button" class="icon-button" data-action="minimize-panel" aria-label="Minimize panel" title="Minimize">-</button>
+            </header>
+            ${renderBaseline(baseline)}
+            ${renderMilesEstimatePrompt(matrixSearch)}
+            <label class="country-input">
+              Countries
+              <input type="text" value="${escapeHtml(state.countryInput)}" data-role="country-input" spellcheck="false" />
+            </label>
+            <div class="actions">
+              <button type="button" ${state.comparing ? "disabled" : ""} data-action="compare-countries">
+                ${state.comparing ? "Checking..." : "Compare countries"}
+              </button>
+              ${matrixSearch ? '<button type="button" class="secondary" data-action="open-matrix">Search Matrix</button>' : ""}
+              <button type="button" class="secondary" data-action="open-options">Options</button>
+            </div>
+            ${state.error ? `<p class="error">${escapeHtml(state.error)}</p>` : ""}
+            ${renderCacheNotice()}
+            ${renderResults(state.results)}`
+      }
     </section>
   `;
+
+  shadow.querySelector('[data-action="minimize-panel"]')?.addEventListener("click", () => {
+    state.panelMinimized = true;
+    savePanelUiState();
+    render();
+  });
+  shadow.querySelector('[data-action="restore-panel"]')?.addEventListener("click", () => {
+    if (suppressPanelRestoreClick) {
+      suppressPanelRestoreClick = false;
+      return;
+    }
+    state.panelMinimized = false;
+    savePanelUiState();
+    render();
+  });
+  shadow.querySelector<HTMLElement>('[data-action="restore-panel"]')?.addEventListener("pointerdown", onPanelDragStart);
+  shadow.querySelector<HTMLElement>('[data-role="panel-header"]')?.addEventListener("pointerdown", onPanelDragStart);
 
   const input = shadow.querySelector<HTMLInputElement>('[data-role="country-input"]');
   input?.addEventListener("input", () => {
@@ -536,6 +579,157 @@ function renderCheapest(result: GoogleFlightsCountryResult): string {
   return `${result.cheapest.priceText} ${tiedProviders.join(", ")}`;
 }
 
+function loadPanelUiState(): { minimized: boolean; position: PanelPosition } {
+  try {
+    const raw = sessionStorage.getItem(PANEL_UI_STORAGE_KEY);
+    if (!raw) return { minimized: false, position: DEFAULT_PANEL_POSITION };
+    const parsed = JSON.parse(raw) as { minimized?: unknown; position?: unknown };
+    return {
+      minimized: parsed.minimized === true,
+      position: isPanelPosition(parsed.position) ? parsed.position : DEFAULT_PANEL_POSITION,
+    };
+  } catch {
+    return { minimized: false, position: DEFAULT_PANEL_POSITION };
+  }
+}
+
+function savePanelUiState(): void {
+  try {
+    sessionStorage.setItem(
+      PANEL_UI_STORAGE_KEY,
+      JSON.stringify({
+        minimized: state.panelMinimized,
+        position: state.panelPosition,
+      }),
+    );
+  } catch {
+    // Session storage is an enhancement; the panel still works without it.
+  }
+}
+
+function isPanelPosition(value: unknown): value is PanelPosition {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as { edge?: unknown; ratio?: unknown };
+  return (
+    (candidate.edge === "top" ||
+      candidate.edge === "right" ||
+      candidate.edge === "bottom" ||
+      candidate.edge === "left") &&
+    typeof candidate.ratio === "number" &&
+    Number.isFinite(candidate.ratio) &&
+    candidate.ratio >= 0 &&
+    candidate.ratio <= 1
+  );
+}
+
+function onPanelDragStart(event: PointerEvent): void {
+  const handle = event.currentTarget;
+  if (!(handle instanceof HTMLElement)) return;
+  if (handle.dataset.role === "panel-header" && isInteractivePanelDragTarget(event.target)) return;
+  const panel = handle.closest<HTMLElement>(".panel");
+  if (!panel) return;
+
+  event.preventDefault();
+  handle.setPointerCapture(event.pointerId);
+  let dragged = false;
+  const startX = event.clientX;
+  const startY = event.clientY;
+
+  const movePanel = (pointerEvent: PointerEvent) => {
+    if (Math.hypot(pointerEvent.clientX - startX, pointerEvent.clientY - startY) > 4) dragged = true;
+    state.panelPosition = panelPositionFromPoint(pointerEvent.clientX, pointerEvent.clientY);
+    panel.setAttribute("style", panelPositionStyle(state.panelPosition));
+  };
+
+  const stopDragging = (pointerEvent: PointerEvent) => {
+    movePanel(pointerEvent);
+    savePanelUiState();
+    handle.releasePointerCapture(pointerEvent.pointerId);
+    handle.removeEventListener("pointermove", movePanel);
+    handle.removeEventListener("pointerup", stopDragging);
+    handle.removeEventListener("pointercancel", stopDragging);
+    if (dragged && handle.dataset.action === "restore-panel") {
+      suppressPanelRestoreClick = true;
+      window.setTimeout(() => {
+        suppressPanelRestoreClick = false;
+      }, 0);
+    } else if (handle.dataset.action === "restore-panel") {
+      state.panelMinimized = false;
+      savePanelUiState();
+      render();
+    }
+  };
+
+  movePanel(event);
+  handle.addEventListener("pointermove", movePanel);
+  handle.addEventListener("pointerup", stopDragging);
+  handle.addEventListener("pointercancel", stopDragging);
+}
+
+function isInteractivePanelDragTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return Boolean(target.closest("button, a, input, select, textarea, summary, label"));
+}
+
+function panelPositionFromPoint(clientX: number, clientY: number): PanelPosition {
+  const width = Math.max(window.innerWidth, 1);
+  const height = Math.max(window.innerHeight, 1);
+  const topOffset = panelTopOffsetPx();
+  const verticalAxisLength = Math.max(height - topOffset - PANEL_EDGE_OFFSET_PX, 1);
+  const verticalAxisPoint = clamp(clientY - topOffset, 0, verticalAxisLength);
+  const distances: Array<{ edge: PanelEdge; distance: number }> = [
+    { edge: "left", distance: clientX },
+    { edge: "right", distance: width - clientX },
+    { edge: "top", distance: Math.max(clientY - topOffset, 0) },
+    { edge: "bottom", distance: height - clientY },
+  ];
+  distances.sort((a, b) => a.distance - b.distance);
+
+  const edge = distances[0]?.edge || DEFAULT_PANEL_POSITION.edge;
+  const axisLength = edge === "top" || edge === "bottom" ? width : verticalAxisLength;
+  const axisPoint = edge === "top" || edge === "bottom" ? clientX : verticalAxisPoint;
+  let ratio = clamp(axisPoint / axisLength, 0, 1);
+
+  if (axisPoint <= PANEL_CORNER_SNAP_PX) ratio = 0;
+  if (axisLength - axisPoint <= PANEL_CORNER_SNAP_PX) ratio = 1;
+
+  return { edge, ratio };
+}
+
+function panelPositionStyle(position: PanelPosition): string {
+  const percent = `${Math.round(position.ratio * 1000) / 10}%`;
+  const offset = `${PANEL_EDGE_OFFSET_PX}px`;
+  const topOffsetPx = panelTopOffsetPx();
+  const topOffset = `${topOffsetPx}px`;
+  const topMaxHeight = `max-height: calc(100vh - ${topOffsetPx + PANEL_EDGE_OFFSET_PX}px);`;
+  if (position.edge === "top" && position.ratio === 0) return `top: ${topOffset}; left: ${offset}; ${topMaxHeight}`;
+  if (position.edge === "top" && position.ratio === 1) return `top: ${topOffset}; right: ${offset}; ${topMaxHeight}`;
+  if (position.edge === "bottom" && position.ratio === 0) return `bottom: ${offset}; left: ${offset};`;
+  if (position.edge === "bottom" && position.ratio === 1) return `right: ${offset}; bottom: ${offset};`;
+  if (position.edge === "left" && position.ratio === 0) return `top: ${topOffset}; left: ${offset}; ${topMaxHeight}`;
+  if (position.edge === "left" && position.ratio === 1) return `bottom: ${offset}; left: ${offset};`;
+  if (position.edge === "right" && position.ratio === 0) return `top: ${topOffset}; right: ${offset}; ${topMaxHeight}`;
+  if (position.edge === "right" && position.ratio === 1) return `right: ${offset}; bottom: ${offset};`;
+  if (position.edge === "top") {
+    return `top: ${topOffset}; left: ${percent}; transform: translateX(-${percent}); ${topMaxHeight}`;
+  }
+  if (position.edge === "bottom") return `bottom: ${offset}; left: ${percent}; transform: translateX(-${percent});`;
+  if (position.edge === "left") return `left: ${offset}; top: ${percent}; transform: translateY(-${percent});`;
+  return `right: ${offset}; top: ${percent}; transform: translateY(-${percent});`;
+}
+
+function panelTopOffsetPx(): number {
+  return clamp(
+    GOOGLE_FLIGHTS_HEADER_HEIGHT_PX + GOOGLE_FLIGHTS_HEADER_BUFFER_PX,
+    PANEL_EDGE_OFFSET_PX,
+    window.innerHeight - 96,
+  );
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
 function googleFlightsResultSignature(result: GoogleFlightsCountryResult): string {
   const cheapest = result.cheapest ? `${result.cheapest.provider}:${result.cheapest.priceText}` : "";
   const direct = result.direct ? `${result.direct.provider}:${result.direct.priceText}` : "";
@@ -689,8 +883,6 @@ function styles(): string {
     }
     .panel {
       position: fixed;
-      right: 16px;
-      bottom: 16px;
       z-index: 2147483647;
       width: min(360px, calc(100vw - 32px));
       max-height: min(560px, calc(100vh - 32px));
@@ -703,14 +895,55 @@ function styles(): string {
       box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18);
       font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
+    .panel.minimized {
+      width: auto;
+      max-height: none;
+      overflow: visible;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      box-shadow: none;
+    }
     header {
       display: flex;
+      align-items: center;
       justify-content: space-between;
       gap: 12px;
       padding: 10px 12px;
       border-bottom: 1px solid #e2e8f0;
+      cursor: grab;
+      user-select: none;
     }
+    header:active { cursor: grabbing; }
     header span { color: #64748b; }
+    .panel-icon {
+      display: inline-grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      border: 1px solid #0f766e;
+      border-radius: 999px;
+      background: #0f766e;
+      color: #ffffff;
+      box-shadow: 0 8px 28px rgba(15, 23, 42, 0.24);
+      font: inherit;
+      font-weight: 750;
+      letter-spacing: 0;
+      cursor: pointer;
+    }
+    .icon-button {
+      flex: 0 0 auto;
+      display: inline-grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border-color: #cbd5e1;
+      background: #ffffff;
+      color: #475569;
+      font-size: 18px;
+      line-height: 1;
+    }
     dl {
       display: grid;
       gap: 6px;

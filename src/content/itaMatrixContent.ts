@@ -24,6 +24,13 @@ import { rankProviderLinks, summarizeItinerary } from "../shared/providers";
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from "../shared/storage";
 import type { ExtensionSettings, ItinerarySegment, NormalizedItinerary, RankedProviderLink } from "../shared/types";
 
+type PanelEdge = "top" | "right" | "bottom" | "left";
+
+type PanelPosition = {
+  edge: PanelEdge;
+  ratio: number;
+};
+
 type PanelState = {
   settings: ExtensionSettings | null;
   itinerary: NormalizedItinerary | null;
@@ -39,6 +46,8 @@ type PanelState = {
   showAllMileagePrograms: boolean;
   mileageSortMode: MileageSortMode;
   groupPreferredMileage: boolean;
+  panelMinimized: boolean;
+  panelPosition: PanelPosition;
   currencyRates: UsdCurrencyRates | null;
 };
 
@@ -71,7 +80,12 @@ const AUTO_SEARCH_DEBOUNCE_MS = 250;
 const AUTO_SEARCH_TIMEOUT_MS = 15_000;
 const AUTO_OPEN_DEBOUNCE_MS = 300;
 const AUTO_OPEN_TIMEOUT_MS = 15_000;
+const AUTO_OPEN_REMEMBER_MS = AUTO_SEARCH_TIMEOUT_MS + AUTO_OPEN_TIMEOUT_MS;
 const AUTO_OPEN_STORAGE_KEY = "muTravelMatrixAutoOpen";
+const PANEL_UI_STORAGE_KEY = "muTravelPanelUi";
+const DEFAULT_PANEL_POSITION: PanelPosition = { edge: "right", ratio: 1 };
+const PANEL_EDGE_OFFSET_PX = 16;
+const PANEL_CORNER_SNAP_PX = 96;
 let mileageProgramsByLengthCache: string[] | undefined;
 let autoCaptureCheckTimer: number | undefined;
 let flightResultAnnotationTimer: number | undefined;
@@ -85,6 +99,8 @@ let autoOpenDone = false;
 let autoOpenLocationKey = "";
 let autoOpenClickedPrimaryResult = false;
 let autoOpenPrimaryResultRow: HTMLTableRowElement | null = null;
+let suppressPanelRestoreClick = false;
+const panelUi = loadPanelUiState();
 
 const state: PanelState = {
   settings: null,
@@ -101,6 +117,8 @@ const state: PanelState = {
   showAllMileagePrograms: false,
   mileageSortMode: "miles",
   groupPreferredMileage: true,
+  panelMinimized: panelUi.minimized,
+  panelPosition: panelUi.position,
   currencyRates: null,
 };
 
@@ -139,23 +157,32 @@ function render(): void {
 
   shadow.innerHTML = `
     <style>${styles()}</style>
-    <section class="panel" aria-label="Mu Travel Flights">
-      <header>
-        <div>
-          <strong>Mu Travel</strong>
-          <span>ITA Matrix companion</span>
-        </div>
-      </header>
+    <section class="panel ${state.panelMinimized ? "minimized" : ""}" style="${panelPositionStyle(state.panelPosition)}" aria-label="Mu Travel Flights">
+      ${
+        state.panelMinimized
+          ? `<button type="button" class="panel-icon" data-action="restore-panel" aria-label="Expand Mu Travel panel">Mu</button>`
+          : `<header data-role="panel-header">
+              <div>
+                <strong>Mu Travel</strong>
+                <span>ITA Matrix companion</span>
+              </div>
+              <button type="button" class="icon-button" data-action="minimize-panel" aria-label="Minimize panel" title="Minimize">-</button>
+            </header>`
+      }
 
-      ${renderStatusMessage()}
+      ${state.panelMinimized ? "" : renderStatusMessage()}
 
-      ${isItineraryPage() ? renderItineraryPanel() : ""}
-      ${isItineraryPage() ? renderLinksPanel() : ""}
-      ${isSearchPage() ? renderAirportHelper(settings) : ""}
+      ${!state.panelMinimized && isItineraryPage() ? renderItineraryPanel() : ""}
+      ${!state.panelMinimized && isItineraryPage() ? renderLinksPanel() : ""}
+      ${!state.panelMinimized && isSearchPage() ? renderAirportHelper(settings) : ""}
 
-      <footer>
-        <button type="button" class="link-button" data-action="options">Options</button>
-      </footer>
+      ${
+        state.panelMinimized
+          ? ""
+          : `<footer>
+              <button type="button" class="link-button" data-action="options">Options</button>
+            </footer>`
+      }
     </section>
   `;
 
@@ -201,6 +228,22 @@ function renderLinksPanel(): string {
 }
 
 function bind(root: ShadowRoot): void {
+  root.querySelector('[data-action="minimize-panel"]')?.addEventListener("click", () => {
+    state.panelMinimized = true;
+    savePanelUiState();
+    render();
+  });
+  root.querySelector('[data-action="restore-panel"]')?.addEventListener("click", () => {
+    if (suppressPanelRestoreClick) {
+      suppressPanelRestoreClick = false;
+      return;
+    }
+    state.panelMinimized = false;
+    savePanelUiState();
+    render();
+  });
+  root.querySelector<HTMLElement>('[data-action="restore-panel"]')?.addEventListener("pointerdown", onPanelDragStart);
+  root.querySelector<HTMLElement>('[data-role="panel-header"]')?.addEventListener("pointerdown", onPanelDragStart);
   root.querySelector('[data-action="capture"]')?.addEventListener("click", () => {
     void captureItinerary(false);
   });
@@ -256,6 +299,143 @@ function bind(root: ShadowRoot): void {
     const target = event.currentTarget as HTMLInputElement;
     void updateAirportSetting("exclusions", target.value);
   });
+}
+
+function loadPanelUiState(): { minimized: boolean; position: PanelPosition } {
+  try {
+    const raw = sessionStorage.getItem(PANEL_UI_STORAGE_KEY);
+    if (!raw) return { minimized: false, position: DEFAULT_PANEL_POSITION };
+    const parsed = JSON.parse(raw) as { minimized?: unknown; position?: unknown };
+    return {
+      minimized: parsed.minimized === true,
+      position: isPanelPosition(parsed.position) ? parsed.position : DEFAULT_PANEL_POSITION,
+    };
+  } catch {
+    return { minimized: false, position: DEFAULT_PANEL_POSITION };
+  }
+}
+
+function savePanelUiState(): void {
+  try {
+    sessionStorage.setItem(
+      PANEL_UI_STORAGE_KEY,
+      JSON.stringify({
+        minimized: state.panelMinimized,
+        position: state.panelPosition,
+      }),
+    );
+  } catch {
+    // Session storage is an enhancement; the panel still works without it.
+  }
+}
+
+function isPanelPosition(value: unknown): value is PanelPosition {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as { edge?: unknown; ratio?: unknown };
+  return (
+    (candidate.edge === "top" ||
+      candidate.edge === "right" ||
+      candidate.edge === "bottom" ||
+      candidate.edge === "left") &&
+    typeof candidate.ratio === "number" &&
+    Number.isFinite(candidate.ratio) &&
+    candidate.ratio >= 0 &&
+    candidate.ratio <= 1
+  );
+}
+
+function onPanelDragStart(event: PointerEvent): void {
+  const handle = event.currentTarget;
+  if (!(handle instanceof HTMLElement)) return;
+  if (handle.dataset.role === "panel-header" && isInteractivePanelDragTarget(event.target)) return;
+  const panel = handle.closest<HTMLElement>(".panel");
+  if (!panel) return;
+
+  event.preventDefault();
+  handle.setPointerCapture(event.pointerId);
+  handle.classList.add("dragging");
+  let dragged = false;
+  const startX = event.clientX;
+  const startY = event.clientY;
+
+  const movePanel = (pointerEvent: PointerEvent) => {
+    if (Math.hypot(pointerEvent.clientX - startX, pointerEvent.clientY - startY) > 4) dragged = true;
+    state.panelPosition = panelPositionFromPoint(pointerEvent.clientX, pointerEvent.clientY);
+    panel.setAttribute("style", panelPositionStyle(state.panelPosition));
+  };
+
+  const stopDragging = (pointerEvent: PointerEvent) => {
+    movePanel(pointerEvent);
+    savePanelUiState();
+    handle.classList.remove("dragging");
+    handle.releasePointerCapture(pointerEvent.pointerId);
+    handle.removeEventListener("pointermove", movePanel);
+    handle.removeEventListener("pointerup", stopDragging);
+    handle.removeEventListener("pointercancel", stopDragging);
+    if (dragged && handle.dataset.action === "restore-panel") {
+      suppressPanelRestoreClick = true;
+      window.setTimeout(() => {
+        suppressPanelRestoreClick = false;
+      }, 0);
+    } else if (handle.dataset.action === "restore-panel") {
+      state.panelMinimized = false;
+      savePanelUiState();
+      render();
+    }
+  };
+
+  movePanel(event);
+  handle.addEventListener("pointermove", movePanel);
+  handle.addEventListener("pointerup", stopDragging);
+  handle.addEventListener("pointercancel", stopDragging);
+}
+
+function isInteractivePanelDragTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return Boolean(target.closest("button, a, input, select, textarea, summary, label"));
+}
+
+function panelPositionFromPoint(clientX: number, clientY: number): PanelPosition {
+  const width = Math.max(window.innerWidth, 1);
+  const height = Math.max(window.innerHeight, 1);
+  const distances: Array<{ edge: PanelEdge; distance: number }> = [
+    { edge: "left", distance: clientX },
+    { edge: "right", distance: width - clientX },
+    { edge: "top", distance: clientY },
+    { edge: "bottom", distance: height - clientY },
+  ];
+  distances.sort((a, b) => a.distance - b.distance);
+
+  const edge = distances[0]?.edge || DEFAULT_PANEL_POSITION.edge;
+  const axisLength = edge === "top" || edge === "bottom" ? width : height;
+  const axisPoint = edge === "top" || edge === "bottom" ? clientX : clientY;
+  let ratio = clamp(axisPoint / axisLength, 0, 1);
+
+  if (axisPoint <= PANEL_CORNER_SNAP_PX) ratio = 0;
+  if (axisLength - axisPoint <= PANEL_CORNER_SNAP_PX) ratio = 1;
+
+  return { edge, ratio };
+}
+
+function panelPositionStyle(position: PanelPosition): string {
+  const percent = `${Math.round(position.ratio * 1000) / 10}%`;
+  const offset = `${PANEL_EDGE_OFFSET_PX}px`;
+  if (position.edge === "top" && position.ratio === 0) return `top: ${offset}; left: ${offset};`;
+  if (position.edge === "top" && position.ratio === 1) return `top: ${offset}; right: ${offset};`;
+  if (position.edge === "bottom" && position.ratio === 0) return `bottom: ${offset}; left: ${offset};`;
+  if (position.edge === "bottom" && position.ratio === 1) return `right: ${offset}; bottom: ${offset};`;
+  if (position.edge === "left" && position.ratio === 0) return `top: ${offset}; left: ${offset};`;
+  if (position.edge === "left" && position.ratio === 1) return `bottom: ${offset}; left: ${offset};`;
+  if (position.edge === "right" && position.ratio === 0) return `top: ${offset}; right: ${offset};`;
+  if (position.edge === "right" && position.ratio === 1) return `right: ${offset}; bottom: ${offset};`;
+  if (position.edge === "top") return `top: ${offset}; left: ${percent}; transform: translateX(-${percent});`;
+  if (position.edge === "bottom") return `bottom: ${offset}; left: ${percent}; transform: translateX(-${percent});`;
+  if (position.edge === "left") return `left: ${offset}; top: ${percent}; transform: translateY(-${percent});`;
+  return `right: ${offset}; top: ${percent}; transform: translateY(-${percent});`;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 async function captureItinerary(isAutomatic: boolean): Promise<void> {
@@ -645,8 +825,7 @@ function shouldAutoOpenMatrixResultAfterSearch(): boolean {
 }
 
 function shouldAutoOpenMatrixResult(): boolean {
-  const url = new URL(window.location.href);
-  return url.searchParams.get("muTravelAutoOpen") === "1" || rememberedAutoOpenRequest();
+  return rememberedAutoOpenRequest();
 }
 
 function matrixResultOpenTarget(): HTMLElement | null {
@@ -762,7 +941,13 @@ function expandedResultScopesFor(row: HTMLTableRowElement | null): HTMLElement[]
 
 function rememberAutoOpenRequest(): void {
   try {
-    sessionStorage.setItem(AUTO_OPEN_STORAGE_KEY, "1");
+    sessionStorage.setItem(
+      AUTO_OPEN_STORAGE_KEY,
+      JSON.stringify({
+        token: autoOpenSearchToken(),
+        expiresAt: Date.now() + AUTO_OPEN_REMEMBER_MS,
+      }),
+    );
   } catch {
     // Session storage is optional; URL flags still drive same-page behavior.
   }
@@ -770,7 +955,15 @@ function rememberAutoOpenRequest(): void {
 
 function rememberedAutoOpenRequest(): boolean {
   try {
-    return sessionStorage.getItem(AUTO_OPEN_STORAGE_KEY) === "1";
+    const raw = sessionStorage.getItem(AUTO_OPEN_STORAGE_KEY);
+    if (!raw) return false;
+    const request = JSON.parse(raw) as { token?: unknown; expiresAt?: unknown };
+    if (typeof request.expiresAt !== "number" || request.expiresAt < Date.now()) {
+      forgetAutoOpenRequest();
+      return false;
+    }
+    const currentToken = autoOpenSearchToken();
+    return !currentToken || typeof request.token !== "string" || request.token === currentToken;
   } catch {
     return false;
   }
@@ -790,6 +983,11 @@ function resetAutoOpenState(): void {
   autoOpenLocationKey = "";
   autoOpenClickedPrimaryResult = false;
   autoOpenPrimaryResultRow = null;
+}
+
+function autoOpenSearchToken(): string {
+  const url = new URL(window.location.href);
+  return url.searchParams.get("search") || "";
 }
 
 function annotateFlightResultsSoon(): void {
@@ -1765,8 +1963,6 @@ function styles(): string {
     :host { all: initial; color-scheme: light; }
     .panel {
       position: fixed;
-      right: 16px;
-      bottom: 16px;
       z-index: 2147483647;
       width: 360px;
       max-height: min(720px, calc(100vh - 32px));
@@ -1779,7 +1975,18 @@ function styles(): string {
       box-shadow: 0 10px 40px rgba(15, 23, 42, 0.24);
       font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
+    .panel.minimized {
+      width: auto;
+      max-height: none;
+      overflow: visible;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      box-shadow: none;
+    }
     header, footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px; border-bottom: 1px solid #e2e8f0; }
+    header { cursor: grab; user-select: none; }
+    header:active { cursor: grabbing; }
     footer { border-top: 1px solid #e2e8f0; border-bottom: 0; }
     strong { display: block; font-size: 15px; }
     header span, .muted, small { color: #64748b; }
@@ -1787,6 +1994,30 @@ function styles(): string {
     button { border: 1px solid #0f766e; background: #0f766e; color: white; border-radius: 6px; padding: 6px 9px; cursor: pointer; }
     button.secondary, .link-button { background: white; color: #0f766e; }
     .link-button { border-color: transparent; text-decoration: underline; }
+    .panel-icon {
+      display: inline-grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      padding: 0;
+      border-radius: 999px;
+      box-shadow: 0 8px 28px rgba(15, 23, 42, 0.24);
+      font-weight: 750;
+      letter-spacing: 0;
+    }
+    .icon-button {
+      flex: 0 0 auto;
+      display: inline-grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border-color: #cbd5e1;
+      background: #ffffff;
+      color: #475569;
+      font-size: 18px;
+      line-height: 1;
+    }
     details { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; }
     summary { cursor: pointer; font-weight: 650; }
     details.advanced { margin-top: 8px; padding: 8px 0 0; border: 0; }
