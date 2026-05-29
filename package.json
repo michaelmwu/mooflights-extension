@@ -1,6 +1,6 @@
 {
   "name": "flights-extension",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "Mu Travel browser extension for ITA Matrix flight workflows.",
   "license": "AGPL-3.0-only",
   "private": true,
@@ -18,6 +18,10 @@
     "import:airports": "node scripts/import-airports.mjs",
     "lint": "biome lint .",
     "package": "bun run build && node scripts/package-extension.mjs",
+    "release:next-patch": "node scripts/prepare-next-release-version.mjs --next=patch",
+    "release:next-minor": "node scripts/prepare-next-release-version.mjs --next=minor",
+    "release:package:next-patch": "bun run release:next-patch && bun run package",
+    "release:package:next-minor": "bun run release:next-minor && bun run package",
     "release:verify": "node scripts/verify-release-version.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
