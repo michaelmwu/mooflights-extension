@@ -187,13 +187,17 @@ function Options(): React.ReactElement {
                       checked={settings.preferredFrequentFlyerPrograms.includes(program.program)}
                       onChange={() => togglePreferredProgram(program.program)}
                     />
-                    {program.carrierCodes[0] ? (
-                      <img
-                        src={chrome.runtime.getURL(`assets/carriers64/light/${program.carrierCodes[0]}.png`)}
-                        alt=""
-                        aria-hidden="true"
-                      />
-                    ) : null}
+                    <span className="program-icon" aria-hidden="true">
+                      {program.carrierCodes[0] ? (
+                        <img
+                          src={chrome.runtime.getURL(`assets/carriers64/light/${program.carrierCodes[0]}.png`)}
+                          alt=""
+                          onError={(event) => {
+                            event.currentTarget.style.visibility = "hidden";
+                          }}
+                        />
+                      ) : null}
+                    </span>
                     <span>{program.label}</span>
                   </label>
                   {tierOptions.length > 0 ? (

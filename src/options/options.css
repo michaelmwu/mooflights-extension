@@ -219,7 +219,14 @@ button.secondary {
   padding: 0;
 }
 
-.program-choice img {
+.program-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+}
+
+.program-icon img {
   width: 24px;
   height: 24px;
   object-fit: contain;
