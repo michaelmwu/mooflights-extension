@@ -104,7 +104,10 @@ jobs:
           DRAFT_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.draft || 'false' }}
           PRERELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || 'false' }}
         run: |
-          release_notes="Mu Travel Flights extension package for ${RELEASE_TAG}. Chrome Web Store publishing is intentionally manual for now."
+          generated_notes="$(gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+            -f tag_name="${RELEASE_TAG}" \
+            --jq '.body')"
+          release_notes=$'Chrome Web Store publishing is intentionally manual for now.\n\n'"${generated_notes}"
           if gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
             edit_args=(
               "${RELEASE_TAG}"
