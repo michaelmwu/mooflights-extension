@@ -48,6 +48,8 @@ bun run check
 bun run typecheck
 bun run test
 bun run package
+bun run release:package:next-patch
+bun run release:package:next-minor
 ```
 
 ## Docs

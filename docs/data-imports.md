@@ -39,8 +39,9 @@ Generated airline snapshots should include source attribution and a `fetched_at`
 
 ## Carrier Icons
 
-The options page uses locally bundled carrier icons copied from `https://seats.aero/static/carriers64/light/`. Keep these
-assets local in the extension package instead of hotlinking from the options page.
+The options page uses locally bundled carrier icons, primarily copied from `https://seats.aero/static/carriers64/light/`
+with small curated additions for missing program owners. Keep these assets local in the extension package instead of
+hotlinking from the options page.
 
 ## Airports
 

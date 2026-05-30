@@ -7,6 +7,15 @@ on:
         description: "Optional existing vX.Y.Z tag to create/update a GitHub release. Leave blank to package only."
         required: false
         type: string
+      version_strategy:
+        description: "Version to package when release_tag is blank."
+        required: true
+        default: next_patch
+        type: choice
+        options:
+          - current
+          - next_patch
+          - next_minor
       draft:
         description: "Create a draft GitHub release when release_tag is set."
         required: true
@@ -38,17 +47,30 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           ref: ${{ inputs.release_tag || github.ref }}
+          fetch-depth: 0
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: package.json
 
+      - name: Setup Chrome
+        id: setup-chrome
+        uses: browser-actions/setup-chrome@2e1d749697dd1612b833dba4a722266286fbefcd # v2
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      - name: Prepare next patch version
+        if: github.event_name == 'workflow_dispatch' && inputs.release_tag == '' && inputs.version_strategy == 'next_patch'
+        run: bun run release:next-patch
+
+      - name: Prepare next minor version
+        if: github.event_name == 'workflow_dispatch' && inputs.release_tag == '' && inputs.version_strategy == 'next_minor'
+        run: bun run release:next-minor
 
       - name: Verify
         run: |
@@ -60,13 +82,19 @@ jobs:
         run: node scripts/verify-release-version.mjs "${RELEASE_TAG}"
 
       - name: Package extension
+        env:
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+          MU_TRAVEL_CRX_KEY_B64: ${{ secrets.MU_TRAVEL_CRX_KEY_B64 }}
+          MU_TRAVEL_REQUIRE_CRX_KEY: ${{ env.RELEASE_TAG != '' && '1' || '' }}
         run: bun run package
 
       - name: Upload package artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: mu-travel-flights-extension
-          path: artifacts/mu-travel-flights.zip
+          path: |
+            artifacts/mu-travel-flights.zip
+            artifacts/mu-travel-flights.crx
           if-no-files-found: error
 
       - name: Attach package to GitHub release
@@ -95,13 +123,14 @@ jobs:
               edit_args+=(--prerelease=false)
             fi
             gh release edit "${edit_args[@]}"
-            gh release upload "${RELEASE_TAG}" artifacts/mu-travel-flights.zip \
+            gh release upload "${RELEASE_TAG}" artifacts/mu-travel-flights.zip artifacts/mu-travel-flights.crx \
               --repo "${GITHUB_REPOSITORY}" \
               --clobber
           else
             args=(
               "${RELEASE_TAG}"
               artifacts/mu-travel-flights.zip
+              artifacts/mu-travel-flights.crx
               --repo "${GITHUB_REPOSITORY}"
               --title "${RELEASE_TAG}"
               --notes "${release_notes}"
