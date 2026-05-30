@@ -48,6 +48,7 @@ type PanelState = {
   groupPreferredMileage: boolean;
   panelMinimized: boolean;
   panelPosition: PanelPosition;
+  panelCollapsePosition: PanelPosition | null;
   currencyRates: UsdCurrencyRates | null;
 };
 
@@ -86,6 +87,7 @@ const PANEL_UI_STORAGE_KEY = "muTravelPanelUi";
 const DEFAULT_PANEL_POSITION: PanelPosition = { edge: "right", ratio: 1 };
 const PANEL_EDGE_OFFSET_PX = 16;
 const PANEL_CORNER_SNAP_PX = 96;
+const PANEL_MINIMIZED_ICON_SIZE_PX = 42;
 let mileageProgramsByLengthCache: string[] | undefined;
 let autoCaptureCheckTimer: number | undefined;
 let flightResultAnnotationTimer: number | undefined;
@@ -119,6 +121,7 @@ const state: PanelState = {
   groupPreferredMileage: true,
   panelMinimized: panelUi.minimized,
   panelPosition: panelUi.position,
+  panelCollapsePosition: panelUi.collapsePosition,
   currencyRates: null,
 };
 
@@ -229,6 +232,10 @@ function renderLinksPanel(): string {
 
 function bind(root: ShadowRoot): void {
   root.querySelector('[data-action="minimize-panel"]')?.addEventListener("click", () => {
+    const panel = root.querySelector<HTMLElement>(".panel");
+    state.panelPosition =
+      state.panelCollapsePosition || (panel ? minimizedPanelPositionFromPanel(panel) : state.panelPosition);
+    state.panelCollapsePosition = null;
     state.panelMinimized = true;
     savePanelUiState();
     render();
@@ -238,6 +245,8 @@ function bind(root: ShadowRoot): void {
       suppressPanelRestoreClick = false;
       return;
     }
+    state.panelCollapsePosition = state.panelPosition;
+    restoreExpandedPanelPosition();
     state.panelMinimized = false;
     savePanelUiState();
     render();
@@ -301,17 +310,29 @@ function bind(root: ShadowRoot): void {
   });
 }
 
-function loadPanelUiState(): { minimized: boolean; position: PanelPosition } {
+function loadPanelUiState(): {
+  minimized: boolean;
+  position: PanelPosition;
+  collapsePosition: PanelPosition | null;
+} {
   try {
     const raw = sessionStorage.getItem(PANEL_UI_STORAGE_KEY);
-    if (!raw) return { minimized: false, position: DEFAULT_PANEL_POSITION };
-    const parsed = JSON.parse(raw) as { minimized?: unknown; position?: unknown };
+    if (!raw) {
+      return { minimized: false, position: DEFAULT_PANEL_POSITION, collapsePosition: null };
+    }
+    const parsed = JSON.parse(raw) as {
+      minimized?: unknown;
+      position?: unknown;
+      collapsePosition?: unknown;
+    };
+    const position = isPanelPosition(parsed.position) ? parsed.position : DEFAULT_PANEL_POSITION;
     return {
       minimized: parsed.minimized === true,
-      position: isPanelPosition(parsed.position) ? parsed.position : DEFAULT_PANEL_POSITION,
+      position,
+      collapsePosition: isPanelPosition(parsed.collapsePosition) ? parsed.collapsePosition : null,
     };
   } catch {
-    return { minimized: false, position: DEFAULT_PANEL_POSITION };
+    return { minimized: false, position: DEFAULT_PANEL_POSITION, collapsePosition: null };
   }
 }
 
@@ -322,6 +343,7 @@ function savePanelUiState(): void {
       JSON.stringify({
         minimized: state.panelMinimized,
         position: state.panelPosition,
+        collapsePosition: state.panelCollapsePosition,
       }),
     );
   } catch {
@@ -366,6 +388,7 @@ function onPanelDragStart(event: PointerEvent): void {
 
   const stopDragging = (pointerEvent: PointerEvent) => {
     movePanel(pointerEvent);
+    if (dragged) state.panelCollapsePosition = null;
     savePanelUiState();
     handle.classList.remove("dragging");
     handle.releasePointerCapture(pointerEvent.pointerId);
@@ -378,6 +401,8 @@ function onPanelDragStart(event: PointerEvent): void {
         suppressPanelRestoreClick = false;
       }, 0);
     } else if (handle.dataset.action === "restore-panel") {
+      state.panelCollapsePosition = state.panelPosition;
+      restoreExpandedPanelPosition();
       state.panelMinimized = false;
       savePanelUiState();
       render();
@@ -393,6 +418,10 @@ function onPanelDragStart(event: PointerEvent): void {
 function isInteractivePanelDragTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false;
   return Boolean(target.closest("button, a, input, select, textarea, summary, label"));
+}
+
+function restoreExpandedPanelPosition(): void {
+  state.panelPosition = nearestWindowCornerPanelPosition(state.panelPosition);
 }
 
 function panelPositionFromPoint(clientX: number, clientY: number): PanelPosition {
@@ -415,6 +444,76 @@ function panelPositionFromPoint(clientX: number, clientY: number): PanelPosition
   if (axisLength - axisPoint <= PANEL_CORNER_SNAP_PX) ratio = 1;
 
   return { edge, ratio };
+}
+
+function minimizedPanelPositionFromPanel(panel: HTMLElement): PanelPosition {
+  const rect = panel.getBoundingClientRect();
+  const width = Math.max(window.innerWidth, 1);
+  const height = Math.max(window.innerHeight, 1);
+  const viewportCorners = [
+    { x: 0, y: 0 },
+    { x: width, y: 0 },
+    { x: 0, y: height },
+    { x: width, y: height },
+  ];
+  const panelCorners = [
+    { distanceX: rect.left, distanceY: rect.top, x: rect.left, y: rect.top },
+    { distanceX: rect.right, distanceY: rect.top, x: rect.right, y: rect.top },
+    {
+      distanceX: rect.left,
+      distanceY: rect.bottom,
+      x: rect.left,
+      y: rect.bottom - PANEL_MINIMIZED_ICON_SIZE_PX,
+    },
+    {
+      distanceX: rect.right,
+      distanceY: rect.bottom,
+      x: rect.right,
+      y: rect.bottom - PANEL_MINIMIZED_ICON_SIZE_PX,
+    },
+  ];
+  const nearest = panelCorners
+    .map((corner) => ({
+      ...corner,
+      distance: Math.min(
+        ...viewportCorners.map((viewportCorner) =>
+          Math.hypot(corner.distanceX - viewportCorner.x, corner.distanceY - viewportCorner.y),
+        ),
+      ),
+    }))
+    .sort((left, right) => left.distance - right.distance)[0];
+  return panelPositionFromPoint(nearest?.x ?? rect.right, nearest?.y ?? rect.top);
+}
+
+function nearestWindowCornerPanelPosition(position: PanelPosition): PanelPosition {
+  const point = panelPositionPoint(position);
+  const width = Math.max(window.innerWidth, 1);
+  const height = Math.max(window.innerHeight, 1);
+  const corners: Array<{ position: PanelPosition; x: number; y: number }> = [
+    { position: { edge: "top", ratio: 0 }, x: 0, y: 0 },
+    { position: { edge: "top", ratio: 1 }, x: width, y: 0 },
+    { position: { edge: "bottom", ratio: 0 }, x: 0, y: height },
+    { position: { edge: "bottom", ratio: 1 }, x: width, y: height },
+  ];
+  return (
+    corners
+      .map((corner) => ({
+        ...corner,
+        distance: Math.hypot(point.x - corner.x, point.y - corner.y),
+      }))
+      .sort((left, right) => left.distance - right.distance)[0]?.position || DEFAULT_PANEL_POSITION
+  );
+}
+
+function panelPositionPoint(position: PanelPosition): { x: number; y: number } {
+  const width = Math.max(window.innerWidth, 1);
+  const height = Math.max(window.innerHeight, 1);
+  if (position.edge === "top") return { x: width * position.ratio, y: 0 };
+  if (position.edge === "bottom") return { x: width * position.ratio, y: height };
+  return {
+    x: position.edge === "left" ? 0 : width,
+    y: height * position.ratio,
+  };
 }
 
 function panelPositionStyle(position: PanelPosition): string {

@@ -23,6 +23,7 @@ type CompareState = {
   cacheKey: string;
   panelMinimized: boolean;
   panelPosition: PanelPosition;
+  panelCollapsePosition: PanelPosition | null;
 };
 
 type CompareResponse = {
@@ -48,6 +49,7 @@ const PANEL_EDGE_OFFSET_PX = 16;
 const GOOGLE_FLIGHTS_HEADER_HEIGHT_PX = 64;
 const GOOGLE_FLIGHTS_HEADER_BUFFER_PX = 12;
 const PANEL_CORNER_SNAP_PX = 96;
+const PANEL_MINIMIZED_ICON_SIZE_PX = 42;
 const STORED_OPTIONS_LIMIT = 24;
 let regionDisplayNames: Intl.DisplayNames | null | undefined;
 let countryCodeByDisplayName: Map<string, string> | null | undefined;
@@ -66,6 +68,7 @@ const state: CompareState = {
   cacheKey: "",
   panelMinimized: panelUi.minimized,
   panelPosition: panelUi.position,
+  panelCollapsePosition: panelUi.collapsePosition,
 };
 
 const resultCache = new Map<
@@ -394,6 +397,10 @@ function render(): void {
   `;
 
   shadow.querySelector('[data-action="minimize-panel"]')?.addEventListener("click", () => {
+    const panel = shadow.querySelector<HTMLElement>(".panel");
+    state.panelPosition =
+      state.panelCollapsePosition || (panel ? minimizedPanelPositionFromPanel(panel) : state.panelPosition);
+    state.panelCollapsePosition = null;
     state.panelMinimized = true;
     savePanelUiState();
     render();
@@ -403,6 +410,8 @@ function render(): void {
       suppressPanelRestoreClick = false;
       return;
     }
+    state.panelCollapsePosition = state.panelPosition;
+    restoreExpandedPanelPosition();
     state.panelMinimized = false;
     savePanelUiState();
     render();
@@ -579,17 +588,29 @@ function renderCheapest(result: GoogleFlightsCountryResult): string {
   return `${result.cheapest.priceText} ${tiedProviders.join(", ")}`;
 }
 
-function loadPanelUiState(): { minimized: boolean; position: PanelPosition } {
+function loadPanelUiState(): {
+  minimized: boolean;
+  position: PanelPosition;
+  collapsePosition: PanelPosition | null;
+} {
   try {
     const raw = sessionStorage.getItem(PANEL_UI_STORAGE_KEY);
-    if (!raw) return { minimized: false, position: DEFAULT_PANEL_POSITION };
-    const parsed = JSON.parse(raw) as { minimized?: unknown; position?: unknown };
+    if (!raw) {
+      return { minimized: false, position: DEFAULT_PANEL_POSITION, collapsePosition: null };
+    }
+    const parsed = JSON.parse(raw) as {
+      minimized?: unknown;
+      position?: unknown;
+      collapsePosition?: unknown;
+    };
+    const position = isPanelPosition(parsed.position) ? parsed.position : DEFAULT_PANEL_POSITION;
     return {
       minimized: parsed.minimized === true,
-      position: isPanelPosition(parsed.position) ? parsed.position : DEFAULT_PANEL_POSITION,
+      position,
+      collapsePosition: isPanelPosition(parsed.collapsePosition) ? parsed.collapsePosition : null,
     };
   } catch {
-    return { minimized: false, position: DEFAULT_PANEL_POSITION };
+    return { minimized: false, position: DEFAULT_PANEL_POSITION, collapsePosition: null };
   }
 }
 
@@ -600,6 +621,7 @@ function savePanelUiState(): void {
       JSON.stringify({
         minimized: state.panelMinimized,
         position: state.panelPosition,
+        collapsePosition: state.panelCollapsePosition,
       }),
     );
   } catch {
@@ -643,6 +665,7 @@ function onPanelDragStart(event: PointerEvent): void {
 
   const stopDragging = (pointerEvent: PointerEvent) => {
     movePanel(pointerEvent);
+    if (dragged) state.panelCollapsePosition = null;
     savePanelUiState();
     handle.releasePointerCapture(pointerEvent.pointerId);
     handle.removeEventListener("pointermove", movePanel);
@@ -654,6 +677,8 @@ function onPanelDragStart(event: PointerEvent): void {
         suppressPanelRestoreClick = false;
       }, 0);
     } else if (handle.dataset.action === "restore-panel") {
+      state.panelCollapsePosition = state.panelPosition;
+      restoreExpandedPanelPosition();
       state.panelMinimized = false;
       savePanelUiState();
       render();
@@ -669,6 +694,10 @@ function onPanelDragStart(event: PointerEvent): void {
 function isInteractivePanelDragTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false;
   return Boolean(target.closest("button, a, input, select, textarea, summary, label"));
+}
+
+function restoreExpandedPanelPosition(): void {
+  state.panelPosition = nearestWindowCornerPanelPosition(state.panelPosition);
 }
 
 function panelPositionFromPoint(clientX: number, clientY: number): PanelPosition {
@@ -696,12 +725,88 @@ function panelPositionFromPoint(clientX: number, clientY: number): PanelPosition
   return { edge, ratio };
 }
 
+function minimizedPanelPositionFromPanel(panel: HTMLElement): PanelPosition {
+  const rect = panel.getBoundingClientRect();
+  const topOffset = panelTopOffsetPx();
+  const width = Math.max(window.innerWidth, 1);
+  const height = Math.max(window.innerHeight, 1);
+  const viewportCorners = [
+    { x: 0, y: topOffset },
+    { x: width, y: topOffset },
+    { x: 0, y: height },
+    { x: width, y: height },
+  ];
+  const panelCorners = [
+    { distanceX: rect.left, distanceY: rect.top, x: rect.left, y: rect.top },
+    { distanceX: rect.right, distanceY: rect.top, x: rect.right, y: rect.top },
+    {
+      distanceX: rect.left,
+      distanceY: rect.bottom,
+      x: rect.left,
+      y: rect.bottom - PANEL_MINIMIZED_ICON_SIZE_PX,
+    },
+    {
+      distanceX: rect.right,
+      distanceY: rect.bottom,
+      x: rect.right,
+      y: rect.bottom - PANEL_MINIMIZED_ICON_SIZE_PX,
+    },
+  ];
+  const nearest = panelCorners
+    .map((corner) => ({
+      ...corner,
+      distance: Math.min(
+        ...viewportCorners.map((viewportCorner) =>
+          Math.hypot(corner.distanceX - viewportCorner.x, corner.distanceY - viewportCorner.y),
+        ),
+      ),
+    }))
+    .sort((left, right) => left.distance - right.distance)[0];
+  return panelPositionFromPoint(nearest?.x ?? rect.right, nearest?.y ?? rect.top);
+}
+
+function nearestWindowCornerPanelPosition(position: PanelPosition): PanelPosition {
+  const point = panelPositionPoint(position);
+  const topOffset = panelTopOffsetPx();
+  const width = Math.max(window.innerWidth, 1);
+  const height = Math.max(window.innerHeight, 1);
+  const corners: Array<{ position: PanelPosition; x: number; y: number }> = [
+    { position: { edge: "top", ratio: 0 }, x: 0, y: topOffset },
+    { position: { edge: "top", ratio: 1 }, x: width, y: topOffset },
+    { position: { edge: "bottom", ratio: 0 }, x: 0, y: height },
+    { position: { edge: "bottom", ratio: 1 }, x: width, y: height },
+  ];
+  return (
+    corners
+      .map((corner) => ({
+        ...corner,
+        distance: Math.hypot(point.x - corner.x, point.y - corner.y),
+      }))
+      .sort((left, right) => left.distance - right.distance)[0]?.position || DEFAULT_PANEL_POSITION
+  );
+}
+
+function panelPositionPoint(position: PanelPosition): { x: number; y: number } {
+  const width = Math.max(window.innerWidth, 1);
+  const height = Math.max(window.innerHeight, 1);
+  const topOffset = panelTopOffsetPx();
+  const verticalAxisLength = Math.max(height - topOffset - PANEL_EDGE_OFFSET_PX, 1);
+  if (position.edge === "top") return { x: width * position.ratio, y: topOffset };
+  if (position.edge === "bottom") return { x: width * position.ratio, y: height };
+  return {
+    x: position.edge === "left" ? 0 : width,
+    y: topOffset + verticalAxisLength * position.ratio,
+  };
+}
+
 function panelPositionStyle(position: PanelPosition): string {
   const percent = `${Math.round(position.ratio * 1000) / 10}%`;
   const offset = `${PANEL_EDGE_OFFSET_PX}px`;
   const topOffsetPx = panelTopOffsetPx();
   const topOffset = `${topOffsetPx}px`;
   const topMaxHeight = `max-height: calc(100vh - ${topOffsetPx + PANEL_EDGE_OFFSET_PX}px);`;
+  const verticalAxisLength = Math.max(window.innerHeight - topOffsetPx - PANEL_EDGE_OFFSET_PX, 1);
+  const topPx = Math.round(topOffsetPx + verticalAxisLength * position.ratio);
   if (position.edge === "top" && position.ratio === 0) return `top: ${topOffset}; left: ${offset}; ${topMaxHeight}`;
   if (position.edge === "top" && position.ratio === 1) return `top: ${topOffset}; right: ${offset}; ${topMaxHeight}`;
   if (position.edge === "bottom" && position.ratio === 0) return `bottom: ${offset}; left: ${offset};`;
@@ -714,8 +819,9 @@ function panelPositionStyle(position: PanelPosition): string {
     return `top: ${topOffset}; left: ${percent}; transform: translateX(-${percent}); ${topMaxHeight}`;
   }
   if (position.edge === "bottom") return `bottom: ${offset}; left: ${percent}; transform: translateX(-${percent});`;
-  if (position.edge === "left") return `left: ${offset}; top: ${percent}; transform: translateY(-${percent});`;
-  return `right: ${offset}; top: ${percent}; transform: translateY(-${percent});`;
+  if (position.edge === "left")
+    return `left: ${offset}; top: ${topPx}px; transform: translateY(-${percent}); ${topMaxHeight}`;
+  return `right: ${offset}; top: ${topPx}px; transform: translateY(-${percent}); ${topMaxHeight}`;
 }
 
 function panelTopOffsetPx(): number {
