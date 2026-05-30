@@ -118,10 +118,17 @@ async function distPath() {
   if (process.env.MU_TRAVEL_DIST_DIR) return resolve(process.env.MU_TRAVEL_DIST_DIR);
   if (!stableDist) return resolve(root, "dist");
 
-  const { stdout } = await execFileAsync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
-  const commonGitDir = stdout.trim();
-  const repoRoot = basename(commonGitDir) === ".git" ? dirname(commonGitDir) : root;
-  return resolve(repoRoot, "dist");
+  try {
+    const { stdout } = await execFileAsync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+    const commonGitDir = stdout.trim();
+    const repoRoot = basename(commonGitDir) === ".git" ? dirname(commonGitDir) : root;
+    return resolve(repoRoot, "dist");
+  } catch (error) {
+    console.warn(
+      `Could not resolve canonical repo root for --stable-dist; falling back to workspace dist. ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return resolve(root, "dist");
+  }
 }
 
 if (watch) {

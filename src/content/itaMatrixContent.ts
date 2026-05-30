@@ -924,7 +924,8 @@ function shouldAutoOpenMatrixResultAfterSearch(): boolean {
 }
 
 function shouldAutoOpenMatrixResult(): boolean {
-  return rememberedAutoOpenRequest();
+  const url = new URL(window.location.href);
+  return url.searchParams.get("muTravelAutoOpen") === "1" || rememberedAutoOpenRequest();
 }
 
 function matrixResultOpenTarget(): HTMLElement | null {

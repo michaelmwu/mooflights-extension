@@ -10,12 +10,13 @@ const zipPath = resolve(artifacts, "mu-travel-flights.zip");
 const crxPath = resolve(artifacts, "mu-travel-flights.crx");
 const generatedCrxPath = resolve(root, "dist.crx");
 const generatedPemPath = resolve(root, "dist.pem");
+const providedCrxKeyPath = process.env.MU_TRAVEL_CRX_KEY_PATH ? resolve(process.env.MU_TRAVEL_CRX_KEY_PATH) : "";
 
 await mkdir(artifacts, { recursive: true });
 await rm(zipPath, { force: true });
 await rm(crxPath, { force: true });
 await rm(generatedCrxPath, { force: true });
-await rm(generatedPemPath, { force: true });
+if (!isProvidedCrxKeyPath(generatedPemPath)) await rm(generatedPemPath, { force: true });
 try {
   await execFileAsync("zip", ["--version"]);
 } catch {
@@ -32,6 +33,11 @@ if (!chrome) {
 }
 
 const keyPath = await crxKeyPath();
+if (!keyPath && process.env.MU_TRAVEL_REQUIRE_CRX_KEY === "1") {
+  throw new Error(
+    "A stable CRX signing key is required for release packaging. Set MU_TRAVEL_CRX_KEY_B64 or MU_TRAVEL_CRX_KEY_PATH.",
+  );
+}
 const args = [`--pack-extension=${resolve(root, "dist")}`, "--no-sandbox"];
 if (keyPath) args.push(`--pack-extension-key=${keyPath.path}`);
 
@@ -41,7 +47,12 @@ try {
   console.log(`Wrote ${crxPath}`);
 } finally {
   if (keyPath?.temporary) await rm(keyPath.path, { force: true });
-  await rm(generatedPemPath, { force: true });
+  await rm(generatedCrxPath, { force: true });
+  if (!isProvidedCrxKeyPath(generatedPemPath)) await rm(generatedPemPath, { force: true });
+}
+
+function isProvidedCrxKeyPath(path) {
+  return Boolean(providedCrxKeyPath && resolve(path) === providedCrxKeyPath);
 }
 
 async function chromeExecutable() {
@@ -77,6 +88,6 @@ async function crxKeyPath() {
     await writeFile(path, Buffer.from(process.env.MU_TRAVEL_CRX_KEY_B64, "base64"));
     return { path, temporary: true };
   }
-  if (process.env.MU_TRAVEL_CRX_KEY_PATH) return { path: process.env.MU_TRAVEL_CRX_KEY_PATH, temporary: false };
+  if (process.env.MU_TRAVEL_CRX_KEY_PATH) return { path: providedCrxKeyPath, temporary: false };
   return null;
 }
