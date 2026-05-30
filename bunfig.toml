@@ -1,0 +1,3 @@
+[install]
+# 7 days. Filters newly-published npm package versions during Bun resolution.
+minimumReleaseAge = 604800
