@@ -26,7 +26,7 @@ On ITA Matrix itinerary pages, the extension estimates mileage earning from the 
 
 ## Quickstart
 
-For manual Chrome installation, check the [latest releases](https://github.com/michaelmwu/flights-extension/releases) and download the packaged extension.
+For manual Chrome installation, check the [latest release](../../releases/latest) and download the packaged extension.
 
 ```sh
 bun install
