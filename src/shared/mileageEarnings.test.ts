@@ -149,6 +149,37 @@ describe("Mileage earning estimates", () => {
     });
   });
 
+  it("keeps fixed-mile rows when percentage rows cannot be computed", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "one-way",
+      carriers: ["A3"],
+      fareBases: [],
+      slices: [
+        {
+          origin: "QAA",
+          destination: "QAB",
+          segments: [
+            {
+              origin: "QAA",
+              destination: "QAB",
+              carrier: "A3",
+              bookingClass: "F",
+              cabin: "first",
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(earningForProgram(itinerary, "Aegean Miles+Bonus")).toMatchObject({
+      estimatedMiles: 250,
+      formula: "250 Miles",
+      basis: "fixed",
+    });
+  });
+
   it("uses the highest-mile row for single segment annotations", () => {
     const itinerary: NormalizedItinerary = itineraryFor("4Y", "B");
     itinerary.currency = "EUR";

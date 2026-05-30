@@ -394,7 +394,7 @@ function estimateSegmentEarningsRows(
 
   const distance = segment.distance ?? inferSegmentDistance(itinerary, segment, segments, segmentIndex, segmentCount);
   const fare = inferSegmentFare(itinerary, segment, segments, segmentCount);
-  const rows = earningRows(carrier, bookingClass, booking, programTiers);
+  const rows = earningRows(carrier, bookingClass, booking, programTiers, distance);
 
   return rows.map((row) => {
     const computed = computeMiles(row.percent, row.value, distance, fare, itinerary.currency, currencyRates);
@@ -428,6 +428,7 @@ function earningRows(
   bookingClass: string,
   booking: CompactBookingClass,
   programTiers: MileageProgramTierPreference,
+  distance: number | undefined,
 ): CompactProgramEarning[] {
   const acceptedRows: CompactProgramEarning[] = [];
   const rows = new Map<string, CompactProgramEarning>();
@@ -452,7 +453,7 @@ function earningRows(
   for (const displayRow of acceptedRows) {
     const program = revenueProgramOwner(displayRow.program) || displayRow.program;
     if (revenuePrograms.has(program) && !parseRevenueMultiplier(displayRow.value)) continue;
-    rows.set(displayRow.program, preferredEarningRow(rows.get(displayRow.program), displayRow));
+    rows.set(displayRow.program, preferredEarningRow(rows.get(displayRow.program), displayRow, distance));
   }
 
   return Array.from(rows.values());
@@ -461,10 +462,11 @@ function earningRows(
 function preferredEarningRow(
   current: CompactProgramEarning | undefined,
   candidate: CompactProgramEarning,
+  distance: number | undefined,
 ): CompactProgramEarning {
   if (!current) return candidate;
-  const currentScore = earningRowScore(current);
-  const candidateScore = earningRowScore(candidate);
+  const currentScore = earningRowScore(current, distance);
+  const candidateScore = earningRowScore(candidate, distance);
   if (candidateScore.priority !== currentScore.priority) {
     return candidateScore.priority > currentScore.priority ? candidate : current;
   }
@@ -474,10 +476,13 @@ function preferredEarningRow(
   return current;
 }
 
-function earningRowScore(row: CompactProgramEarning): { priority: number; amount: number } {
+function earningRowScore(
+  row: CompactProgramEarning,
+  distance: number | undefined,
+): { priority: number; amount: number } {
   const revenueMultiplier = parseRevenueMultiplier(row.value);
   if (revenueMultiplier) return { priority: 3, amount: revenueMultiplier.multiplier };
-  if (finiteNumber(row.percent)) return { priority: 2, amount: row.percent };
+  if (finiteNumber(row.percent) && finiteNumber(distance)) return { priority: 2, amount: row.percent };
   const fixedMiles = parseFixedMiles(row.value);
   if (finiteNumber(fixedMiles)) return { priority: 1, amount: fixedMiles };
   return { priority: 0, amount: 0 };
