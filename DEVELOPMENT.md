@@ -94,7 +94,7 @@ bun run release:verify
 ## GitHub Workflows
 
 - `CI`: runs on pull requests and pushes to `main`; installs with Bun, runs Biome, typecheck, tests, and production build.
-- `Release Extension Package`: runs manually or on `v*` tags; verifies the repo, checks the release tag matches the extension version when provided, builds `artifacts/mu-travel-flights.zip` and `artifacts/mu-travel-flights.crx`, uploads both package artifacts, and attaches them to a GitHub release. Manual runs can omit `release_tag` to build only, use the default `next_patch` strategy to package the next unused patch version as a build artifact, choose `next_minor` for a `0.1.0`-style bump, or provide an existing `vX.Y.Z` tag to create/update a draft release.
+- `Release Extension Package`: runs manually or on `v*` tags; verifies the repo, checks the release tag matches the extension version when provided, builds `artifacts/mu-travel-flights.zip` and `artifacts/mu-travel-flights.crx`, uploads both package artifacts, generates GitHub release notes from the tag history, and attaches the packages to a GitHub release. Manual runs can omit `release_tag` to build only, use the default `next_patch` strategy to package the next unused patch version as a build artifact, choose `next_minor` for a `0.1.0`-style bump, or provide an existing `vX.Y.Z` tag to create/update a draft release.
 
 The release workflow intentionally does not publish to the Chrome Web Store yet. Until Mu Travel has an approved
 developer account and store automation credentials, store submission remains manual and outside GitHub Actions.
