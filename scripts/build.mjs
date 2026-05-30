@@ -72,12 +72,11 @@ const staticFiles = [
 
 async function copyStaticFiles() {
   const manifest = JSON.parse(await readFile(resolve(root, "src/manifest.json"), "utf8"));
+  manifest.host_permissions = Array.from(
+    new Set([...(manifest.host_permissions || []), ...(devBuild ? ["http://localhost/*", "http://127.0.0.1/*"] : [])]),
+  );
   manifest.optional_host_permissions = Array.from(
-    new Set([
-      ...(manifest.optional_host_permissions || []),
-      "https://travel.mu-travel.com/*",
-      ...(devBuild ? ["http://localhost/*", "http://127.0.0.1/*"] : []),
-    ]),
+    new Set([...(manifest.optional_host_permissions || []), "https://travel.mu-travel.com/*"]),
   );
   manifest.web_accessible_resources = [
     {

@@ -81,7 +81,7 @@ const AUTO_SEARCH_DEBOUNCE_MS = 250;
 const AUTO_SEARCH_TIMEOUT_MS = 15_000;
 const AUTO_OPEN_DEBOUNCE_MS = 300;
 const AUTO_OPEN_TIMEOUT_MS = 15_000;
-const AUTO_OPEN_REMEMBER_MS = AUTO_SEARCH_TIMEOUT_MS + AUTO_OPEN_TIMEOUT_MS;
+const AUTO_OPEN_REMEMBER_MS = 5 * 60 * 1000;
 const AUTO_OPEN_STORAGE_KEY = "muTravelMatrixAutoOpen";
 const PANEL_UI_STORAGE_KEY = "muTravelPanelUi";
 const DEFAULT_PANEL_POSITION: PanelPosition = { edge: "right", ratio: 1 };
@@ -241,6 +241,7 @@ function bind(root: ShadowRoot): void {
     render();
   });
   root.querySelector('[data-action="restore-panel"]')?.addEventListener("click", () => {
+    if (!state.panelMinimized) return;
     if (suppressPanelRestoreClick) {
       suppressPanelRestoreClick = false;
       return;
@@ -375,22 +376,21 @@ function onPanelDragStart(event: PointerEvent): void {
 
   event.preventDefault();
   handle.setPointerCapture(event.pointerId);
-  handle.classList.add("dragging");
   let dragged = false;
   const startX = event.clientX;
   const startY = event.clientY;
 
   const movePanel = (pointerEvent: PointerEvent) => {
-    if (Math.hypot(pointerEvent.clientX - startX, pointerEvent.clientY - startY) > 4) dragged = true;
+    if (Math.hypot(pointerEvent.clientX - startX, pointerEvent.clientY - startY) <= 4) return;
+    dragged = true;
     state.panelPosition = panelPositionFromPoint(pointerEvent.clientX, pointerEvent.clientY);
     panel.setAttribute("style", panelPositionStyle(state.panelPosition));
   };
 
   const stopDragging = (pointerEvent: PointerEvent) => {
-    movePanel(pointerEvent);
+    if (dragged) movePanel(pointerEvent);
     if (dragged) state.panelCollapsePosition = null;
     savePanelUiState();
-    handle.classList.remove("dragging");
     handle.releasePointerCapture(pointerEvent.pointerId);
     handle.removeEventListener("pointermove", movePanel);
     handle.removeEventListener("pointerup", stopDragging);
@@ -409,7 +409,6 @@ function onPanelDragStart(event: PointerEvent): void {
     }
   };
 
-  movePanel(event);
   handle.addEventListener("pointermove", movePanel);
   handle.addEventListener("pointerup", stopDragging);
   handle.addEventListener("pointercancel", stopDragging);
@@ -661,6 +660,7 @@ function isAllowedGoogleFlightsUrl(value: string): boolean {
       (url.pathname === "/travel/flights" || url.pathname.startsWith("/travel/flights/"))
     );
   } catch {
+    forgetAutoOpenRequest();
     return false;
   }
 }

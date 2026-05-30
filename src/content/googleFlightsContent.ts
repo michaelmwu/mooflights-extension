@@ -406,6 +406,7 @@ function render(): void {
     render();
   });
   shadow.querySelector('[data-action="restore-panel"]')?.addEventListener("click", () => {
+    if (!state.panelMinimized) return;
     if (suppressPanelRestoreClick) {
       suppressPanelRestoreClick = false;
       return;
@@ -658,13 +659,14 @@ function onPanelDragStart(event: PointerEvent): void {
   const startY = event.clientY;
 
   const movePanel = (pointerEvent: PointerEvent) => {
-    if (Math.hypot(pointerEvent.clientX - startX, pointerEvent.clientY - startY) > 4) dragged = true;
+    if (Math.hypot(pointerEvent.clientX - startX, pointerEvent.clientY - startY) <= 4) return;
+    dragged = true;
     state.panelPosition = panelPositionFromPoint(pointerEvent.clientX, pointerEvent.clientY);
     panel.setAttribute("style", panelPositionStyle(state.panelPosition));
   };
 
   const stopDragging = (pointerEvent: PointerEvent) => {
-    movePanel(pointerEvent);
+    if (dragged) movePanel(pointerEvent);
     if (dragged) state.panelCollapsePosition = null;
     savePanelUiState();
     handle.releasePointerCapture(pointerEvent.pointerId);
@@ -685,7 +687,6 @@ function onPanelDragStart(event: PointerEvent): void {
     }
   };
 
-  movePanel(event);
   handle.addEventListener("pointermove", movePanel);
   handle.addEventListener("pointerup", stopDragging);
   handle.addEventListener("pointercancel", stopDragging);
@@ -825,11 +826,8 @@ function panelPositionStyle(position: PanelPosition): string {
 }
 
 function panelTopOffsetPx(): number {
-  return clamp(
-    GOOGLE_FLIGHTS_HEADER_HEIGHT_PX + GOOGLE_FLIGHTS_HEADER_BUFFER_PX,
-    PANEL_EDGE_OFFSET_PX,
-    window.innerHeight - 96,
-  );
+  const maxOffset = Math.max(PANEL_EDGE_OFFSET_PX, window.innerHeight - 96);
+  return clamp(GOOGLE_FLIGHTS_HEADER_HEIGHT_PX + GOOGLE_FLIGHTS_HEADER_BUFFER_PX, PANEL_EDGE_OFFSET_PX, maxOffset);
 }
 
 function clamp(value: number, min: number, max: number): number {
