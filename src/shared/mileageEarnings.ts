@@ -140,10 +140,55 @@ const PROGRAM_OWNER_CARRIER_CODES: Record<string, string[]> = {
   "Xiamen Airlines Egret Club": ["MF"],
 };
 
+const REVENUE_PROGRAM_TICKETING_CARRIER_CODES: Partial<Record<string, string[]>> = {
+  "Miles&More": ["LH", "LX", "OS", "SN", "EW", "EN", "VL", "4Y", "AZ"],
+};
+
 // Temporary curated rows for preferred-program display until the generated
 // snapshot stores all program earning rows. Keep this small and source future
 // additions from airline/program public earning charts or licensed data.
 const SUPPLEMENTAL_PROGRAM_EARNINGS: Record<string, Record<string, CompactProgramEarning[]>> = {
+  AC: Object.fromEntries(
+    ["A", "B", "C", "D", "E", "G", "H", "J", "K", "L", "M", "N", "O", "P", "Q", "S", "T", "U", "V", "W", "Y"].map(
+      (bookingClass) => [bookingClass, [{ program: "Air Canada Aeroplan", percent: null, value: "1 Miles/CAD" }]],
+    ),
+  ),
+  DL: Object.fromEntries(
+    [
+      "A",
+      "B",
+      "C",
+      "D",
+      "E",
+      "F",
+      "G",
+      "H",
+      "I",
+      "J",
+      "K",
+      "L",
+      "M",
+      "P",
+      "Q",
+      "S",
+      "T",
+      "U",
+      "V",
+      "W",
+      "X",
+      "Y",
+      "Z",
+    ].map((bookingClass) => [
+      bookingClass,
+      [
+        { program: "Delta SkyMiles Member", percent: null, value: "5 Miles/USD" },
+        { program: "Delta SkyMiles Silver", percent: null, value: "7 Miles/USD" },
+        { program: "Delta SkyMiles Gold", percent: null, value: "8 Miles/USD" },
+        { program: "Delta SkyMiles Platinum", percent: null, value: "9 Miles/USD" },
+        { program: "Delta SkyMiles Diamond", percent: null, value: "11 Miles/USD" },
+      ],
+    ]),
+  ),
   UA: Object.fromEntries(
     ["B", "E", "G", "H", "K", "L", "M", "N", "Q", "S", "T", "U", "V", "W", "Y"].map((bookingClass) => [
       bookingClass,
@@ -349,7 +394,7 @@ function estimateSegmentEarningsRows(
 
   const distance = segment.distance ?? inferSegmentDistance(itinerary, segment, segments, segmentIndex, segmentCount);
   const fare = inferSegmentFare(itinerary, segment, segments, segmentCount);
-  const rows = earningRows(carrier, bookingClass, booking, programTiers);
+  const rows = earningRows(carrier, bookingClass, booking, programTiers, distance);
 
   return rows.map((row) => {
     const computed = computeMiles(row.percent, row.value, distance, fare, itinerary.currency, currencyRates);
@@ -383,7 +428,9 @@ function earningRows(
   bookingClass: string,
   booking: CompactBookingClass,
   programTiers: MileageProgramTierPreference,
+  distance: number | undefined,
 ): CompactProgramEarning[] {
+  const acceptedRows: CompactProgramEarning[] = [];
   const rows = new Map<string, CompactProgramEarning>();
   const supplementalRows = SUPPLEMENTAL_PROGRAM_EARNINGS[carrier]?.[bookingClass] || [];
   const supplementalTierParents = new Set(
@@ -392,11 +439,71 @@ function earningRows(
   for (const row of [...booking.redeemable_miles, ...supplementalRows]) {
     if (supplementalTierParents.has(row.program)) continue;
     const displayRow = displayEarningRowForTier(row, programTiers);
+    if (!appliesToRevenueTicketingCarrier(carrier, displayRow)) continue;
     if (!matchesDisplayedProgramTier(displayRow.program, programTiers)) continue;
-    rows.set(earningRowKey(displayRow), displayRow);
+    acceptedRows.push(displayRow);
+  }
+
+  const revenuePrograms = new Set(
+    acceptedRows
+      .filter((row) => parseRevenueMultiplier(row.value))
+      .map((row) => revenueProgramOwner(row.program) || row.program),
+  );
+
+  for (const displayRow of acceptedRows) {
+    const program = revenueProgramOwner(displayRow.program) || displayRow.program;
+    if (revenuePrograms.has(program) && !parseRevenueMultiplier(displayRow.value)) continue;
+    rows.set(displayRow.program, preferredEarningRow(rows.get(displayRow.program), displayRow, distance));
   }
 
   return Array.from(rows.values());
+}
+
+function preferredEarningRow(
+  current: CompactProgramEarning | undefined,
+  candidate: CompactProgramEarning,
+  distance: number | undefined,
+): CompactProgramEarning {
+  if (!current) return candidate;
+  const currentScore = earningRowScore(current, distance);
+  const candidateScore = earningRowScore(candidate, distance);
+  if (candidateScore.priority !== currentScore.priority) {
+    return candidateScore.priority > currentScore.priority ? candidate : current;
+  }
+  if (candidateScore.amount !== currentScore.amount) {
+    return candidateScore.amount > currentScore.amount ? candidate : current;
+  }
+  return current;
+}
+
+function earningRowScore(
+  row: CompactProgramEarning,
+  distance: number | undefined,
+): { priority: number; amount: number } {
+  const revenueMultiplier = parseRevenueMultiplier(row.value);
+  if (revenueMultiplier) return { priority: 3, amount: revenueMultiplier.multiplier };
+  if (finiteNumber(row.percent) && finiteNumber(distance)) return { priority: 2, amount: row.percent };
+  const fixedMiles = parseFixedMiles(row.value);
+  if (finiteNumber(fixedMiles)) return { priority: 1, amount: fixedMiles };
+  return { priority: 0, amount: 0 };
+}
+
+function appliesToRevenueTicketingCarrier(carrier: string, row: CompactProgramEarning): boolean {
+  if (!parseRevenueMultiplier(row.value)) return true;
+  const ownerProgram = revenueProgramOwner(row.program);
+  const ownerCarriers = ownerProgram ? revenueProgramTicketingCarriers(ownerProgram) : [];
+  return ownerCarriers.length === 0 || ownerCarriers.includes(carrier);
+}
+
+function revenueProgramTicketingCarriers(program: string): string[] {
+  return REVENUE_PROGRAM_TICKETING_CARRIER_CODES[program] || PROGRAM_OWNER_CARRIER_CODES[program] || [];
+}
+
+function revenueProgramOwner(program: string): string {
+  if (PROGRAM_OWNER_CARRIER_CODES[program]) return program;
+  return (
+    Object.keys(PROGRAM_OWNER_CARRIER_CODES).find((parentProgram) => program.startsWith(`${parentProgram} `)) || ""
+  );
 }
 
 function displayEarningRowForTier(
@@ -427,10 +534,6 @@ function aeroplanRevenueMultiplier(tierProgram: string): number {
 
 function isAeroplanRevenueValue(value: string | null): boolean {
   return /\bMiles\/CAD\b/i.test(value || "");
-}
-
-function earningRowKey(row: CompactProgramEarning): string {
-  return [row.program, row.percent ?? "", row.value ?? ""].join("|");
 }
 
 function normalizeCompactAirlines(data: CompactMileageEarningData): Record<string, CompactAirline> {
@@ -666,10 +769,10 @@ function inferReciprocalRoundTripDistance(
 }
 
 function inferSegmentFare(
-  itinerary: NormalizedItinerary,
+  _itinerary: NormalizedItinerary,
   segment: ItinerarySegment | undefined,
   segments: ItinerarySegment[],
-  segmentCount: number,
+  _segmentCount: number,
 ): number | undefined {
   if (finiteNumber(segment?.farePrice)) {
     if (!segment.fareComponentKey) return segment.farePrice;
@@ -678,12 +781,7 @@ function inferSegmentFare(
     ).length;
     return componentSegmentCount > 1 ? segment.farePrice / componentSegmentCount : segment.farePrice;
   }
-  if (!finiteNumber(itinerary.totalPrice)) return undefined;
-  const passengerCount =
-    finiteNumber(itinerary.passengerCount) && itinerary.passengerCount > 0 ? itinerary.passengerCount : 1;
-  const perPassengerTotal = itinerary.totalPrice / passengerCount;
-  if (segmentCount <= 1) return perPassengerTotal;
-  return perPassengerTotal / segmentCount;
+  return undefined;
 }
 
 function whereToCreditAirlineUrl(carrier: string): string {
