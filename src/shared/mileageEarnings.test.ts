@@ -32,6 +32,13 @@ describe("Mileage earning estimates", () => {
       { program: "United MileagePlus Premier Platinum", label: "Platinum" },
       { program: "United MileagePlus Premier 1K", label: "1K" },
     ]);
+    expect(mileageProgramTierOptions("Delta SkyMiles")).toEqual([
+      { program: "Delta SkyMiles Member", label: "Member" },
+      { program: "Delta SkyMiles Silver", label: "Silver" },
+      { program: "Delta SkyMiles Gold", label: "Gold" },
+      { program: "Delta SkyMiles Platinum", label: "Platinum" },
+      { program: "Delta SkyMiles Diamond", label: "Diamond" },
+    ]);
     expect(mileageProgramTierOptions("Air Canada Aeroplan")).toEqual([
       { program: "Air Canada Aeroplan Member", label: "Member" },
       { program: "Air Canada Aeroplan 25K", label: "25K" },
@@ -144,15 +151,17 @@ describe("Mileage earning estimates", () => {
 
   it("uses the highest-mile row for single segment annotations", () => {
     const itinerary: NormalizedItinerary = itineraryFor("4Y", "B");
+    itinerary.currency = "EUR";
     const segment = itinerary.slices[0]?.segments[0];
     if (!segment) throw new Error("Expected itinerary fixture segment");
+    segment.farePrice = 500;
 
     expect(estimateSegmentEarnings(segment, itinerary)).toMatchObject({
       airlineName: "Discover Airlines",
       bookingClass: "B",
       program: "Miles&More",
-      estimatedMiles: 1500,
-      formula: "1,000 miles x 150%",
+      estimatedMiles: 2000,
+      formula: "500 EUR x 4 miles/EUR",
     });
   });
 
@@ -365,7 +374,7 @@ describe("Mileage earning estimates", () => {
     ).toEqual(["500 miles x 30%", "500 miles x 30%"]);
   });
 
-  it("estimates revenue-based earnings from per-passenger fare", () => {
+  it("does not estimate non-owner revenue-based earnings from per-passenger fare", () => {
     const itinerary: NormalizedItinerary = {
       source: "ita-matrix",
       capturedAt: "2026-01-01T00:00:00Z",
@@ -391,13 +400,9 @@ describe("Mileage earning estimates", () => {
       ],
     };
 
-    expect(estimateEarnings(itinerary)[0]).toMatchObject({
-      airlineName: "JetSmart",
-      bookingClass: "Y",
-      estimatedMiles: 200,
-      formula: "100 USD x 2 miles/USD",
-      basis: "revenue-multiplier",
-    });
+    expect(
+      estimateEarnings(itinerary).filter((estimate) => estimate.program === "American Airlines AAdvantage"),
+    ).toEqual([]);
   });
 
   it("shows the lowest United MileagePlus status tier from ITA base fare by default", () => {
@@ -597,7 +602,542 @@ describe("Mileage earning estimates", () => {
     ]);
   });
 
-  it("displays the selected Air Canada Aeroplan revenue tier", () => {
+  it("does not apply United revenue multipliers to partner-issued tickets", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "one-way",
+      currency: "HKD",
+      totalPrice: 910,
+      passengerCount: 1,
+      carriers: ["ZH"],
+      fareBases: ["KTEST"],
+      slices: [
+        {
+          origin: "CAN",
+          destination: "PVG",
+          segments: [
+            {
+              origin: "CAN",
+              destination: "PVG",
+              distance: 1000,
+              carrier: "ZH",
+              bookingClass: "K",
+              farePrice: 910,
+              cabin: "economy",
+            },
+          ],
+        },
+      ],
+    };
+    const rates: UsdCurrencyRates = {
+      base: "USD",
+      rates: { USD: 1, HKD: 7.835 },
+      fetchedAt: 0,
+      source: "test",
+    };
+
+    expect(
+      estimateEarnings(itinerary, ["United MileagePlus"], {}, rates)
+        .filter((estimate) => estimate.program.startsWith("United MileagePlus"))
+        .map((estimate) => ({
+          program: estimate.program,
+          miles: estimate.estimatedMiles,
+          formula: estimate.formula,
+          basis: estimate.basis,
+        }))
+        .sort((left, right) => left.program.localeCompare(right.program)),
+    ).toEqual([
+      {
+        program: "United MileagePlus",
+        miles: 250,
+        formula: "1,000 miles x 25%",
+        basis: "distance-percent",
+      },
+    ]);
+  });
+
+  it("does not apply United revenue multipliers when the fare carrier is not United", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "one-way",
+      currency: "USD",
+      totalPrice: 450,
+      passengerCount: 1,
+      carriers: ["UA"],
+      fareBases: ["STEST"],
+      slices: [
+        {
+          origin: "TPE",
+          destination: "SFO",
+          segments: [
+            {
+              origin: "TPE",
+              destination: "SFO",
+              carrier: "UA",
+              fareCarrier: "JX",
+              bookingClass: "S",
+              farePrice: 450,
+              cabin: "economy",
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(
+      estimateEarnings(itinerary, ["United MileagePlus"])
+        .filter((estimate) => estimate.program.startsWith("United MileagePlus"))
+        .map((estimate) => estimate.formula),
+    ).toEqual([]);
+  });
+
+  it("uses the selected Delta SkyMiles revenue tier on Delta fare carriers", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "one-way",
+      currency: "USD",
+      totalPrice: 300,
+      passengerCount: 1,
+      carriers: ["DL"],
+      fareBases: ["VTEST"],
+      slices: [
+        {
+          origin: "LAX",
+          destination: "SEA",
+          segments: [
+            {
+              origin: "LAX",
+              destination: "SEA",
+              carrier: "DL",
+              fareCarrier: "DL",
+              bookingClass: "V",
+              farePrice: 200,
+              cabin: "economy",
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(
+      estimateEarnings(itinerary, ["Delta SkyMiles"], {
+        "Delta SkyMiles": "Delta SkyMiles Diamond",
+      })
+        .filter((estimate) => estimate.program.startsWith("Delta SkyMiles"))
+        .map((estimate) => ({
+          program: estimate.program,
+          miles: estimate.estimatedMiles,
+          formula: estimate.formula,
+          basis: estimate.basis,
+        })),
+    ).toEqual([
+      {
+        program: "Delta SkyMiles Diamond",
+        miles: 2200,
+        formula: "200 USD x 11 miles/USD",
+        basis: "revenue-multiplier",
+      },
+    ]);
+  });
+
+  it("keeps Delta SkyMiles distance earning on partner fare carriers", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "one-way",
+      currency: "USD",
+      totalPrice: 300,
+      passengerCount: 1,
+      carriers: ["AF"],
+      fareBases: ["VTEST"],
+      slices: [
+        {
+          origin: "CDG",
+          destination: "AMS",
+          segments: [
+            {
+              origin: "CDG",
+              destination: "AMS",
+              distance: 1000,
+              carrier: "AF",
+              fareCarrier: "AF",
+              bookingClass: "V",
+              farePrice: 200,
+              cabin: "economy",
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(
+      estimateEarnings(itinerary, ["Delta SkyMiles"], {
+        "Delta SkyMiles": "Delta SkyMiles Diamond",
+      })
+        .filter((estimate) => estimate.program.startsWith("Delta SkyMiles"))
+        .map((estimate) => ({
+          program: estimate.program,
+          miles: estimate.estimatedMiles,
+          formula: estimate.formula,
+          basis: estimate.basis,
+        })),
+    ).toEqual([
+      {
+        program: "Delta SkyMiles",
+        miles: 250,
+        formula: "1,000 miles x 25%",
+        basis: "distance-percent",
+      },
+    ]);
+  });
+
+  it("applies owner-carrier revenue multipliers on regional partner flights", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "one-way",
+      currency: "USD",
+      totalPrice: 300,
+      passengerCount: 1,
+      carriers: ["OO"],
+      fareBases: ["QVAKZOBX"],
+      slices: [
+        {
+          origin: "LAX",
+          destination: "SEA",
+          segments: [
+            {
+              origin: "LAX",
+              destination: "SEA",
+              carrier: "OO",
+              carrierName: "SkyWest Airlines",
+              fareCarrier: "AA",
+              bookingClass: "Q",
+              fareBasis: "QVAKZOBX",
+              farePrice: 300,
+              cabin: "economy",
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(
+      estimateEarnings(itinerary, ["American Airlines AAdvantage"])
+        .filter((estimate) => estimate.program === "American Airlines AAdvantage")
+        .map((estimate) => ({
+          airlineName: estimate.airlineName,
+          miles: estimate.estimatedMiles,
+          formula: estimate.formula,
+          basis: estimate.basis,
+        })),
+    ).toEqual([
+      {
+        airlineName: "American Airlines",
+        miles: 1500,
+        formula: "300 USD x 5 miles/USD",
+        basis: "revenue-multiplier",
+      },
+    ]);
+  });
+
+  it("applies Miles&More revenue multipliers to Lufthansa Group fare carriers", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "one-way",
+      currency: "EUR",
+      totalPrice: 260,
+      passengerCount: 1,
+      carriers: ["LX"],
+      fareBases: ["QTEST"],
+      slices: [
+        {
+          origin: "ZRH",
+          destination: "FRA",
+          segments: [
+            {
+              origin: "ZRH",
+              destination: "FRA",
+              carrier: "LX",
+              fareCarrier: "LX",
+              bookingClass: "Q",
+              farePrice: 200,
+              cabin: "economy",
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(
+      estimateEarnings(itinerary, ["Miles&More"])
+        .filter((estimate) => estimate.program === "Miles&More")
+        .map((estimate) => ({
+          miles: estimate.estimatedMiles,
+          formula: estimate.formula,
+          basis: estimate.basis,
+        })),
+    ).toEqual([
+      {
+        miles: 800,
+        formula: "200 EUR x 4 miles/EUR",
+        basis: "revenue-multiplier",
+      },
+    ]);
+  });
+
+  it("applies Aeroplan revenue tiers to Air Canada fare carriers without distance fallback", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "one-way",
+      currency: "CAD",
+      totalPrice: 320,
+      passengerCount: 1,
+      carriers: ["AC"],
+      fareBases: ["NTEST"],
+      slices: [
+        {
+          origin: "YYZ",
+          destination: "YVR",
+          segments: [
+            {
+              origin: "YYZ",
+              destination: "YVR",
+              distance: 1000,
+              carrier: "AC",
+              fareCarrier: "AC",
+              bookingClass: "N",
+              farePrice: 240,
+              cabin: "economy",
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(
+      estimateEarnings(itinerary, ["Air Canada Aeroplan"], {
+        "Air Canada Aeroplan": "Air Canada Aeroplan 25K",
+      })
+        .filter((estimate) => estimate.program.startsWith("Air Canada Aeroplan"))
+        .map((estimate) => ({
+          program: estimate.program,
+          miles: estimate.estimatedMiles,
+          formula: estimate.formula,
+          basis: estimate.basis,
+        }))
+        .sort((left, right) => (left.program < right.program ? -1 : left.program > right.program ? 1 : 0)),
+    ).toEqual([
+      {
+        program: "Air Canada Aeroplan 25K",
+        miles: 480,
+        formula: "240 CAD x 2 miles/CAD",
+        basis: "revenue-multiplier",
+      },
+    ]);
+  });
+
+  it("does not show multiple conditional rows for one program on the same flight", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "one-way",
+      currency: "CAD",
+      totalPrice: 300,
+      passengerCount: 1,
+      carriers: ["AC"],
+      fareBases: ["KTEST"],
+      slices: [
+        {
+          origin: "YYZ",
+          destination: "YVR",
+          segments: [
+            {
+              origin: "YYZ",
+              destination: "YVR",
+              distance: 800,
+              carrier: "AC",
+              fareCarrier: "AC",
+              bookingClass: "K",
+              cabin: "economy",
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(
+      estimateEarnings(itinerary, ["Air Canada Aeroplan", "United MileagePlus"])
+        .filter(
+          (estimate) => estimate.program.startsWith("Air Canada Aeroplan") || estimate.program === "United MileagePlus",
+        )
+        .map((estimate) => ({
+          program: estimate.program,
+          miles: estimate.estimatedMiles,
+          formula: estimate.formula,
+          basis: estimate.basis,
+        }))
+        .sort((left, right) => (left.program < right.program ? -1 : left.program > right.program ? 1 : 0)),
+    ).toEqual([
+      {
+        program: "Air Canada Aeroplan Member",
+        miles: undefined,
+        formula: "1 Miles/CAD",
+        basis: "unknown",
+      },
+      {
+        program: "United MileagePlus",
+        miles: 400,
+        formula: "800 miles x 50%",
+        basis: "distance-percent",
+      },
+    ]);
+  });
+
+  it("does not apply Miles&More revenue multipliers to non-Lufthansa Group fare carriers", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "one-way",
+      currency: "EUR",
+      totalPrice: 260,
+      passengerCount: 1,
+      carriers: ["UA"],
+      fareBases: ["QTEST"],
+      slices: [
+        {
+          origin: "SFO",
+          destination: "FRA",
+          segments: [
+            {
+              origin: "SFO",
+              destination: "FRA",
+              distance: 1000,
+              carrier: "UA",
+              fareCarrier: "UA",
+              bookingClass: "Q",
+              farePrice: 200,
+              cabin: "economy",
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(
+      estimateEarnings(itinerary, ["Miles&More"])
+        .filter((estimate) => estimate.program === "Miles&More")
+        .map((estimate) => ({
+          miles: estimate.estimatedMiles,
+          formula: estimate.formula,
+          basis: estimate.basis,
+        })),
+    ).toEqual([
+      {
+        miles: 500,
+        formula: "1,000 miles x 50%",
+        basis: "distance-percent",
+      },
+    ]);
+  });
+
+  it("does not use total itinerary price for revenue multiplier estimates", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "one-way",
+      currency: "USD",
+      totalPrice: 300,
+      passengerCount: 1,
+      carriers: ["B6"],
+      fareBases: [],
+      slices: [
+        {
+          origin: "LAX",
+          destination: "JFK",
+          segments: [
+            {
+              origin: "LAX",
+              destination: "JFK",
+              carrier: "B6",
+              fareCarrier: "B6",
+              bookingClass: "B",
+              cabin: "economy",
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(
+      estimateEarnings(itinerary, ["JetBlue TrueBlue"])
+        .filter((estimate) => estimate.program === "JetBlue TrueBlue")
+        .map((estimate) => ({
+          miles: estimate.estimatedMiles,
+          formula: estimate.formula,
+          basis: estimate.basis,
+        })),
+    ).toEqual([
+      {
+        miles: undefined,
+        formula: "2 Miles/USD",
+        basis: "unknown",
+      },
+    ]);
+  });
+
+  it("does not use total itinerary price for American AAdvantage revenue estimates", () => {
+    const itinerary: NormalizedItinerary = {
+      source: "ita-matrix",
+      capturedAt: "2026-01-01T00:00:00Z",
+      tripType: "one-way",
+      currency: "USD",
+      totalPrice: 300,
+      passengerCount: 1,
+      carriers: ["AA"],
+      fareBases: ["QVAKZOBX"],
+      slices: [
+        {
+          origin: "LAX",
+          destination: "SEA",
+          segments: [
+            {
+              origin: "LAX",
+              destination: "SEA",
+              carrier: "AA",
+              fareCarrier: "AA",
+              bookingClass: "Q",
+              fareBasis: "QVAKZOBX",
+              cabin: "economy",
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(
+      estimateEarnings(itinerary, ["American Airlines AAdvantage"])
+        .filter((estimate) => estimate.program === "American Airlines AAdvantage")
+        .map((estimate) => ({
+          miles: estimate.estimatedMiles,
+          formula: estimate.formula,
+          basis: estimate.basis,
+        })),
+    ).toEqual([
+      {
+        miles: undefined,
+        formula: "5 Miles/USD",
+        basis: "unknown",
+      },
+    ]);
+  });
+
+  it("does not display the selected Air Canada Aeroplan revenue tier on United-issued tickets", () => {
     const itinerary: NormalizedItinerary = {
       source: "ita-matrix",
       capturedAt: "2026-01-01T00:00:00Z",
@@ -635,13 +1175,7 @@ describe("Mileage earning estimates", () => {
           miles: estimate.estimatedMiles,
           formula: estimate.formula,
         })),
-    ).toEqual([
-      {
-        program: "Air Canada Aeroplan 25K",
-        miles: 474,
-        formula: "237 CAD x 2 miles/CAD",
-      },
-    ]);
+    ).toEqual([]);
   });
 
   it("apportions one fare component across multiple legs before revenue mileage math", () => {
@@ -712,7 +1246,7 @@ describe("Mileage earning estimates", () => {
       tripType: "round-trip",
       totalPrice: 400,
       passengerCount: 2,
-      carriers: ["JA"],
+      carriers: ["B6"],
       fareBases: [],
       slices: [
         {
@@ -722,8 +1256,10 @@ describe("Mileage earning estimates", () => {
             {
               origin: "SCL",
               destination: "LIM",
-              carrier: "JA",
-              bookingClass: "Y",
+              carrier: "B6",
+              fareCarrier: "B6",
+              bookingClass: "B",
+              farePrice: 100,
               cabin: "economy",
             },
           ],
@@ -735,8 +1271,10 @@ describe("Mileage earning estimates", () => {
             {
               origin: "LIM",
               destination: "SCL",
-              carrier: "JA",
-              bookingClass: "Y",
+              carrier: "B6",
+              fareCarrier: "B6",
+              bookingClass: "B",
+              farePrice: 100,
               cabin: "economy",
             },
           ],
@@ -744,7 +1282,11 @@ describe("Mileage earning estimates", () => {
       ],
     };
 
-    expect(estimateEarnings(itinerary).map((estimate) => estimate.estimatedMiles)).toEqual([200, 200]);
+    expect(
+      estimateEarnings(itinerary)
+        .filter((estimate) => estimate.program === "JetBlue TrueBlue")
+        .map((estimate) => estimate.estimatedMiles),
+    ).toEqual([200, 200]);
   });
 
   it("does not synthesize Where to Credit deep links for missing carriers", () => {
