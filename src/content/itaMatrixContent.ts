@@ -4,6 +4,7 @@ import {
   airportAreaOptions,
   airportAreaSearchValue,
   airportCodes,
+  itaCityCodeCoverage,
 } from "../shared/airports";
 import { fetchRemoteProviderMetadata } from "../shared/backendClient";
 import { runtimeUrl, safeChromeCall, sendRuntimeMessage } from "../shared/chromeRuntime";
@@ -288,6 +289,12 @@ function bind(root: ShadowRoot): void {
   root.querySelectorAll<HTMLButtonElement>('[data-action="remove-airport-code"]').forEach((button) => {
     button.addEventListener("click", () => {
       void removeAirportCode(button.dataset.code || "");
+    });
+  });
+  root.querySelectorAll<HTMLButtonElement>('[data-action="airport-coverage-mode"]').forEach((button) => {
+    button.addEventListener("click", () => {
+      const mode = button.dataset.mode === "all-airports" ? "all-airports" : "useful-gaps";
+      void updateAirportCoverageMode(mode);
     });
   });
 }
@@ -670,6 +677,21 @@ async function removeAirportCode(code: string): Promise<void> {
     airportHelper: {
       ...state.settings.airportHelper,
       exclusions,
+    },
+  };
+  state.settings = next;
+  state.airportPreview = airportCodes(next.airportHelper).slice(0, 120);
+  await safeChromeCall(() => saveSettings(next), undefined);
+  render();
+}
+
+async function updateAirportCoverageMode(mode: ExtensionSettings["airportHelper"]["coverageMode"]): Promise<void> {
+  if (!state.settings) return;
+  const next: ExtensionSettings = {
+    ...state.settings,
+    airportHelper: {
+      ...state.settings.airportHelper,
+      coverageMode: mode,
     },
   };
   state.settings = next;
@@ -1546,6 +1568,8 @@ function shouldHidePanel(): boolean {
 
 function renderAirportHelper(settings: ExtensionSettings): string {
   const areaDatalistId = "mu-travel-airport-area-options";
+  const cityCodeCoverage = itaCityCodeCoverage(settings.airportHelper);
+  const skippedCodes = cityCodeCoverage.map((coverage) => coverage.code);
   return `
     <details open>
       <summary>Airport helper</summary>
@@ -1556,6 +1580,11 @@ function renderAirportHelper(settings: ExtensionSettings): string {
           ${AIRPORT_AREA_OPTIONS.map((option) => `<option value="${escapeHtml(option.searchValue)}"></option>`).join("")}
         </datalist>
       </label>
+      <div class="coverage-control" role="group" aria-label="Airport coverage">
+        <button type="button" data-action="airport-coverage-mode" data-mode="useful-gaps" aria-pressed="${settings.airportHelper.coverageMode === "useful-gaps"}">Useful gaps</button>
+        <button type="button" data-action="airport-coverage-mode" data-mode="all-airports" aria-pressed="${settings.airportHelper.coverageMode === "all-airports"}">All airports</button>
+      </div>
+      ${renderAirportCoverageNote(settings, skippedCodes)}
       <div class="airport-output-row">
         <div class="airport-chip-list">
           ${
@@ -1581,6 +1610,18 @@ function renderAirportHelper(settings: ExtensionSettings): string {
       </div>
     </details>
   `;
+}
+
+function renderAirportCoverageNote(settings: ExtensionSettings, skippedCodes: string[]): string {
+  if (!airportAreaSearchValue(settings.airportHelper)) {
+    return `<p class="airport-note">Choose an area to build an airport code list.</p>`;
+  }
+  if (settings.airportHelper.coverageMode === "all-airports" || skippedCodes.length === 0) return "";
+  const codes = skippedCodes.join(", ");
+  if (state.airportPreview.length === 0) {
+    return `<p class="airport-note">${escapeHtml(codes)} already covers this area in ITA Matrix. Switch to All airports to show individual codes.</p>`;
+  }
+  return `<p class="airport-note">Skipping airports covered by ITA city codes: ${escapeHtml(codes)}.</p>`;
 }
 
 function installChipClearShortcut(): void {
@@ -2190,6 +2231,31 @@ function styles(): string {
       align-items: start;
       gap: 8px;
       margin: 10px 0;
+    }
+    .coverage-control {
+      display: inline-flex;
+      overflow: hidden;
+      margin-top: 8px;
+      border: 1px solid #99f6e4;
+      border-radius: 6px;
+      background: #ffffff;
+    }
+    .coverage-control button {
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: #0f766e;
+      padding: 5px 8px;
+      font-size: 12px;
+    }
+    .coverage-control button[aria-pressed="true"] {
+      background: #0f766e;
+      color: #ffffff;
+    }
+    .airport-note {
+      margin: 8px 0 0;
+      color: #64748b;
+      font-size: 12px;
     }
     .airport-chip-list {
       display: flex;

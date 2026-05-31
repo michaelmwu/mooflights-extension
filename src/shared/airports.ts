@@ -21,6 +21,12 @@ type AirportRegionPreset = {
   codes: string[];
 };
 
+type ItaCityCodeCoverage = {
+  code: string;
+  label: string;
+  airportCodes: string[];
+};
+
 export type AirportAreaOption = {
   type: "region" | "continent" | "country";
   value: string;
@@ -46,16 +52,30 @@ export const AIRPORTS: Airport[] = Object.entries(DATA.airports)
 const AIRPORTS_BY_CODE = new Map(AIRPORTS.map((airport) => [airport.code, airport]));
 const REGION_PRESETS_BY_ID = new Map(AIRPORT_REGION_PRESETS.map((preset) => [preset.id, preset]));
 const COUNTRY_DISPLAY = typeof Intl !== "undefined" ? new Intl.DisplayNames(["en"], { type: "region" }) : undefined;
+const ITA_CITY_CODE_COVERAGE: ItaCityCodeCoverage[] = [
+  cityCodeCoverage("NYC", "New York City", "nyc"),
+  cityCodeCoverage("LON", "London", "london"),
+  cityCodeCoverage("PAR", "Paris", "paris"),
+  cityCodeCoverage("TYO", "Tokyo", "tokyo"),
+  cityCodeCoverage("SEL", "Seoul", "seoul"),
+  cityCodeCoverage("OSA", "Osaka", "osaka"),
+  cityCodeCoverage("BJS", "Beijing", "beijing"),
+  cityCodeCoverage("SHA", "Shanghai", "shanghai"),
+].filter((coverage) => coverage.airportCodes.length > 0);
 
 export function filterAirports(filters: AirportFilters, list: Airport[] = AIRPORTS): Airport[] {
+  if (!hasAirportAreaFilter(filters)) return [];
   const countries = new Set(filters.countries);
   const exclusions = new Set(filters.exclusions.map((code) => code.toUpperCase()));
   const regionCodes = regionAirportCodes(filters.region);
+  const cityCodeCoveredAirports =
+    filters.coverageMode === "all-airports" ? new Set<string>() : itaCityCodeCoveredAirportCodes(filters);
 
   const filtered = list
     .filter((airport) => regionCodes.size === 0 || regionCodes.has(airport.code))
     .filter((airport) => regionCodes.size > 0 || !filters.continent || airport.continent === filters.continent)
     .filter((airport) => regionCodes.size > 0 || countries.size === 0 || countries.has(airport.country))
+    .filter((airport) => !cityCodeCoveredAirports.has(airport.code))
     .filter((airport) => !exclusions.has(airport.code));
 
   return list === AIRPORTS ? filtered : filtered.sort((a, b) => a.code.localeCompare(b.code));
@@ -156,6 +176,14 @@ export function airportAreaFromSearchValue(value: string): Pick<AirportFilters, 
   return { region: "", continent: "", countries: [option.value] };
 }
 
+export function itaCityCodeCoverage(filters: AirportFilters): ItaCityCodeCoverage[] {
+  if (!hasAirportAreaFilter(filters)) return [];
+  const pool = filterAirports({ ...filters, exclusions: [], coverageMode: "all-airports" });
+  const poolCodes = new Set(pool.map((airport) => airport.code));
+
+  return ITA_CITY_CODE_COVERAGE.filter((coverage) => coverage.airportCodes.some((code) => poolCodes.has(code)));
+}
+
 export function airportCoordinate(code: string): { latitude: number; longitude: number } | undefined {
   const airport = AIRPORTS_BY_CODE.get(code.toUpperCase());
   if (!airport) return undefined;
@@ -180,6 +208,22 @@ export function parseAirportCodes(value: string): string[] {
 function regionAirportCodes(regionId: string): Set<string> {
   const preset = REGION_PRESETS_BY_ID.get(regionId);
   return new Set(preset?.codes || []);
+}
+
+function hasAirportAreaFilter(filters: AirportFilters): boolean {
+  return Boolean(filters.region || filters.continent || filters.countries.length > 0);
+}
+
+function itaCityCodeCoveredAirportCodes(filters: AirportFilters): Set<string> {
+  return new Set(itaCityCodeCoverage(filters).flatMap((coverage) => coverage.airportCodes));
+}
+
+function cityCodeCoverage(code: string, label: string, regionId: string): ItaCityCodeCoverage {
+  return {
+    code,
+    label,
+    airportCodes: REGION_PRESETS_BY_ID.get(regionId)?.codes || [],
+  };
 }
 
 function countryLabel(code: string): string {

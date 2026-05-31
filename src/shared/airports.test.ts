@@ -5,6 +5,7 @@ import {
   countryCodeFromSearchValue,
   countrySearchValue,
   filterAirports,
+  itaCityCodeCoverage,
   parseAirportCodes,
   uniqueAirportRegions,
 } from "./airports";
@@ -27,20 +28,23 @@ describe("airport helper", () => {
     expect(codes).not.toContain("LHR");
   });
 
-  it("uses curated region presets for ITA search insertion", () => {
+  it("skips airports already covered by ITA city codes in useful gaps mode", () => {
     const filters = {
       ...DEFAULT_SETTINGS.airportHelper,
       region: "tokyo",
     };
 
-    expect(airportCodes(filters)).toEqual(["HND", "NRT"]);
+    expect(airportCodes(filters)).toEqual([]);
+    expect(itaCityCodeCoverage(filters).map((coverage) => coverage.code)).toEqual(["TYO"]);
+    expect(airportCodes({ ...filters, coverageMode: "all-airports" })).toEqual(["HND", "NRT"]);
     expect(uniqueAirportRegions().map((region) => region.id)).toContain("tokyo");
   });
 
   it("returns full airport records for matching filters", () => {
     const airports = filterAirports({ ...DEFAULT_SETTINGS.airportHelper, countries: ["JP"] });
 
-    expect(airports.map((airport) => airport.code)).toEqual(expect.arrayContaining(["HND", "NRT"]));
+    expect(airports.map((airport) => airport.code)).not.toEqual(expect.arrayContaining(["HND", "NRT", "ITM", "KIX"]));
+    expect(airports.map((airport) => airport.code)).toEqual(expect.arrayContaining(["FUK", "CTS"]));
     expect(airports.every((airport) => airport.country === "JP")).toBe(true);
   });
 
