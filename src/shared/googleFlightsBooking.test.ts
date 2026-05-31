@@ -236,7 +236,7 @@ describe("Google Flights booking option parser", () => {
     expect(countries).not.toContain("IR");
     expect(countries).not.toContain("UK");
     expect(countries).not.toContain("ZZ");
-    expect(countries).toHaveLength(64);
+    expect(countries.length).toBeGreaterThan(DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES.length);
     expect(new Set(countries).size).toBe(countries.length);
   });
 

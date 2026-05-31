@@ -8,6 +8,8 @@ const ITA_MATRIX_LOCATION_SOURCE =
 const INCLUDED_TYPES = new Set(["large_airport", "medium_airport"]);
 const REQUIRED_SCHEDULED_SERVICE = "yes";
 const ITA_MATRIX_VALIDATION_CONCURRENCY = 24;
+const ITA_MATRIX_VALIDATION_RETRIES = 3;
+const ITA_MATRIX_RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
 
 const OUTPUT = "src/shared/data/airports.json";
 const airports = {};
@@ -91,11 +93,23 @@ async function unsupportedItaMatrixAirportCodes(codes) {
 }
 
 async function supportsItaMatrixAirportCode(code) {
-  const response = await fetch(`${ITA_MATRIX_LOCATION_SOURCE}/${code}`);
-  if (response.status === 400 || response.status === 404) return false;
-  if (!response.ok) throw new Error(`Failed to validate ${code} with ITA Matrix: ${response.status}`);
-  const location = await response.json();
-  return location?.code === code;
+  for (let attempt = 0; attempt <= ITA_MATRIX_VALIDATION_RETRIES; attempt++) {
+    const response = await fetch(`${ITA_MATRIX_LOCATION_SOURCE}/${code}`);
+    if (response.status === 400 || response.status === 404) return false;
+    if (response.ok) {
+      const location = await response.json();
+      return location?.code === code;
+    }
+    if (!ITA_MATRIX_RETRYABLE_STATUSES.has(response.status) || attempt === ITA_MATRIX_VALIDATION_RETRIES) {
+      throw new Error(`Failed to validate ${code} with ITA Matrix: ${response.status}`);
+    }
+    await sleep(500 * 2 ** attempt);
+  }
+  return false;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function compactString(value) {

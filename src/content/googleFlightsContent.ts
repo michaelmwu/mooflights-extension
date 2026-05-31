@@ -445,6 +445,10 @@ function render(): void {
   const countryDropdown = shadow.querySelector<HTMLElement>('[data-role="country-dropdown"]');
   countrySearch?.addEventListener("input", () => {
     state.countrySearch = countrySearch.value;
+    if (state.error) {
+      state.error = "";
+      shadow.querySelector(".error")?.remove();
+    }
     if (state.countrySearch.includes(",")) {
       addCountrySearchValue(true);
       return;

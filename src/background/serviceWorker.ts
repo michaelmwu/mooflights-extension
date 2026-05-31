@@ -30,8 +30,17 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
   }
 
   if (payload.command === "compareGoogleFlightsCountries") {
-    void compareGoogleFlightsCountries(payload, sender.tab?.id).catch((error) =>
-      sendGoogleFlightsCountryComplete(sender.tab?.id, payload.requestId, {
+    const progressTabId = sender.tab?.id;
+    if (typeof progressTabId !== "number") {
+      sendResponse({ ok: false, error: "Missing Google Flights tab." });
+      return false;
+    }
+    if (typeof payload.requestId !== "string" || !payload.requestId) {
+      sendResponse({ ok: false, error: "Missing Google Flights comparison request." });
+      return false;
+    }
+    void compareGoogleFlightsCountries(payload, progressTabId).catch((error) =>
+      sendGoogleFlightsCountryComplete(progressTabId, payload.requestId, {
         ok: false,
         error: error instanceof Error ? error.message : "Compare failed.",
       }),
