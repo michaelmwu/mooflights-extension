@@ -187,6 +187,7 @@ function render(): void {
 
 function renderStatusMessage(): string {
   if (state.error) return `<p class="message error">${escapeHtml(state.error)}</p>`;
+  if (isSearchPage() && state.status === "Ready") return "";
   if (isItineraryPage() && state.itinerary && state.status === "Itinerary captured.") return "";
   return `<p class="message">${escapeHtml(state.status)}</p>`;
 }
