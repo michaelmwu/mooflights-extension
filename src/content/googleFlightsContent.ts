@@ -4,13 +4,13 @@ import {
   type GoogleFlightsCountryResult,
   type GoogleFlightsMatrixSearch,
   googleFlightsCountryUrl,
-  normalizeGoogleFlightsCountryCodes,
   parseGoogleFlightsBookingOptions,
   parseGoogleFlightsCountryInput,
   parseGoogleFlightsMatrixSearch,
 } from "../shared/googleFlightsBooking";
 import {
   allGoogleFlightsCountryCodes,
+  filterAvailableGoogleFlightsCountryCodes,
   googleFlightsAvailableCountryOptions,
   isAllGoogleFlightsCountryCodes,
 } from "../shared/googleFlightsCountries";
@@ -249,7 +249,7 @@ void init();
 async function init(): Promise<void> {
   try {
     const settings = await loadSettings();
-    state.countryInput = settings.googleFlights.countryCodes.join(", ");
+    state.countryInput = filterAvailableGoogleFlightsCountryCodes(settings.googleFlights.countryCodes).join(", ");
   } catch {
     state.countryInput = DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES.join(", ");
   }
@@ -387,7 +387,7 @@ function render(): void {
   const shadow = getShadowRoot();
   if (!shadow) return;
   const matrixSearch = parseGoogleFlightsMatrixSearch(window.location.href);
-  const selectedCodes = parseGoogleFlightsCountryInput(state.countryInput);
+  const selectedCodes = selectedGoogleFlightsCountries();
 
   shadow.innerHTML = `
     <style>${styles()}</style>
@@ -466,7 +466,7 @@ function render(): void {
       return;
     }
     if (event.key === "Backspace" && countrySearch.value === "") {
-      removeGoogleFlightsCountry(parseGoogleFlightsCountryInput(state.countryInput).at(-1) || "");
+      removeGoogleFlightsCountry(selectedGoogleFlightsCountries().at(-1) || "");
     }
   });
   countrySearch?.addEventListener("focus", () => {
@@ -505,11 +505,6 @@ function render(): void {
   });
   shadow.querySelector('[data-action="compare-countries"]')?.addEventListener("click", () => {
     void compareCountries();
-  });
-  shadow.querySelector('[data-action="open-matrix"]')?.addEventListener("click", (event) => {
-    event.preventDefault();
-    if (!matrixSearch) return;
-    window.open(matrixSearch.matrixUrl, "_blank", "noopener,noreferrer");
   });
   shadow.querySelector('[data-action="open-options"]')?.addEventListener("click", () => {
     sendRuntimeMessage({ command: "openOptionsPage" });
@@ -552,7 +547,7 @@ function renderCountrySelect(selectedCodes: string[]): string {
 function countryDropdownOptions(): Array<{ code: string; label: string; searchValue: string }> {
   const query = normalizeCountryName(state.countrySearch);
   if (!query) return [];
-  const selectedCodes = new Set(parseGoogleFlightsCountryInput(state.countryInput));
+  const selectedCodes = new Set(selectedGoogleFlightsCountries());
   return COUNTRY_OPTIONS.filter((country) => {
     if (selectedCodes.has(country.code)) return false;
     return (
@@ -595,7 +590,9 @@ function renderCountryDropdown(dropdown: HTMLElement | null): void {
 }
 
 function addCountrySearchValue(parseAsList: boolean): void {
-  const parsedCodes = parseAsList ? parseGoogleFlightsCountryInput(state.countrySearch) : [];
+  const parsedCodes = parseAsList
+    ? filterAvailableGoogleFlightsCountryCodes(parseGoogleFlightsCountryInput(state.countrySearch))
+    : [];
   const firstMatch = countryDropdownOptions()[0]?.code || "";
   const code = googleFlightsCountryCodeFromSearchValue(state.countrySearch) || firstMatch;
   const countryCodes = parsedCodes.length > 0 ? parsedCodes : code ? [code] : [];
@@ -603,10 +600,17 @@ function addCountrySearchValue(parseAsList: boolean): void {
 }
 
 function addGoogleFlightsCountries(countryCodes: string[], refocusSearch: boolean): void {
-  const nextCountries = normalizeGoogleFlightsCountryCodes(
-    [...parseGoogleFlightsCountryInput(state.countryInput), ...countryCodes],
-    [],
-  );
+  const availableCountryCodes = filterAvailableGoogleFlightsCountryCodes(countryCodes);
+  if (availableCountryCodes.length === 0) {
+    state.error = "Choose an available Google Flights country.";
+    render();
+    if (refocusSearch) focusCountrySearch();
+    return;
+  }
+  const nextCountries = filterAvailableGoogleFlightsCountryCodes([
+    ...selectedGoogleFlightsCountries(),
+    ...availableCountryCodes,
+  ]);
   if (nextCountries.length === 0) return;
   state.countryInput = nextCountries.join(", ");
   state.countrySearch = "";
@@ -617,13 +621,14 @@ function addGoogleFlightsCountries(countryCodes: string[], refocusSearch: boolea
 
 function removeGoogleFlightsCountry(countryCode: string): void {
   if (!countryCode) return;
-  const nextCountries = normalizeGoogleFlightsCountryCodes(
-    parseGoogleFlightsCountryInput(state.countryInput).filter((code) => code !== countryCode),
-    [],
-  );
+  const nextCountries = selectedGoogleFlightsCountries().filter((code) => code !== countryCode);
   state.countryInput = nextCountries.join(", ");
   state.error = "";
   render();
+}
+
+function selectedGoogleFlightsCountries(): string[] {
+  return filterAvailableGoogleFlightsCountryCodes(parseGoogleFlightsCountryInput(state.countryInput));
 }
 
 function focusCountrySearch(): void {
@@ -653,7 +658,7 @@ function renderComparisonNotice(): string {
   if (state.comparing) {
     return `<p class="cache-note">${state.progressCompleted} of ${state.progressTotal} countries checked.</p>`;
   }
-  const selectedCountries = parseGoogleFlightsCountryInput(state.countryInput);
+  const selectedCountries = selectedGoogleFlightsCountries();
   const selectedCount = selectedCountries.length;
   if (selectedCount <= DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES.length) return "";
   if (isAllGoogleFlightsCountryCodes(selectedCountries)) {
@@ -1128,7 +1133,7 @@ function normalizeCountryName(value: string): string {
 }
 
 async function compareCountries(): Promise<void> {
-  const selectedCountries = parseGoogleFlightsCountryInput(state.countryInput);
+  const selectedCountries = selectedGoogleFlightsCountries();
   if (selectedCountries.length === 0) {
     state.error = "Enter at least one country code.";
     render();
@@ -1200,7 +1205,7 @@ function applyGoogleFlightsCountryProgress(payload: { requestId?: unknown; resul
     return;
   }
 
-  const selectedCountries = parseGoogleFlightsCountryInput(state.countryInput);
+  const selectedCountries = selectedGoogleFlightsCountries();
   state.results = mergeCountryResults(state.results, [payload.result], selectedCountries).results;
   state.resultsCachedAt = 0;
   state.progressCompleted = Math.min(state.progressTotal, state.progressCompleted + 1);

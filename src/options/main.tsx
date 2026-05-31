@@ -8,12 +8,13 @@ import {
   uniqueAirportRegions,
   uniqueAirportValues,
 } from "../shared/airports";
+import { DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES, parseGoogleFlightsCountryInput } from "../shared/googleFlightsBooking";
 import {
-  DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES,
-  normalizeGoogleFlightsCountryCodes,
-  parseGoogleFlightsCountryInput,
-} from "../shared/googleFlightsBooking";
-import { allGoogleFlightsCountryCodes, isAllGoogleFlightsCountryCodes } from "../shared/googleFlightsCountries";
+  allGoogleFlightsCountryCodes,
+  filterAvailableGoogleFlightsCountryCodes,
+  googleFlightsAvailableCountryOptions,
+  isAllGoogleFlightsCountryCodes,
+} from "../shared/googleFlightsCountries";
 import {
   type MileageProgramOption,
   mileageProgramTierOptions,
@@ -29,7 +30,8 @@ function Options(): React.ReactElement {
   const [programSearch, setProgramSearch] = useState("");
   const [googleFlightsCountrySearch, setGoogleFlightsCountrySearch] = useState("");
   const [saved, setSaved] = useState(false);
-  const countries = useMemo(() => uniqueAirportCountries(), []);
+  const airportCountries = useMemo(() => uniqueAirportCountries(), []);
+  const googleFlightsCountries = useMemo(() => googleFlightsAvailableCountryOptions(), []);
   const allGoogleFlightsCountries = useMemo(() => allGoogleFlightsCountryCodes(), []);
   const usesAllGoogleFlightsCountries = isAllGoogleFlightsCountryCodes(settings.googleFlights.countryCodes);
   const continents = useMemo(() => uniqueAirportValues("continent"), []);
@@ -98,8 +100,8 @@ function Options(): React.ReactElement {
 
   function addGoogleFlightsCountry(): void {
     const country =
-      countryCodeFromSearchValue(googleFlightsCountrySearch) ||
-      parseGoogleFlightsCountryInput(googleFlightsCountrySearch)[0] ||
+      googleFlightsCountryCodeFromSearchValue(googleFlightsCountrySearch, googleFlightsCountries) ||
+      filterAvailableGoogleFlightsCountryCodes(parseGoogleFlightsCountryInput(googleFlightsCountrySearch))[0] ||
       "";
     if (!country) return;
     setGoogleFlightsCountrySearch("");
@@ -107,15 +109,14 @@ function Options(): React.ReactElement {
       ...settings,
       googleFlights: {
         ...settings.googleFlights,
-        countryCodes: normalizeGoogleFlightsCountryCodes([...settings.googleFlights.countryCodes, country]),
+        countryCodes: filterAvailableGoogleFlightsCountryCodes([...settings.googleFlights.countryCodes, country]),
       },
     });
   }
 
   function removeGoogleFlightsCountry(country: string): void {
-    const countryCodes = normalizeGoogleFlightsCountryCodes(
+    const countryCodes = filterAvailableGoogleFlightsCountryCodes(
       settings.googleFlights.countryCodes.filter((code) => code !== country),
-      [],
     );
     void persist({
       ...settings,
@@ -165,7 +166,7 @@ function Options(): React.ReactElement {
               }}
             />
             <datalist id="google-country-options">
-              {countries.map((country) => (
+              {googleFlightsCountries.map((country) => (
                 <option key={country.code} value={country.searchValue} />
               ))}
             </datalist>
@@ -344,7 +345,7 @@ function Options(): React.ReactElement {
                 }}
               />
               <datalist id="country-options">
-                {countries.map((country) => (
+                {airportCountries.map((country) => (
                   <option key={country.code} value={country.searchValue} />
                 ))}
               </datalist>
@@ -580,6 +581,24 @@ function categoryLabel(category: string): string {
 function flagEmoji(code: string): string {
   if (!/^[A-Za-z]{2}$/.test(code)) return "";
   return String.fromCodePoint(...[...code.toUpperCase()].map((character) => 0x1f1e6 + character.charCodeAt(0) - 65));
+}
+
+function googleFlightsCountryCodeFromSearchValue(
+  value: string,
+  countries: Array<{ code: string; label: string; searchValue: string }>,
+): string {
+  const query = value.trim();
+  if (!query) return "";
+
+  const directCode = query.toUpperCase();
+  if (countries.some((country) => country.code === directCode)) return directCode;
+
+  const parenthesizedCode = query.match(/\(([A-Z]{2})\)$/i)?.[1]?.toUpperCase();
+  if (parenthesizedCode && countries.some((country) => country.code === parenthesizedCode)) {
+    return parenthesizedCode;
+  }
+
+  return countries.find((country) => country.label.toLowerCase() === query.toLowerCase())?.code || "";
 }
 
 function countryDisplayName(code: string): string {

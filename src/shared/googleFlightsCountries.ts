@@ -188,6 +188,7 @@ const AVAILABLE_GOOGLE_FLIGHTS_COUNTRY_CODES = [
   "ZM",
   "ZW",
 ];
+const AVAILABLE_GOOGLE_FLIGHTS_COUNTRY_CODE_SET = new Set(AVAILABLE_GOOGLE_FLIGHTS_COUNTRY_CODES);
 
 const NOT_USEFUL_GOOGLE_FLIGHTS_COUNTRY_CODES = new Set([
   "AF",
@@ -365,6 +366,18 @@ export function isAllGoogleFlightsCountryCodes(codes: readonly string[]): boolea
   const selectedCodes = new Set(codes.map((code) => code.trim().toUpperCase()).filter(Boolean));
 
   return selectedCodes.size === allCountries.length && allCountries.every((code) => selectedCodes.has(code));
+}
+
+export function filterAvailableGoogleFlightsCountryCodes(codes: readonly string[]): string[] {
+  const seen = new Set<string>();
+  return codes
+    .map((code) => code.trim().toUpperCase())
+    .filter((code) => /^[A-Z]{2}$/.test(code) && AVAILABLE_GOOGLE_FLIGHTS_COUNTRY_CODE_SET.has(code))
+    .filter((code) => {
+      if (seen.has(code)) return false;
+      seen.add(code);
+      return true;
+    });
 }
 
 export function googleFlightsCountryOptions(): Array<{ code: string; label: string; searchValue: string }> {
