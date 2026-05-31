@@ -2275,7 +2275,7 @@ function setError(message: string): void {
 
 async function copyAirportPreview(successMessage: string): Promise<void> {
   try {
-    await navigator.clipboard.writeText(state.airportPreview.join(", "));
+    await navigator.clipboard.writeText(state.airportPreview.join(" "));
     setStatus(successMessage);
   } catch (error) {
     setError(`Could not copy airport codes: ${error instanceof Error ? error.message : String(error)}`);
