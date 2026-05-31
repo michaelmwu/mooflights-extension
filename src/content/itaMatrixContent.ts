@@ -154,6 +154,11 @@ async function init(): Promise<void> {
 }
 
 function render(): void {
+  if (shouldHidePanel()) {
+    removePanel();
+    return;
+  }
+
   const shadow = getShadowRoot();
   if (!shadow) return;
   const settings = state.settings;
@@ -1552,10 +1557,14 @@ function isFlightsPage(): boolean {
   return window.location.pathname.startsWith("/flights");
 }
 
+function shouldHidePanel(): boolean {
+  return isFlightsPage();
+}
+
 function renderAirportHelper(settings: ExtensionSettings): string {
   const countryDatalistId = "mu-travel-country-options";
   return `
-    <details>
+    <details open>
       <summary>Airport helper</summary>
       <div class="grid">
         ${selectHtml(
@@ -1606,6 +1615,10 @@ function getShadowRoot(): ShadowRoot | null {
     document.documentElement.appendChild(host);
   }
   return host.shadowRoot || host.attachShadow({ mode: "open" });
+}
+
+function removePanel(): void {
+  document.getElementById(PANEL_ID)?.remove();
 }
 
 function renderLinks(links: RankedProviderLink[]): string {
