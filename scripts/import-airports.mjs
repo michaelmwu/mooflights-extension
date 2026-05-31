@@ -3,8 +3,11 @@ import { dirname, resolve } from "node:path";
 
 const AIRPORTS_SOURCE = "https://davidmegginson.github.io/ourairports-data/airports.csv";
 const ATTRIBUTION_URL = "https://ourairports.com/data/";
+const ITA_MATRIX_LOCATION_SOURCE =
+  "https://alkalimatrix-pa.googleapis.com/v1/locationTypes/airportOrMultiAirportCity/locationCodes";
 const INCLUDED_TYPES = new Set(["large_airport", "medium_airport"]);
 const REQUIRED_SCHEDULED_SERVICE = "yes";
+const ITA_MATRIX_VALIDATION_CONCURRENCY = 24;
 
 const OUTPUT = "src/shared/data/airports.json";
 const airports = {};
@@ -48,13 +51,20 @@ for (const row of rows) {
   ];
 }
 
+const itaMatrixUnsupportedCodes = await unsupportedItaMatrixAirportCodes(Object.keys(airports));
+for (const code of itaMatrixUnsupportedCodes) {
+  delete airports[code];
+}
+
 const output = {
   provider: "OurAirports",
   license: "Public Domain",
-  source_urls: [AIRPORTS_SOURCE, ATTRIBUTION_URL],
+  source_urls: [AIRPORTS_SOURCE, ATTRIBUTION_URL, ITA_MATRIX_LOCATION_SOURCE],
   fetched_at: new Date().toISOString(),
   included_types: Array.from(INCLUDED_TYPES).sort(),
   required_scheduled_service: REQUIRED_SCHEDULED_SERVICE,
+  validated_with_ita_matrix_location_codes: true,
+  excluded_unsupported_ita_matrix_codes: itaMatrixUnsupportedCodes,
   fields: ["name", "city", "country", "continent", "latitude", "longitude"],
   precision: "latitude and longitude are stored as integer degrees * 10000",
   airports,
@@ -63,7 +73,29 @@ const output = {
 const target = resolve(process.cwd(), OUTPUT);
 await mkdir(dirname(target), { recursive: true });
 await writeFile(target, `${JSON.stringify(output)}\n`);
-console.log(`Wrote ${Object.keys(airports).length} medium/large airports to ${OUTPUT}`);
+console.log(`Wrote ${Object.keys(airports).length} medium/large airports accepted by ITA Matrix to ${OUTPUT}`);
+
+async function unsupportedItaMatrixAirportCodes(codes) {
+  const unsupported = [];
+  let index = 0;
+
+  async function worker() {
+    while (index < codes.length) {
+      const code = codes[index++];
+      if (!(await supportsItaMatrixAirportCode(code))) unsupported.push(code);
+    }
+  }
+
+  await Promise.all(Array.from({ length: ITA_MATRIX_VALIDATION_CONCURRENCY }, worker));
+  return unsupported.sort();
+}
+
+async function supportsItaMatrixAirportCode(code) {
+  const response = await fetch(`${ITA_MATRIX_LOCATION_SOURCE}/${code}`);
+  if (!response.ok) throw new Error(`Failed to validate ${code} with ITA Matrix: ${response.status}`);
+  const location = await response.json();
+  return location?.code === code;
+}
 
 function compactString(value) {
   return String(value || "").trim();

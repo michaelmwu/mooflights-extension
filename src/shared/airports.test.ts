@@ -1,4 +1,5 @@
 import {
+  AIRPORTS,
   airportAreaFromSearchValue,
   airportAreaSearchValue,
   airportCodes,
@@ -8,6 +9,7 @@ import {
   parseAirportCodes,
   uniqueAirportRegions,
 } from "./airports";
+import airportData from "./data/airports.json";
 import { DEFAULT_SETTINGS } from "./storage";
 
 describe("airport helper", () => {
@@ -35,6 +37,16 @@ describe("airport helper", () => {
 
     expect(airportCodes(filters)).toEqual(["HND", "NRT"]);
     expect(uniqueAirportRegions().map((region) => region.id)).toContain("tokyo");
+  });
+
+  it("excludes airport codes that ITA Matrix does not resolve", () => {
+    const unsupportedCodes = new Set(
+      (airportData as { excluded_unsupported_ita_matrix_codes?: string[] }).excluded_unsupported_ita_matrix_codes || [],
+    );
+    const supportedCodes = new Set(AIRPORTS.map((airport) => airport.code));
+
+    expect(unsupportedCodes.size).toBeGreaterThan(0);
+    expect([...unsupportedCodes].some((code) => supportedCodes.has(code))).toBe(false);
   });
 
   it("returns full airport records for matching filters", () => {
