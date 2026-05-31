@@ -94,6 +94,7 @@ let autoCaptureCheckTimer: number | undefined;
 let flightResultAnnotationTimer: number | undefined;
 let autoSearchTimer: number | undefined;
 let autoOpenTimer: number | undefined;
+let locationClearButtonInstallFrame: number | undefined;
 let autoSearchStartedAt = 0;
 let autoSearchDone = false;
 let autoSearchLocationKey = "";
@@ -1721,7 +1722,11 @@ function installLocationClearButtons(): void {
 }
 
 function scheduleLocationClearButtonInstall(): void {
-  window.requestAnimationFrame(addLocationClearButtons);
+  if (locationClearButtonInstallFrame !== undefined) return;
+  locationClearButtonInstallFrame = window.requestAnimationFrame(() => {
+    locationClearButtonInstallFrame = undefined;
+    addLocationClearButtons();
+  });
 }
 
 function addLocationClearButtons(): void {
