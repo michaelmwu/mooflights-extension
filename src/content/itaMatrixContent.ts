@@ -1,5 +1,6 @@
 import { airportDistanceMiles } from "../shared/airportCoordinates";
 import {
+  type AirportAreaOption,
   airportAreaFromSearchValue,
   airportAreaOptions,
   airportAreaSearchValue,
@@ -8,6 +9,7 @@ import {
 import { fetchRemoteProviderMetadata } from "../shared/backendClient";
 import { runtimeUrl, safeChromeCall, sendRuntimeMessage } from "../shared/chromeRuntime";
 import { loadUsdCurrencyRates, type UsdCurrencyRates } from "../shared/currencyRates";
+import { flagEmoji } from "../shared/flags";
 import { flattenSegments, parseItaBookingDetails, parseItineraryJson } from "../shared/itinerary";
 import {
   type EarningsEstimate,
@@ -48,6 +50,7 @@ type PanelState = {
   panelPosition: PanelPosition;
   panelCollapsePosition: PanelPosition | null;
   currencyRates: UsdCurrencyRates | null;
+  airportAreaSearch: string;
 };
 
 type ResultMileageSummary = {
@@ -121,6 +124,7 @@ const state: PanelState = {
   panelPosition: panelUi.position,
   panelCollapsePosition: panelUi.collapsePosition,
   currencyRates: null,
+  airportAreaSearch: "",
 };
 
 const AIRPORT_AREA_OPTIONS = airportAreaOptions();
@@ -276,16 +280,29 @@ function bind(root: ShadowRoot): void {
 
   root.querySelectorAll<HTMLInputElement>('input[data-setting="area"]').forEach((input) => {
     input.addEventListener("change", () => {
+      if (input.value === airportAreaSearchValue(state.settings?.airportHelper || DEFAULT_SETTINGS.airportHelper))
+        return;
       void updateAirportSetting("area", input.value);
     });
     input.addEventListener("input", () => {
+      state.airportAreaSearch = input.value;
+      renderAirportAreaDropdown(root.querySelector<HTMLElement>('[data-role="airport-area-dropdown"]'));
       if (!input.value.trim()) void updateAirportSetting("area", "");
     });
     input.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        state.airportAreaSearch = "";
+        input.value = airportAreaSearchValue(state.settings?.airportHelper || DEFAULT_SETTINGS.airportHelper);
+        renderAirportAreaDropdown(root.querySelector<HTMLElement>('[data-role="airport-area-dropdown"]'));
+        return;
+      }
       if (event.key !== "Enter") return;
-      input.blur();
+      event.preventDefault();
+      const firstOption = airportAreaDropdownOptions()[0];
+      void updateAirportSetting("area", firstOption?.searchValue || input.value);
     });
   });
+  bindAirportAreaDropdown(root);
   root.querySelectorAll<HTMLButtonElement>('[data-action="remove-airport-code"]').forEach((button) => {
     button.addEventListener("click", () => {
       void removeAirportCode(button.dataset.code || "");
@@ -651,6 +668,7 @@ async function updateAirportSetting(key: string, value: string): Promise<void> {
   if (!state.settings) return;
   const area = key === "area" ? airportAreaFromSearchValue(value) : null;
   if (key === "area" && value.trim() && area && !hasAirportArea(area)) {
+    state.airportAreaSearch = "";
     render();
     return;
   }
@@ -663,6 +681,7 @@ async function updateAirportSetting(key: string, value: string): Promise<void> {
     },
   };
   state.settings = next;
+  state.airportAreaSearch = "";
   state.airportPreview = airportCodes(next.airportHelper).slice(0, 120);
   await safeChromeCall(() => saveSettings(next), undefined);
   render();
@@ -1569,19 +1588,97 @@ function shouldHidePanel(): boolean {
   return isFlightsPage();
 }
 
+function airportAreaDropdownOptions(): AirportAreaOption[] {
+  const query = normalizeAirportAreaSearch(state.airportAreaSearch);
+  if (!query) return [];
+  return AIRPORT_AREA_OPTIONS.map((option) => ({
+    option,
+    score: airportAreaOptionScore(option, query),
+  }))
+    .filter((match) => match.score >= 0)
+    .sort((left, right) => left.score - right.score || left.option.label.localeCompare(right.option.label))
+    .map((match) => match.option)
+    .slice(0, 8);
+}
+
+function airportAreaOptionScore(option: AirportAreaOption, query: string): number {
+  const label = normalizeAirportAreaSearch(option.label);
+  const value = normalizeAirportAreaSearch(option.value);
+  const searchValue = normalizeAirportAreaSearch(option.searchValue);
+  if (option.type === "country" && value === query) return 0;
+  if (label === query) return 1;
+  if (label.startsWith(query)) return 2;
+  if (searchValue.startsWith(query)) return 3;
+  if (label.includes(query)) return 4;
+  if (searchValue.includes(query)) return 5;
+  if (value.includes(query)) return 6;
+  return -1;
+}
+
+function renderAirportAreaDropdownRows(options: AirportAreaOption[]): string {
+  return options
+    .map((option, index) => {
+      const typeLabel = option.type === "country" ? "" : option.type === "continent" ? "Continent" : "Region";
+      return `
+        <li role="presentation">
+          <button type="button" class="${index === 0 ? "active" : ""}" data-action="select-airport-area" data-value="${escapeHtml(option.searchValue)}" role="option">
+            ${option.type === "country" ? `<span class="flag" aria-hidden="true">${escapeHtml(flagEmoji(option.value))}</span>` : ""}
+            <span>${escapeHtml(option.label)}</span>
+            ${typeLabel ? `<small>${escapeHtml(typeLabel)}</small>` : ""}
+          </button>
+        </li>
+      `;
+    })
+    .join("");
+}
+
+function renderAirportAreaDropdown(dropdown: HTMLElement | null): void {
+  if (!dropdown) return;
+  const options = airportAreaDropdownOptions();
+  dropdown.hidden = options.length === 0;
+  dropdown.innerHTML = renderAirportAreaDropdownRows(options);
+  const input =
+    dropdown.getRootNode() instanceof ShadowRoot
+      ? (dropdown.getRootNode() as ShadowRoot).querySelector<HTMLInputElement>('input[data-setting="area"]')
+      : null;
+  input?.setAttribute("aria-expanded", options.length > 0 ? "true" : "false");
+  bindAirportAreaDropdown(dropdown);
+}
+
+function bindAirportAreaDropdown(root: ParentNode): void {
+  root.querySelectorAll<HTMLButtonElement>('[data-action="select-airport-area"]').forEach((button) => {
+    button.addEventListener("mousedown", (event) => event.preventDefault());
+    button.addEventListener("click", () => {
+      const value = button.dataset.value || "";
+      if (!value) return;
+      void updateAirportSetting("area", value);
+    });
+  });
+}
+
+function normalizeAirportAreaSearch(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 function renderAirportHelper(settings: ExtensionSettings): string {
-  const areaDatalistId = "mu-travel-airport-area-options";
+  const areaInputId = "mu-travel-airport-area";
+  const areaDropdownId = "mu-travel-airport-area-dropdown";
+  const areaValue = airportAreaSearchValue(settings.airportHelper);
+  const areaInputValue = state.airportAreaSearch || areaValue;
+  const areaDropdownOptions = airportAreaDropdownOptions();
   return `
     <details open>
       <summary>Airport helper</summary>
-      <label>
-        Area
-        <input type="search" data-setting="area" list="${areaDatalistId}" value="${escapeHtml(airportAreaSearchValue(settings.airportHelper))}" placeholder="Search region, continent, or country">
-        <datalist id="${areaDatalistId}">
-          ${AIRPORT_AREA_OPTIONS.map((option) => `<option value="${escapeHtml(option.searchValue)}"></option>`).join("")}
-        </datalist>
-      </label>
-      ${airportAreaSearchValue(settings.airportHelper) ? "" : '<p class="airport-note">Choose an area to build an airport code list.</p>'}
+      <div class="airport-area-field">
+        <label for="${areaInputId}">Area</label>
+        <div class="airport-area-combo">
+          <input id="${areaInputId}" type="search" data-setting="area" value="${escapeHtml(areaInputValue)}" placeholder="Search region, continent, or country" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="${areaDropdownOptions.length > 0 ? "true" : "false"}" aria-controls="${areaDropdownId}">
+          <ul id="${areaDropdownId}" class="airport-area-dropdown" data-role="airport-area-dropdown" role="listbox" ${areaDropdownOptions.length === 0 ? "hidden" : ""}>
+            ${renderAirportAreaDropdownRows(areaDropdownOptions)}
+          </ul>
+        </div>
+      </div>
+      ${areaValue ? "" : '<p class="airport-note">Choose an area to build an airport code list.</p>'}
       <div class="airport-output-row">
         <div class="airport-chip-list">
           ${
@@ -1633,21 +1730,46 @@ function addLocationClearButtons(): void {
     .querySelectorAll<HTMLButtonElement>('button.add-airport, button[aria-label="add location"]')
     .forEach((nearbyAirportButton) => {
       const suffix = nearbyAirportButton.closest(".mat-mdc-form-field-icon-suffix");
-      if (!suffix || suffix.querySelector(".mu-travel-location-clear")) return;
+      const existingClearButton = suffix?.querySelector<HTMLButtonElement>(".mu-travel-location-clear");
+      if (existingClearButton) {
+        syncLocationClearButton(existingClearButton, nearbyAirportButton);
+        return;
+      }
+      if (!suffix) return;
       const clearButton = document.createElement("button");
       clearButton.type = "button";
       clearButton.className = "mu-travel-location-clear";
-      clearButton.setAttribute("aria-label", "Clear locations");
-      clearButton.setAttribute("title", "Clear locations");
+      clearButton.setAttribute("aria-label", "Clear selected airports");
+      clearButton.setAttribute("title", "Clear selected airports");
       clearButton.tabIndex = -1;
-      clearButton.innerHTML = '<span class="material-icons" aria-hidden="true">backspace</span>';
+      clearButton.innerHTML = '<span class="material-icons" aria-hidden="true">close</span>';
       clearButton.addEventListener("mousedown", (event) => event.preventDefault());
       clearButton.addEventListener("click", (event) => {
         event.preventDefault();
         void clearLocationField(nearbyAirportButton);
       });
       suffix.insertBefore(clearButton, nearbyAirportButton);
+      syncLocationClearButton(clearButton, nearbyAirportButton);
+      const formField = nearbyAirportButton.closest("mat-form-field");
+      formField?.addEventListener("input", () => syncLocationClearButton(clearButton, nearbyAirportButton));
+      formField?.addEventListener("change", () => syncLocationClearButton(clearButton, nearbyAirportButton));
     });
+}
+
+function syncLocationClearButton(clearButton: HTMLButtonElement, anchor: HTMLElement): void {
+  clearButton.hidden = !locationFieldHasValue(anchor.closest("mat-form-field"));
+}
+
+function locationFieldHasValue(formField: Element | null): boolean {
+  const input = formField?.querySelector<HTMLInputElement>(".mat-mdc-chip-input");
+  if (input?.value.trim()) return true;
+  const chipGrid = formField?.querySelector("mat-chip-grid");
+  return Boolean(
+    chipGrid &&
+      Array.from(chipGrid.querySelectorAll("mat-chip-row, mat-chip, .mat-mdc-chip")).some((chip) =>
+        Boolean(chip.textContent?.trim()),
+      ),
+  );
 }
 
 async function clearLocationField(anchor: HTMLElement): Promise<void> {
@@ -1660,6 +1782,8 @@ async function clearLocationField(anchor: HTMLElement): Promise<void> {
     input.dispatchEvent(new Event("change", { bubbles: true }));
     input.focus();
   }
+  const clearButton = formField?.querySelector<HTMLButtonElement>(".mu-travel-location-clear");
+  if (clearButton) syncLocationClearButton(clearButton, anchor);
 }
 
 async function clearLocationChipGrid(chipGrid: Element | null): Promise<void> {
@@ -1685,12 +1809,15 @@ function installLocationClearButtonStyles(): void {
       color: rgba(0, 0, 0, 0.54);
       cursor: pointer;
       display: inline-flex;
-      height: 40px;
+      height: 32px;
       justify-content: center;
-      margin: 0 2px;
-      min-width: 40px;
+      margin: 0 -2px 0 0;
+      min-width: 32px;
       padding: 0;
       vertical-align: middle;
+    }
+    .mu-travel-location-clear[hidden] {
+      display: none;
     }
     .mu-travel-location-clear:hover,
     .mu-travel-location-clear:focus-visible {
@@ -1699,7 +1826,7 @@ function installLocationClearButtonStyles(): void {
       outline: none;
     }
     .mu-travel-location-clear .material-icons {
-      font-size: 22px;
+      font-size: 18px;
       line-height: 1;
     }
   `;
@@ -2306,6 +2433,60 @@ function styles(): string {
       align-items: start;
       gap: 8px;
       margin: 10px 0;
+    }
+    .airport-area-field {
+      display: grid;
+      gap: 4px;
+      margin-top: 8px;
+      color: #334155;
+    }
+    .airport-area-combo {
+      position: relative;
+    }
+    .airport-area-dropdown {
+      position: absolute;
+      z-index: 2;
+      left: 0;
+      right: 0;
+      top: calc(100% + 2px);
+      max-height: 198px;
+      overflow: auto;
+      margin: 0;
+      padding: 4px;
+      list-style: none;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      background: #ffffff;
+      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+    }
+    .airport-area-dropdown[hidden] {
+      display: none;
+    }
+    .airport-area-dropdown button {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 7px;
+      width: 100%;
+      border: 0;
+      border-radius: 5px;
+      background: transparent;
+      color: #162033;
+      padding: 6px 7px;
+      text-align: left;
+      font-weight: 550;
+    }
+    .airport-area-dropdown button:hover,
+    .airport-area-dropdown button.active {
+      background: #f1f5f9;
+    }
+    .airport-area-dropdown small {
+      color: #94a3b8;
+      font-size: 11px;
+      font-weight: 650;
+    }
+    .airport-area-dropdown .flag {
+      font-weight: 400;
     }
     .airport-note {
       margin: 8px 0 0;
