@@ -401,6 +401,7 @@ function render(): void {
             <div class="section-heading">Compare country pricing</div>
             ${renderCountrySelect(selectedCodes)}
             <div class="actions">
+              ${renderMatrixAction(matrixSearch)}
               <button type="button" class="wide" ${state.comparing || selectedCodes.length === 0 ? "disabled" : ""} data-action="compare-countries">
                 ${state.comparing ? "Checking..." : `Compare (${selectedCodes.length})`}
               </button>
@@ -670,6 +671,11 @@ function renderMilesEstimatePrompt(matrixSearch: GoogleFlightsMatrixSearch | nul
       <span><a href="${escapeHtml(matrixSearch.matrixUrl)}" target="_blank" rel="noopener noreferrer" data-action="open-matrix">Search ITA Matrix</a> to see booking classes and mileage earning details for ${escapeHtml(carrierLabels)}.</span>
     </div>
   `;
+}
+
+function renderMatrixAction(matrixSearch: GoogleFlightsMatrixSearch | null): string {
+  if (!matrixSearch) return "";
+  return `<a class="button-link" href="${escapeHtml(matrixSearch.matrixUrl)}" target="_blank" rel="noopener noreferrer">Search ITA Matrix</a>`;
 }
 
 function renderResults(results: GoogleFlightsCountryResult[]): string {
@@ -1422,6 +1428,17 @@ function styles(): string {
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
       gap: 6px;
       padding: 9px 12px;
+    }
+    .actions .button-link {
+      display: inline-grid;
+      place-items: center;
+      min-height: 32px;
+      border: 1px solid #0f766e;
+      border-radius: 6px;
+      background: #ffffff;
+      color: #0f766e;
+      font-weight: 650;
+      text-decoration: none;
     }
     .actions .wide {
       grid-column: 1 / -1;

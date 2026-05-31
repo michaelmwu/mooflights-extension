@@ -22,7 +22,7 @@ import {
 } from "../shared/mileageEarnings";
 import { ALWAYS_SHOWN_PROVIDER_IDS, LOCAL_PROVIDERS, providerConfidence } from "../shared/providers";
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from "../shared/storage";
-import type { ExtensionSettings } from "../shared/types";
+import type { AirportFilters, ExtensionSettings } from "../shared/types";
 import "./options.css";
 
 function Options(): React.ReactElement {
@@ -316,10 +316,10 @@ function Options(): React.ReactElement {
                 defaultValue={airportAreaSearchValue(settings.airportHelper)}
                 placeholder="Search region, continent, or country"
                 onBlur={(event) => {
-                  const area = airportAreaFromSearchValue(event.currentTarget.value);
+                  const nextAirportHelper = airportHelperWithArea(settings.airportHelper, event.currentTarget.value);
                   void persist({
                     ...settings,
-                    airportHelper: { ...settings.airportHelper, ...area, exclusions: [] },
+                    airportHelper: nextAirportHelper,
                   });
                 }}
                 onKeyDown={(event) => {
@@ -567,6 +567,19 @@ function categoryLabel(category: string): string {
 function flagEmoji(code: string): string {
   if (!/^[A-Za-z]{2}$/.test(code)) return "";
   return String.fromCodePoint(...[...code.toUpperCase()].map((character) => 0x1f1e6 + character.charCodeAt(0) - 65));
+}
+
+function airportHelperWithArea(airportHelper: AirportFilters, value: string): AirportFilters {
+  const area = airportAreaFromSearchValue(value);
+  const currentAreaValue = airportAreaSearchValue(airportHelper);
+  const nextAreaValue = airportAreaSearchValue({ ...airportHelper, ...area });
+  const areaChanged = currentAreaValue !== nextAreaValue;
+
+  return {
+    ...airportHelper,
+    ...area,
+    exclusions: areaChanged ? [] : airportHelper.exclusions,
+  };
 }
 
 function countryDisplayName(code: string): string {

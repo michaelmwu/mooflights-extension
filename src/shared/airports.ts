@@ -51,7 +51,7 @@ export const AIRPORTS: Airport[] = Object.entries(DATA.airports)
 
 const AIRPORTS_BY_CODE = new Map(AIRPORTS.map((airport) => [airport.code, airport]));
 const REGION_PRESETS_BY_ID = new Map(AIRPORT_REGION_PRESETS.map((preset) => [preset.id, preset]));
-const COUNTRY_DISPLAY = typeof Intl !== "undefined" ? new Intl.DisplayNames(["en"], { type: "region" }) : undefined;
+const COUNTRY_DISPLAY = createCountryDisplayNames();
 const ITA_CITY_CODE_COVERAGE: ItaCityCodeCoverage[] = [
   cityCodeCoverage("NYC", "New York City", "nyc"),
   cityCodeCoverage("LON", "London", "london"),
@@ -236,4 +236,14 @@ function countryLabel(code: string): string {
 
 function normalizeSearch(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function createCountryDisplayNames(): Intl.DisplayNames | undefined {
+  if (typeof Intl === "undefined" || typeof Intl.DisplayNames !== "function") return undefined;
+
+  try {
+    return new Intl.DisplayNames(["en"], { type: "region" });
+  } catch {
+    return undefined;
+  }
 }

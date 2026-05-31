@@ -92,4 +92,8 @@ describe("airport helper", () => {
     expect(airportAreaSearchValue({ ...DEFAULT_SETTINGS.airportHelper, continent: "Asia" })).toBe("Asia (continent)");
     expect(airportAreaSearchValue({ ...DEFAULT_SETTINGS.airportHelper, countries: ["JP"] })).toBe("Japan (JP)");
   });
+
+  it("falls back to country codes when Intl.DisplayNames labels are unavailable", () => {
+    expect(countrySearchValue("XX")).toBe("XX (XX)");
+  });
 });
