@@ -4,14 +4,12 @@ describe("settings", () => {
   it("merges partial stored settings with safe defaults", () => {
     expect(
       mergeSettings({
-        affiliateOptOut: true,
         backend: {
           enabled: true,
         },
       }),
     ).toEqual({
       ...DEFAULT_SETTINGS,
-      affiliateOptOut: true,
       backend: {
         ...DEFAULT_SETTINGS.backend,
         enabled: true,
@@ -29,7 +27,6 @@ describe("settings", () => {
           "United MileagePlus": "United MileagePlus Premier Gold",
           bad: 123,
         },
-        affiliateOptOut: "yes",
         debugMode: 1,
         googleFlights: {
           countryCodes: ["jp", "MY", "not-a-country", null, "JP"],

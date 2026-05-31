@@ -16,7 +16,7 @@ Depending on the page and features you use, this can include:
 - Google Flights booking-page offers visible in your browser, including prices, booking options, selected country
   markets, and temporary comparison results.
 - Extension settings, such as preferred providers, hidden providers, frequent-flyer program preferences, Google Flights
-  country selections, airport-helper filters, debug settings, and affiliate opt-out state.
+  country selections, airport-helper filters, and debug settings.
 
 The extension may write text to your clipboard when you use copy actions. It does not read your clipboard.
 
@@ -32,6 +32,9 @@ The extension uses this data to:
 
 Mu Travel Flights does not use the current production extension build for analytics, advertising profiles, or user
 tracking.
+
+Mu Travel Flights' use of user data complies with the Chrome Web Store User Data Policy, including the Limited Use
+requirements.
 
 ## Storage And Retention
 
@@ -65,7 +68,6 @@ The extension requests only the permissions needed for the current feature set:
 
 - `storage` for local settings and caches.
 - `clipboardWrite` for user-triggered copy actions.
-- `tabs` for opening and managing comparison tabs.
 - Host access for ITA Matrix, Google Flights, public FX-rate sources, and bundled runtime pages listed in the extension
   manifest.
 

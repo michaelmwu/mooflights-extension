@@ -6,7 +6,6 @@ The extension targets Manifest V3 and currently requests:
 
 - `storage`
 - `clipboardWrite`
-- `tabs`
 - required host access for `https://matrix.itasoftware.com/*`
 - required host access for Google Flights pages on `https://www.google.com/travel/flights*` and
   `https://google.com/travel/flights*`
