@@ -446,5 +446,181 @@
     "id": "us-wy",
     "label": "Wyoming",
     "codes": ["COD", "CPR", "CYS", "GCC", "JAC", "LAR", "RIW", "RKS", "SHR"]
+  },
+  {
+    "id": "jp-hokkaido",
+    "label": "Hokkaido",
+    "codes": ["AKJ", "CTS", "HKD", "KUH", "MBE", "MMB", "OBO", "OIR", "OKD", "RIS", "SHB", "WKJ"]
+  },
+  {
+    "id": "jp-honshu",
+    "label": "Honshu",
+    "codes": [
+      "AOJ",
+      "MSJ",
+      "HNA",
+      "SDJ",
+      "AXT",
+      "ONJ",
+      "GAJ",
+      "SYO",
+      "FKS",
+      "IBR",
+      "NRT",
+      "HAC",
+      "HND",
+      "KIJ",
+      "TOY",
+      "KMQ",
+      "NTQ",
+      "MMJ",
+      "FSZ",
+      "NGO",
+      "NKM",
+      "ITM",
+      "KIX",
+      "TJH",
+      "UKB",
+      "SHM",
+      "TTJ",
+      "YGJ",
+      "IWJ",
+      "IZO",
+      "OKI",
+      "OKJ",
+      "HIJ",
+      "IWK",
+      "UBJ"
+    ]
+  },
+  {
+    "id": "jp-kyushu",
+    "label": "Kyushu",
+    "codes": [
+      "FUK",
+      "KKJ",
+      "HSG",
+      "FUJ",
+      "IKI",
+      "NGS",
+      "TSJ",
+      "AXJ",
+      "KMJ",
+      "OIT",
+      "KMI",
+      "ASJ",
+      "KKX",
+      "KOJ",
+      "KUM",
+      "OKE",
+      "RNJ",
+      "TKN",
+      "TNE"
+    ]
+  },
+  {
+    "id": "jp-okinawa",
+    "label": "Okinawa",
+    "codes": ["ISG", "MMY", "OKA", "SHI", "UEO"]
+  },
+  {
+    "id": "jp-shikoku",
+    "label": "Shikoku",
+    "codes": ["KCZ", "MYJ", "TAK", "TKS"]
+  },
+  {
+    "id": "au-nsw",
+    "label": "New South Wales",
+    "codes": ["BNK", "CFS", "NTL", "SYD", "WSI"]
+  },
+  {
+    "id": "au-nt",
+    "label": "Northern Territory",
+    "codes": ["ASP", "AYQ", "DRW"]
+  },
+  {
+    "id": "au-qld",
+    "label": "Queensland",
+    "codes": ["BNE", "CNS", "HTI", "MCY", "MKY", "OOL", "TSV"]
+  },
+  {
+    "id": "au-sa",
+    "label": "South Australia",
+    "codes": ["ADL", "MGB", "PLO"]
+  },
+  {
+    "id": "au-tas",
+    "label": "Tasmania",
+    "codes": ["HBA", "LST"]
+  },
+  {
+    "id": "au-vic",
+    "label": "Victoria",
+    "codes": ["AVV", "MEB", "MEL", "MQL"]
+  },
+  {
+    "id": "au-wa",
+    "label": "Western Australia",
+    "codes": ["BME", "GET", "KTA", "PER", "PHE"]
+  },
+  {
+    "id": "ca-ab",
+    "label": "Alberta",
+    "codes": ["YEG", "YMM", "YQL", "YYC"]
+  },
+  {
+    "id": "ca-bc",
+    "label": "British Columbia",
+    "codes": ["YLW", "YVR", "YXS", "YXX", "YYJ"]
+  },
+  {
+    "id": "ca-mb",
+    "label": "Manitoba",
+    "codes": ["YBR", "YQD", "YTH", "YWG", "YYQ"]
+  },
+  {
+    "id": "ca-nb",
+    "label": "New Brunswick",
+    "codes": ["YFC", "YQM", "YSJ", "ZBF"]
+  },
+  {
+    "id": "ca-nl",
+    "label": "Newfoundland and Labrador",
+    "codes": ["YQX", "YYT"]
+  },
+  {
+    "id": "ca-nt",
+    "label": "Northwest Territories",
+    "codes": ["YEV", "YFS", "YHY", "YSM", "YVQ", "YZF"]
+  },
+  {
+    "id": "ca-ns",
+    "label": "Nova Scotia",
+    "codes": ["YHZ", "YQY"]
+  },
+  {
+    "id": "ca-nu",
+    "label": "Nunavut",
+    "codes": ["YBK", "YCB", "YFB", "YRB", "YRT", "YUX", "YZS"]
+  },
+  {
+    "id": "ca-on",
+    "label": "Ontario",
+    "codes": ["YHM", "YOW", "YQT", "YTZ", "YXU", "YYZ"]
+  },
+  {
+    "id": "ca-qc",
+    "label": "Quebec",
+    "codes": ["YBG", "YHU", "YMX", "YQB", "YUL"]
+  },
+  {
+    "id": "ca-sk",
+    "label": "Saskatchewan",
+    "codes": ["YNL", "YPA", "YQR", "YSF", "YVC", "YXE"]
+  },
+  {
+    "id": "ca-yt",
+    "label": "Yukon",
+    "codes": ["YDA", "YXY"]
   }
 ]

@@ -1,4 +1,5 @@
 import {
+  AIRPORT_REGION_PRESETS,
   AIRPORTS,
   airportAreaFromSearchValue,
   airportAreaSearchValue,
@@ -47,6 +48,37 @@ describe("airport helper", () => {
     expect(uniqueAirportRegions().map((region) => region.id)).toContain("us-ca");
   });
 
+  it("uses Japan island and regional airport presets", () => {
+    expect(airportCodes({ ...DEFAULT_SETTINGS.airportHelper, region: "jp-okinawa" })).toEqual([
+      "ISG",
+      "MMY",
+      "OKA",
+      "SHI",
+      "UEO",
+    ]);
+    expect(airportCodes({ ...DEFAULT_SETTINGS.airportHelper, region: "jp-hokkaido" })).toEqual(
+      expect.arrayContaining(["CTS", "HKD", "KUH"]),
+    );
+  });
+
+  it("uses curated Australia region presets", () => {
+    expect(airportCodes({ ...DEFAULT_SETTINGS.airportHelper, region: "au-nsw" })).toEqual([
+      "BNK",
+      "CFS",
+      "NTL",
+      "SYD",
+      "WSI",
+    ]);
+    expect(airportCodes({ ...DEFAULT_SETTINGS.airportHelper, region: "au-nsw" })).not.toContain("ARM");
+  });
+
+  it("uses Canada province and territory airport presets", () => {
+    expect(airportCodes({ ...DEFAULT_SETTINGS.airportHelper, region: "ca-bc" })).toEqual(
+      expect.arrayContaining(["YVR", "YYJ", "YLW"]),
+    );
+    expect(uniqueAirportRegions().map((region) => region.id)).toContain("ca-bc");
+  });
+
   it("excludes airport codes that ITA Matrix does not resolve", () => {
     const unsupportedCodes = new Set(
       (airportData as { excluded_unsupported_ita_matrix_codes?: string[] }).excluded_unsupported_ita_matrix_codes || [],
@@ -55,6 +87,13 @@ describe("airport helper", () => {
 
     expect(unsupportedCodes.size).toBeGreaterThan(0);
     expect([...unsupportedCodes].some((code) => supportedCodes.has(code))).toBe(false);
+  });
+
+  it("keeps all region preset airport codes inside the ITA-accepted airport catalog", () => {
+    const supportedCodes = new Set(AIRPORTS.map((airport) => airport.code));
+    const presetCodes = AIRPORT_REGION_PRESETS.flatMap((preset) => preset.codes);
+
+    expect(presetCodes.filter((code) => !supportedCodes.has(code))).toEqual([]);
   });
 
   it("returns full airport records for matching filters", () => {
