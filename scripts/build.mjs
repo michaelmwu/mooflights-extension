@@ -80,6 +80,10 @@ async function copyStaticFiles() {
       matches: ["https://matrix.itasoftware.com/*"],
       resources: ["content/itaMatrixPageBridge.js"],
     },
+    {
+      matches: ["https://www.google.com/*", "https://google.com/*"],
+      resources: ["assets/extension-icons/icon-32.png"],
+    },
   ];
   await writeFile(resolve(dist, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
 

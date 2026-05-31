@@ -6,7 +6,14 @@ type RuntimeMessage = {
   baseUrl?: string;
   countries?: string[];
   baselineOptionCount?: number;
+  requestId?: string;
 };
+
+const GOOGLE_FLIGHTS_COMPARE_CONCURRENCY = 3;
+const GOOGLE_FLIGHTS_TAB_CREATE_SPACING_MS = 750;
+
+let tabCreateQueue = Promise.resolve();
+let lastTabCreatedAt = 0;
 
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === "install") {
@@ -14,7 +21,7 @@ chrome.runtime.onInstalled.addListener((details) => {
   }
 });
 
-chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
   const payload = message as RuntimeMessage;
   if (payload.command === "openOptionsPage") {
     openOptionsPage();
@@ -23,7 +30,7 @@ chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) =
   }
 
   if (payload.command === "compareGoogleFlightsCountries") {
-    void compareGoogleFlightsCountries(payload)
+    void compareGoogleFlightsCountries(payload, sender.tab?.id)
       .then((results) => sendResponse({ ok: true, results }))
       .catch((error) => sendResponse({ ok: false, error: error instanceof Error ? error.message : "Compare failed." }));
     return true;
@@ -37,13 +44,38 @@ chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) =
   return true;
 });
 
-async function compareGoogleFlightsCountries(payload: RuntimeMessage): Promise<GoogleFlightsCountryResult[]> {
+async function compareGoogleFlightsCountries(
+  payload: RuntimeMessage,
+  progressTabId?: number,
+): Promise<GoogleFlightsCountryResult[]> {
   const baseUrl = payload.baseUrl || "";
   if (!baseUrl) throw new Error("Missing Google Flights URL.");
   const countries = Array.from(new Set((payload.countries || []).filter((country) => /^[A-Z]{2}$/.test(country))));
   const baselineOptionCount = payload.baselineOptionCount || 0;
-  return mapWithConcurrency(countries, 3, (country) =>
-    compareGoogleFlightsCountry(baseUrl, country, baselineOptionCount),
+  return mapWithConcurrency(countries, GOOGLE_FLIGHTS_COMPARE_CONCURRENCY, async (country) => {
+    const result = await compareGoogleFlightsCountry(baseUrl, country, baselineOptionCount);
+    sendGoogleFlightsCountryProgress(progressTabId, payload.requestId, result);
+    return result;
+  });
+}
+
+function sendGoogleFlightsCountryProgress(
+  tabId: number | undefined,
+  requestId: string | undefined,
+  result: GoogleFlightsCountryResult,
+): void {
+  if (typeof tabId !== "number" || !requestId) return;
+  chrome.tabs.sendMessage(
+    tabId,
+    {
+      command: "googleFlightsCountryComparisonResult",
+      requestId,
+      result,
+    },
+    () => {
+      // The user may navigate away before long all-country checks finish.
+      void chrome.runtime.lastError;
+    },
   );
 }
 
@@ -55,7 +87,7 @@ async function compareGoogleFlightsCountry(
   const url = googleFlightsCountryUrl(baseUrl, country);
   let tabId: number | undefined;
   try {
-    const tab = await createInactiveTab(url);
+    const tab = await createInactiveTabPaced(url);
     tabId = tab.id;
     if (typeof tabId !== "number") throw new Error("Chrome did not provide a tab id.");
     await waitForTabComplete(tabId);
@@ -79,6 +111,22 @@ async function compareGoogleFlightsCountry(
   } finally {
     if (typeof tabId === "number") await removeTab(tabId);
   }
+}
+
+function createInactiveTabPaced(url: string): Promise<chrome.tabs.Tab> {
+  const scheduled = tabCreateQueue.then(async () => {
+    const elapsed = Date.now() - lastTabCreatedAt;
+    const waitMs = Math.max(0, GOOGLE_FLIGHTS_TAB_CREATE_SPACING_MS - elapsed);
+    if (waitMs > 0) await delay(waitMs);
+    const tab = await createInactiveTab(url);
+    lastTabCreatedAt = Date.now();
+    return tab;
+  });
+  tabCreateQueue = scheduled.then(
+    () => undefined,
+    () => undefined,
+  );
+  return scheduled;
 }
 
 function shouldRetrySparseResult(result: GoogleFlightsCountryResult, baselineOptionCount: number): boolean {

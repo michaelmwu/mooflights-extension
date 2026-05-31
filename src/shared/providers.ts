@@ -13,6 +13,8 @@ export const PROVIDER_CONFIDENCE_THRESHOLDS = {
   medium: 70,
 } as const;
 
+export const ALWAYS_SHOWN_PROVIDER_IDS = ["where-to-credit", "google-flights"] as const;
+
 export const LOCAL_PROVIDERS: LinkProvider[] = [
   {
     id: "where-to-credit",
@@ -168,8 +170,9 @@ export function rankProviderLinks(
       .filter((metadata): metadata is RemoteProviderMetadata => Boolean(metadata))
       .map((metadata) => [metadata.providerId, metadata]),
   );
-  const hidden = new Set(settings.hiddenProviderIds);
-  const preferred = new Set(settings.preferredProviderIds);
+  const alwaysShown = new Set<string>(ALWAYS_SHOWN_PROVIDER_IDS);
+  const hidden = new Set(settings.hiddenProviderIds.filter((providerId) => !alwaysShown.has(providerId)));
+  const preferred = new Set([...ALWAYS_SHOWN_PROVIDER_IDS, ...settings.preferredProviderIds]);
 
   return LOCAL_PROVIDERS.map((provider) => {
     const metadata = metadataById.get(provider.id);

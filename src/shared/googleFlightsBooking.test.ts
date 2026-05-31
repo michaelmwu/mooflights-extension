@@ -1,10 +1,12 @@
 import {
+  DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES,
   googleFlightsCountryUrl,
   normalizeGoogleFlightsCountryCodes,
   parseGoogleFlightsBookingOptions,
   parseGoogleFlightsCountryInput,
   parseGoogleFlightsMatrixSearch,
 } from "./googleFlightsBooking";
+import { allGoogleFlightsCountryCodes, googleFlightsAvailableCountryOptions } from "./googleFlightsCountries";
 
 describe("Google Flights booking option parser", () => {
   it("parses direct and OTA booking options from Google Flights markup", () => {
@@ -216,6 +218,34 @@ describe("Google Flights booking option parser", () => {
   it("normalizes country code defaults for Google Flights comparisons", () => {
     expect(normalizeGoogleFlightsCountryCodes(["us", "JP", "jp", "bad", 123])).toEqual(["US", "JP"]);
     expect(parseGoogleFlightsCountryInput("us, jp MY")).toEqual(["US", "JP", "MY"]);
+  });
+
+  it("builds a useful all-country list with recommended countries first", () => {
+    const countries = allGoogleFlightsCountryCodes();
+
+    expect(countries.slice(0, DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES.length)).toEqual(
+      DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES,
+    );
+    expect(countries).toContain("FR");
+    expect(countries).toContain("BR");
+    expect(countries).not.toContain("AQ");
+    expect(countries).not.toContain("AF");
+    expect(countries).not.toContain("AO");
+    expect(countries).not.toContain("CU");
+    expect(countries).not.toContain("EU");
+    expect(countries).not.toContain("IR");
+    expect(countries).not.toContain("UK");
+    expect(countries).not.toContain("ZZ");
+    expect(countries).toHaveLength(64);
+    expect(new Set(countries).size).toBe(countries.length);
+  });
+
+  it("keeps the searchable country catalog broader than the useful preset", () => {
+    const countries = googleFlightsAvailableCountryOptions();
+
+    expect(countries.map((country) => country.code)).toContain("AF");
+    expect(countries.map((country) => country.code)).toContain("AO");
+    expect(countries.map((country) => country.code)).not.toContain("AQ");
   });
 
   it("builds an ITA Matrix search from Google Flights tfs data", () => {

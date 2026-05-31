@@ -20,7 +20,7 @@ import {
   mileageProgramTierOptions,
   uniqueMileagePrograms,
 } from "../shared/mileageEarnings";
-import { rankProviderLinks, summarizeItinerary } from "../shared/providers";
+import { ALWAYS_SHOWN_PROVIDER_IDS, rankProviderLinks, summarizeItinerary } from "../shared/providers";
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from "../shared/storage";
 import type { ExtensionSettings, ItinerarySegment, NormalizedItinerary, RankedProviderLink } from "../shared/types";
 
@@ -1625,11 +1625,14 @@ function renderLinks(links: RankedProviderLink[]): string {
   return links
     .map((link) => {
       const confidence = providerConfidenceCopy(link);
+      const confidenceBadge = confidence
+        ? `<em class="confidence"><i aria-hidden="true"></i>${escapeHtml(confidence.label)}</em>`
+        : "";
       const issue = link.provider.knownIssues ? `<small>${escapeHtml(link.provider.knownIssues)}</small>` : "";
       return `
         <a href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer" class="provider ${link.confidence}">
           <span>${escapeHtml(link.provider.label)}</span>
-          <em class="confidence"><i aria-hidden="true"></i>${escapeHtml(confidence.label)}</em>
+          ${confidenceBadge}
           ${issue}
         </a>
       `;
@@ -1637,7 +1640,8 @@ function renderLinks(links: RankedProviderLink[]): string {
     .join("");
 }
 
-function providerConfidenceCopy(link: RankedProviderLink): { label: string } {
+function providerConfidenceCopy(link: RankedProviderLink): { label: string } | null {
+  if (ALWAYS_SHOWN_PROVIDER_IDS.includes(link.provider.id as (typeof ALWAYS_SHOWN_PROVIDER_IDS)[number])) return null;
   if (link.confidence === "high") {
     return {
       label: "Reliable",

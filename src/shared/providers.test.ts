@@ -26,6 +26,18 @@ describe("provider ranking", () => {
     expect(links.find((link) => link.provider.id === "google-flights")?.confidence).toBe("medium");
   });
 
+  it("always shows protected providers even if stored settings try to hide them", () => {
+    const itinerary = parseItaBookingDetails(fixture);
+    const links = rankProviderLinks(itinerary, {
+      ...DEFAULT_SETTINGS,
+      hiddenProviderIds: ["where-to-credit", "google-flights"],
+      preferredProviderIds: [],
+    });
+
+    expect(links.some((link) => link.provider.id === "where-to-credit")).toBe(true);
+    expect(links.some((link) => link.provider.id === "google-flights")).toBe(true);
+  });
+
   it("ignores malformed remote reliability metadata", () => {
     const itinerary = parseItaBookingDetails(fixture);
     const links = rankProviderLinks(itinerary, DEFAULT_SETTINGS, [

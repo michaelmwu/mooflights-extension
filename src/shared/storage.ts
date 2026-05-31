@@ -1,9 +1,12 @@
 import { DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES, normalizeGoogleFlightsCountryCodes } from "./googleFlightsBooking";
+import { ALWAYS_SHOWN_PROVIDER_IDS } from "./providers";
 import type { ExtensionSettings } from "./types";
+
+const LEGACY_GOOGLE_FLIGHTS_COUNTRY_CODES = ["US", "CA", "GB", "JP", "TW", "HK", "SG", "KR", "AU", "MY"];
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   hiddenProviderIds: [],
-  preferredProviderIds: ["where-to-credit", "google-flights", "kayak"],
+  preferredProviderIds: ["kayak"],
   preferredFrequentFlyerPrograms: [],
   frequentFlyerProgramTiers: {},
   debugMode: false,
@@ -62,8 +65,11 @@ export function mergeSettings(value: unknown): ExtensionSettings {
   const googleFlights = isRecord(candidate.googleFlights) ? candidate.googleFlights : {};
 
   return {
-    hiddenProviderIds: stringArray(candidate.hiddenProviderIds, DEFAULT_SETTINGS.hiddenProviderIds),
-    preferredProviderIds: stringArray(candidate.preferredProviderIds, DEFAULT_SETTINGS.preferredProviderIds),
+    hiddenProviderIds: providerPreferenceArray(candidate.hiddenProviderIds, DEFAULT_SETTINGS.hiddenProviderIds),
+    preferredProviderIds: providerPreferenceArray(
+      candidate.preferredProviderIds,
+      DEFAULT_SETTINGS.preferredProviderIds,
+    ),
     preferredFrequentFlyerPrograms: stringArray(
       candidate.preferredFrequentFlyerPrograms,
       DEFAULT_SETTINGS.preferredFrequentFlyerPrograms,
@@ -94,9 +100,26 @@ function stringArray(value: unknown, fallback: string[]): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : fallback;
 }
 
+function providerPreferenceArray(value: unknown, fallback: string[]): string[] {
+  const alwaysShown = new Set<string>(ALWAYS_SHOWN_PROVIDER_IDS);
+  return stringArray(value, fallback).filter((providerId) => !alwaysShown.has(providerId));
+}
+
 function googleFlightsCountryCodes(value: unknown): string[] {
   if (Array.isArray(value) && value.length === 0) return [];
-  return normalizeGoogleFlightsCountryCodes(value, DEFAULT_SETTINGS.googleFlights.countryCodes);
+  const countryCodes = normalizeGoogleFlightsCountryCodes(value, DEFAULT_SETTINGS.googleFlights.countryCodes);
+  return isLegacyGoogleFlightsRecommendedSet(countryCodes)
+    ? [...DEFAULT_SETTINGS.googleFlights.countryCodes]
+    : countryCodes;
+}
+
+function isLegacyGoogleFlightsRecommendedSet(countryCodes: string[]): boolean {
+  const currentDefaults = new Set(DEFAULT_SETTINGS.googleFlights.countryCodes);
+  const countrySet = new Set(countryCodes);
+  return (
+    LEGACY_GOOGLE_FLIGHTS_COUNTRY_CODES.every((code) => countrySet.has(code)) &&
+    countryCodes.every((code) => currentDefaults.has(code))
+  );
 }
 
 function stringRecord(value: unknown): Record<string, string> {
