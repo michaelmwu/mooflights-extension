@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 const AIRPORTS_SOURCE = "https://davidmegginson.github.io/ourairports-data/airports.csv";
 const ATTRIBUTION_URL = "https://ourairports.com/data/";
 const INCLUDED_TYPES = new Set(["large_airport", "medium_airport"]);
+const REQUIRED_SCHEDULED_SERVICE = "yes";
 
 const OUTPUT = "src/shared/data/airports.json";
 const airports = {};
@@ -31,9 +32,11 @@ for (const row of rows) {
   const city = row[index.municipality];
   const country = row[index.iso_country];
   const continent = CONTINENTS[row[index.continent]] || row[index.continent];
+  const scheduledService = row[index.scheduled_service];
   const lat = Number(row[index.latitude_deg]);
   const lon = Number(row[index.longitude_deg]);
   if (!INCLUDED_TYPES.has(type)) continue;
+  if (scheduledService !== REQUIRED_SCHEDULED_SERVICE) continue;
   if (!/^[A-Z0-9]{3}$/.test(code) || !Number.isFinite(lat) || !Number.isFinite(lon)) continue;
   airports[code] = [
     compactString(name),
@@ -51,6 +54,7 @@ const output = {
   source_urls: [AIRPORTS_SOURCE, ATTRIBUTION_URL],
   fetched_at: new Date().toISOString(),
   included_types: Array.from(INCLUDED_TYPES).sort(),
+  required_scheduled_service: REQUIRED_SCHEDULED_SERVICE,
   fields: ["name", "city", "country", "continent", "latitude", "longitude"],
   precision: "latitude and longitude are stored as integer degrees * 10000",
   airports,

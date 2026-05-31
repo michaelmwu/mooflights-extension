@@ -351,24 +351,6 @@ function Options(): React.ReactElement {
             >
               Clear area
             </button>
-            <label>
-              Coverage
-              <select
-                value={settings.airportHelper.coverageMode}
-                onChange={(event) =>
-                  void persist({
-                    ...settings,
-                    airportHelper: {
-                      ...settings.airportHelper,
-                      coverageMode: event.currentTarget.value === "all-airports" ? "all-airports" : "useful-gaps",
-                    },
-                  })
-                }
-              >
-                <option value="useful-gaps">Useful gaps</option>
-                <option value="all-airports">All airports</option>
-              </select>
-            </label>
           </div>
         </div>
 

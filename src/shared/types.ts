@@ -74,7 +74,6 @@ export type ExtensionSettings = {
     continent: string;
     countries: string[];
     exclusions: string[];
-    coverageMode: "useful-gaps" | "all-airports";
   };
   backend: {
     enabled: boolean;

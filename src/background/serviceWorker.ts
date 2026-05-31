@@ -30,10 +30,14 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
   }
 
   if (payload.command === "compareGoogleFlightsCountries") {
-    void compareGoogleFlightsCountries(payload, sender.tab?.id)
-      .then((results) => sendResponse({ ok: true, results }))
-      .catch((error) => sendResponse({ ok: false, error: error instanceof Error ? error.message : "Compare failed." }));
-    return true;
+    void compareGoogleFlightsCountries(payload, sender.tab?.id).catch((error) =>
+      sendGoogleFlightsCountryComplete(sender.tab?.id, payload.requestId, {
+        ok: false,
+        error: error instanceof Error ? error.message : "Compare failed.",
+      }),
+    );
+    sendResponse({ ok: true });
+    return false;
   }
 
   if (payload.command !== "fetchProviderMetadata") return false;
@@ -44,19 +48,17 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
   return true;
 });
 
-async function compareGoogleFlightsCountries(
-  payload: RuntimeMessage,
-  progressTabId?: number,
-): Promise<GoogleFlightsCountryResult[]> {
+async function compareGoogleFlightsCountries(payload: RuntimeMessage, progressTabId?: number): Promise<void> {
   const baseUrl = payload.baseUrl || "";
   if (!baseUrl) throw new Error("Missing Google Flights URL.");
   const countries = Array.from(new Set((payload.countries || []).filter((country) => /^[A-Z]{2}$/.test(country))));
   const baselineOptionCount = payload.baselineOptionCount || 0;
-  return mapWithConcurrency(countries, GOOGLE_FLIGHTS_COMPARE_CONCURRENCY, async (country) => {
+  await mapWithConcurrency(countries, GOOGLE_FLIGHTS_COMPARE_CONCURRENCY, async (country) => {
     const result = await compareGoogleFlightsCountry(baseUrl, country, baselineOptionCount);
     sendGoogleFlightsCountryProgress(progressTabId, payload.requestId, result);
     return result;
   });
+  sendGoogleFlightsCountryComplete(progressTabId, payload.requestId, { ok: true });
 }
 
 function sendGoogleFlightsCountryProgress(
@@ -74,6 +76,25 @@ function sendGoogleFlightsCountryProgress(
     },
     () => {
       // The user may navigate away before long all-country checks finish.
+      void chrome.runtime.lastError;
+    },
+  );
+}
+
+function sendGoogleFlightsCountryComplete(
+  tabId: number | undefined,
+  requestId: string | undefined,
+  result: { ok: boolean; error?: string },
+): void {
+  if (typeof tabId !== "number" || !requestId) return;
+  chrome.tabs.sendMessage(
+    tabId,
+    {
+      command: "googleFlightsCountryComparisonComplete",
+      requestId,
+      ...result,
+    },
+    () => {
       void chrome.runtime.lastError;
     },
   );

@@ -18,7 +18,6 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
     continent: "",
     countries: [],
     exclusions: [],
-    coverageMode: "useful-gaps",
   },
   backend: {
     enabled: false,
@@ -85,10 +84,6 @@ export function mergeSettings(value: unknown): ExtensionSettings {
       continent: stringValue(airportHelper.continent, DEFAULT_SETTINGS.airportHelper.continent),
       countries: stringArray(airportHelper.countries, DEFAULT_SETTINGS.airportHelper.countries),
       exclusions: stringArray(airportHelper.exclusions, DEFAULT_SETTINGS.airportHelper.exclusions),
-      coverageMode:
-        airportHelper.coverageMode === "all-airports" || airportHelper.coverageMode === "useful-gaps"
-          ? airportHelper.coverageMode
-          : DEFAULT_SETTINGS.airportHelper.coverageMode,
     },
     backend: {
       enabled: booleanValue(backend.enabled, DEFAULT_SETTINGS.backend.enabled),

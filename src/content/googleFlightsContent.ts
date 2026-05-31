@@ -38,12 +38,6 @@ type CompareState = {
   countrySearch: string;
 };
 
-type CompareResponse = {
-  ok: boolean;
-  results?: GoogleFlightsCountryResult[];
-  error?: string;
-};
-
 type PanelEdge = "top" | "right" | "bottom" | "left";
 
 type PanelPosition = {
@@ -235,13 +229,19 @@ function isGoogleFlightsBookingOption(value: unknown): value is GoogleFlightsCou
 }
 
 chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
-  const payload = message as { command?: string; requestId?: unknown; result?: unknown };
+  const payload = message as { command?: string; requestId?: unknown; result?: unknown; ok?: unknown; error?: unknown };
   if (payload.command === "parseGoogleFlightsBookingOptions") {
     sendResponse(parseCurrentBookingPage());
     return false;
   }
-  if (payload.command !== "googleFlightsCountryComparisonResult") return false;
-  applyGoogleFlightsCountryProgress(payload);
+  if (payload.command === "googleFlightsCountryComparisonResult") {
+    applyGoogleFlightsCountryProgress(payload);
+    return false;
+  }
+  if (payload.command === "googleFlightsCountryComparisonComplete") {
+    applyGoogleFlightsCountryComplete(payload);
+    return false;
+  }
   return false;
 });
 
@@ -1141,12 +1141,10 @@ async function compareCountries(): Promise<void> {
   state.comparingRequestId = `${Date.now()}:${Math.random().toString(36).slice(2)}`;
   state.progressCompleted = 0;
   const previousResults = state.results;
-  const previousCachedAt = state.resultsCachedAt;
   const currentUrl = new URL(window.location.href);
   const hasComparableCurrency = currentUrl.searchParams.has("curr");
   state.baseline = hasComparableCurrency ? parseCurrentBookingPage() : null;
   const comparePageKey = state.pageKey;
-  const compareCacheKey = state.cacheKey;
   const baseline = state.baseline;
   const baseUrl = googleFlightsCountryUrl(window.location.href, currentComparableCountryCode());
   const currentCountry = currentComparableCountryCode();
@@ -1165,30 +1163,15 @@ async function compareCountries(): Promise<void> {
       countries,
       baselineOptionCount: baseline?.options.length ?? 0,
       requestId,
-    })) as CompareResponse;
+    })) as { ok?: boolean; error?: string } | undefined;
     if (state.pageKey !== comparePageKey || state.comparingRequestId !== requestId) return;
     if (!response?.ok) throw new Error(response?.error || "Country comparison failed.");
-    const updates = baseline ? [baseline, ...(response.results || [])] : response.results || [];
-    const merged = mergeCountryResults(state.results, updates, selectedCountries);
-    state.results = merged.results;
-    state.resultsCachedAt = merged.retained ? previousCachedAt || Date.now() : 0;
-    state.progressCompleted = state.progressTotal;
-    if (comparePageKey) {
-      pruneExpiredResultCache();
-      void storeCachedResults(compareCacheKey || comparePageKey, state.results);
-    }
   } catch (error) {
     if (state.pageKey !== comparePageKey || state.comparingRequestId !== requestId) return;
     state.error = error instanceof Error ? error.message : "Country comparison failed.";
-  } finally {
-    if (state.pageKey === comparePageKey && state.comparingRequestId === requestId) {
-      state.comparing = false;
-      state.comparingRequestId = "";
-      render();
-    } else {
-      state.comparing = false;
-      scheduleRender();
-    }
+    state.comparing = false;
+    state.comparingRequestId = "";
+    render();
   }
 }
 
@@ -1205,6 +1188,20 @@ function applyGoogleFlightsCountryProgress(payload: { requestId?: unknown; resul
   state.results = mergeCountryResults(state.results, [payload.result], selectedCountries).results;
   state.resultsCachedAt = 0;
   state.progressCompleted = Math.min(state.progressTotal, state.progressCompleted + 1);
+  render();
+}
+
+function applyGoogleFlightsCountryComplete(payload: { requestId?: unknown; ok?: unknown; error?: unknown }): void {
+  if (typeof payload.requestId !== "string" || payload.requestId !== state.comparingRequestId) return;
+  if (!payload.ok) {
+    state.error = typeof payload.error === "string" ? payload.error : "Country comparison failed.";
+  } else if (state.cacheKey || state.pageKey) {
+    pruneExpiredResultCache();
+    void storeCachedResults(state.cacheKey || state.pageKey, state.results);
+  }
+  state.progressCompleted = state.progressTotal;
+  state.comparing = false;
+  state.comparingRequestId = "";
   render();
 }
 
