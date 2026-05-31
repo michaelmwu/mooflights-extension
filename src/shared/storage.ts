@@ -6,7 +6,6 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   preferredProviderIds: ["where-to-credit", "google-flights", "kayak"],
   preferredFrequentFlyerPrograms: [],
   frequentFlyerProgramTiers: {},
-  affiliateOptOut: false,
   debugMode: false,
   googleFlights: {
     countryCodes: [...DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES],
@@ -19,7 +18,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   },
   backend: {
     enabled: false,
-    baseUrl: "https://travel.mu-travel.com",
+    baseUrl: "",
   },
 };
 
@@ -70,7 +69,6 @@ export function mergeSettings(value: unknown): ExtensionSettings {
       DEFAULT_SETTINGS.preferredFrequentFlyerPrograms,
     ),
     frequentFlyerProgramTiers: stringRecord(candidate.frequentFlyerProgramTiers),
-    affiliateOptOut: booleanValue(candidate.affiliateOptOut, DEFAULT_SETTINGS.affiliateOptOut),
     debugMode: booleanValue(candidate.debugMode, DEFAULT_SETTINGS.debugMode),
     googleFlights: {
       countryCodes: googleFlightsCountryCodes(googleFlights.countryCodes),

@@ -110,6 +110,7 @@ async function parseGoogleFlightsTab(tabId: number, country: string, url: string
 }
 
 async function fetchProviderMetadata(baseUrl: string): Promise<RemoteProviderMetadata[]> {
+  if (typeof __MU_TRAVEL_DEV_BUILD__ !== "undefined" && !__MU_TRAVEL_DEV_BUILD__) return [];
   if (!baseUrl) return [];
   const origin = hostPermissionOrigin(baseUrl);
   if (origin && !(await hasHostPermission(origin))) return [];

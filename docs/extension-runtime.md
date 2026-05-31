@@ -6,16 +6,14 @@ The extension targets Manifest V3 and currently requests:
 
 - `storage`
 - `clipboardWrite`
-- `tabs`
 - required host access for `https://matrix.itasoftware.com/*`
 - required host access for Google Flights pages on `https://www.google.com/travel/flights*` and
   `https://google.com/travel/flights*`
 - required host access for daily cached public USD FX rates from `https://cdn.jsdelivr.net/*` and
   `https://api.fxratesapi.com/*`
-- optional host access for `https://travel.mu-travel.com/*`
 
-Dev builds also add required host access for `https://travel.mu-travel.com/*`, `http://localhost/*`, and
-`http://127.0.0.1/*` so local/backend metadata debugging can work without runtime permission prompts.
+Dev builds also add required host access for `http://localhost/*` and `http://127.0.0.1/*` so local backend metadata
+debugging can work without runtime permission prompts. Production builds do not fetch hosted backend metadata.
 
 ## Content Script
 

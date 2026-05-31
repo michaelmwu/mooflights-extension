@@ -354,18 +354,6 @@ function Options(): React.ReactElement {
         </div>
       </section>
 
-      <section>
-        <h2>Open/Closed Boundary</h2>
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={settings.affiliateOptOut}
-            onChange={(event) => void persist({ ...settings, affiliateOptOut: event.currentTarget.checked })}
-          />
-          Opt out of affiliate routing when configured.
-        </label>
-      </section>
-
       {__MU_TRAVEL_DEV_BUILD__ ? (
         <DeveloperBackend settings={settings} setSettings={setSettings} persist={persist} />
       ) : null}
