@@ -1803,16 +1803,17 @@ function installLocationClearButtonStyles(): void {
   style.textContent = `
     .mu-travel-location-clear {
       align-items: center;
-      background: transparent;
+      background: #ffffff;
       border: 0;
       border-radius: 999px;
-      color: rgba(0, 0, 0, 0.54);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+      color: rgba(0, 0, 0, 0.72);
       cursor: pointer;
       display: inline-flex;
-      height: 32px;
+      height: 26px;
       justify-content: center;
-      margin: 0 -2px 0 0;
-      min-width: 32px;
+      margin: 0 -8px 0 0;
+      min-width: 26px;
       padding: 0;
       vertical-align: middle;
     }
@@ -1821,8 +1822,8 @@ function installLocationClearButtonStyles(): void {
     }
     .mu-travel-location-clear:hover,
     .mu-travel-location-clear:focus-visible {
-      background: rgba(0, 0, 0, 0.06);
-      color: rgba(0, 0, 0, 0.72);
+      background: #f8fafc;
+      color: rgba(0, 0, 0, 0.86);
       outline: none;
     }
     .mu-travel-location-clear .material-icons {
