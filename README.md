@@ -59,6 +59,7 @@ bun run release:package:next-minor
 - [Development](./DEVELOPMENT.md)
 - [Architecture](./ARCHITECTURE.md)
 - [Contributing](./CONTRIBUTING.md)
+- [Privacy policy](./PRIVACY.md)
 - [Backend contract](./docs/backend-contract.md)
 - [Data imports](./docs/data-imports.md)
 - [Extension runtime](./docs/extension-runtime.md)

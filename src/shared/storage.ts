@@ -19,7 +19,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   },
   backend: {
     enabled: false,
-    baseUrl: "https://travel.mu-travel.com",
+    baseUrl: "",
   },
 };
 

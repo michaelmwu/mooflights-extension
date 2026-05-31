@@ -1,6 +1,6 @@
 {
   "name": "flights-extension",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Mu Travel browser extension for ITA Matrix flight workflows.",
   "license": "AGPL-3.0-only",
   "private": true,

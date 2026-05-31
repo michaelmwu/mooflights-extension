@@ -75,9 +75,6 @@ async function copyStaticFiles() {
   manifest.host_permissions = Array.from(
     new Set([...(manifest.host_permissions || []), ...(devBuild ? ["http://localhost/*", "http://127.0.0.1/*"] : [])]),
   );
-  manifest.optional_host_permissions = Array.from(
-    new Set([...(manifest.optional_host_permissions || []), "https://travel.mu-travel.com/*"]),
-  );
   manifest.web_accessible_resources = [
     {
       matches: ["https://matrix.itasoftware.com/*"],
