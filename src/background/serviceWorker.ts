@@ -39,14 +39,17 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
       sendResponse({ ok: false, error: "Missing Google Flights comparison request." });
       return false;
     }
-    void compareGoogleFlightsCountries(payload, progressTabId).catch((error) =>
-      sendGoogleFlightsCountryComplete(progressTabId, payload.requestId, {
-        ok: false,
-        error: error instanceof Error ? error.message : "Compare failed.",
-      }),
-    );
-    sendResponse({ ok: true });
-    return false;
+    void compareGoogleFlightsCountries(payload, progressTabId)
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : "Compare failed.";
+        sendGoogleFlightsCountryComplete(progressTabId, payload.requestId, {
+          ok: false,
+          error: message,
+        });
+        sendResponse({ ok: false, error: message });
+      });
+    return true;
   }
 
   if (payload.command !== "fetchProviderMetadata") return false;
