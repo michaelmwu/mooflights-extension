@@ -318,6 +318,10 @@ function Options(): React.ReactElement {
                 placeholder="Search region, continent, or country"
                 onBlur={(event) => {
                   const nextAirportHelper = airportHelperWithArea(settings.airportHelper, event.currentTarget.value);
+                  if (nextAirportHelper === settings.airportHelper) {
+                    event.currentTarget.value = airportAreaSearchValue(settings.airportHelper);
+                    return;
+                  }
                   void persist({
                     ...settings,
                     airportHelper: nextAirportHelper,
