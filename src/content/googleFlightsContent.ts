@@ -12,6 +12,7 @@ import {
   allGoogleFlightsCountryCodes,
   filterAvailableGoogleFlightsCountryCodes,
   googleFlightsAvailableCountryOptions,
+  googleFlightsCountryCodeFromSearchValue,
   isAllGoogleFlightsCountryCodes,
 } from "../shared/googleFlightsCountries";
 import { mileageCarrierName } from "../shared/mileageCarriers";
@@ -512,6 +513,7 @@ function render(): void {
 }
 
 function renderCountrySelect(selectedCodes: string[]): string {
+  const dropdownOptions = countryDropdownOptions();
   return `
     <div class="country-select">
       <div class="country-head">
@@ -519,9 +521,9 @@ function renderCountrySelect(selectedCodes: string[]): string {
         <small>${selectedCodes.length} selected</small>
       </div>
       <div class="country-combo">
-        <input type="search" data-role="country-search" placeholder="Add a country..." autocomplete="off" spellcheck="false" value="${escapeHtml(state.countrySearch)}">
-        <ul class="country-dropdown" data-role="country-dropdown" ${countryDropdownOptions().length === 0 ? "hidden" : ""}>
-          ${renderCountryDropdownRows(countryDropdownOptions())}
+        <input type="search" data-role="country-search" aria-label="Add a country" placeholder="Add a country..." autocomplete="off" spellcheck="false" value="${escapeHtml(state.countrySearch)}">
+        <ul class="country-dropdown" data-role="country-dropdown" ${dropdownOptions.length === 0 ? "hidden" : ""}>
+          ${renderCountryDropdownRows(dropdownOptions)}
         </ul>
       </div>
       <div class="country-chips" data-role="country-chips">
@@ -594,7 +596,7 @@ function addCountrySearchValue(parseAsList: boolean): void {
     ? filterAvailableGoogleFlightsCountryCodes(parseGoogleFlightsCountryInput(state.countrySearch))
     : [];
   const firstMatch = countryDropdownOptions()[0]?.code || "";
-  const code = googleFlightsCountryCodeFromSearchValue(state.countrySearch) || firstMatch;
+  const code = googleFlightsCountryCodeFromSearchValue(state.countrySearch, COUNTRY_OPTIONS) || firstMatch;
   const countryCodes = parsedCodes.length > 0 ? parsedCodes : code ? [code] : [];
   addGoogleFlightsCountries(countryCodes, true);
 }
@@ -633,18 +635,6 @@ function selectedGoogleFlightsCountries(): string[] {
 
 function focusCountrySearch(): void {
   getShadowRoot()?.querySelector<HTMLInputElement>('[data-role="country-search"]')?.focus();
-}
-
-function googleFlightsCountryCodeFromSearchValue(value: string): string {
-  const query = value.trim();
-  if (!query) return "";
-  const directCode = query.toUpperCase();
-  if (COUNTRY_OPTIONS.some((country) => country.code === directCode)) return directCode;
-  const parenthesizedCode = query.match(/\(([A-Z]{2})\)$/i)?.[1]?.toUpperCase();
-  if (parenthesizedCode && COUNTRY_OPTIONS.some((country) => country.code === parenthesizedCode)) {
-    return parenthesizedCode;
-  }
-  return COUNTRY_OPTIONS.find((country) => country.label.toLowerCase() === query.toLowerCase())?.code || "";
 }
 
 function renderCacheNotice(now = Date.now()): string {

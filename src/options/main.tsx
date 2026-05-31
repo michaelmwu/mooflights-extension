@@ -2,17 +2,17 @@ import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  countryCodeFromSearchValue,
+  airportAreaFromSearchValue,
+  airportAreaOptions,
+  airportAreaSearchValue,
   countrySearchValue,
-  uniqueAirportCountries,
-  uniqueAirportRegions,
-  uniqueAirportValues,
 } from "../shared/airports";
 import { DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES, parseGoogleFlightsCountryInput } from "../shared/googleFlightsBooking";
 import {
   allGoogleFlightsCountryCodes,
   filterAvailableGoogleFlightsCountryCodes,
   googleFlightsAvailableCountryOptions,
+  googleFlightsCountryCodeFromSearchValue,
   isAllGoogleFlightsCountryCodes,
 } from "../shared/googleFlightsCountries";
 import {
@@ -30,12 +30,10 @@ function Options(): React.ReactElement {
   const [programSearch, setProgramSearch] = useState("");
   const [googleFlightsCountrySearch, setGoogleFlightsCountrySearch] = useState("");
   const [saved, setSaved] = useState(false);
-  const airportCountries = useMemo(() => uniqueAirportCountries(), []);
+  const airportAreas = useMemo(() => airportAreaOptions(), []);
   const googleFlightsCountries = useMemo(() => googleFlightsAvailableCountryOptions(), []);
   const allGoogleFlightsCountries = useMemo(() => allGoogleFlightsCountryCodes(), []);
   const usesAllGoogleFlightsCountries = isAllGoogleFlightsCountryCodes(settings.googleFlights.countryCodes);
-  const continents = useMemo(() => uniqueAirportValues("continent"), []);
-  const regions = useMemo(() => uniqueAirportRegions(), []);
   const mileagePrograms = useMemo(() => uniqueMileageProgramOptions(), []);
   const visibleMileagePrograms = useMemo(
     () => filteredMileagePrograms(mileagePrograms, settings.preferredFrequentFlyerPrograms, programSearch),
@@ -309,34 +307,19 @@ function Options(): React.ReactElement {
         <div className="settings-group">
           <h3>Airport Helper Defaults</h3>
           <div className="grid">
-            <Select
-              label="Region"
-              value={settings.airportHelper.region}
-              values={["", ...regions.map((region) => region.id)]}
-              labels={new Map(regions.map((region) => [region.id, region.label]))}
-              onChange={(region) => void persist({ ...settings, airportHelper: { ...settings.airportHelper, region } })}
-            />
-            <Select
-              label="Continent"
-              value={settings.airportHelper.continent}
-              values={["", ...continents]}
-              onChange={(continent) =>
-                void persist({ ...settings, airportHelper: { ...settings.airportHelper, continent } })
-              }
-            />
             <label>
-              Country
+              Area
               <input
-                key={settings.airportHelper.countries[0] || "any-country"}
+                key={airportAreaSearchValue(settings.airportHelper) || "any-area"}
                 type="search"
-                list="country-options"
-                defaultValue={countrySearchValue(settings.airportHelper.countries[0] || "")}
-                placeholder="Search country"
+                list="airport-area-options"
+                defaultValue={airportAreaSearchValue(settings.airportHelper)}
+                placeholder="Search region, continent, or country"
                 onBlur={(event) => {
-                  const country = countryCodeFromSearchValue(event.currentTarget.value);
+                  const area = airportAreaFromSearchValue(event.currentTarget.value);
                   void persist({
                     ...settings,
-                    airportHelper: { ...settings.airportHelper, countries: country ? [country] : [] },
+                    airportHelper: { ...settings.airportHelper, ...area, exclusions: [] },
                   });
                 }}
                 onKeyDown={(event) => {
@@ -344,9 +327,9 @@ function Options(): React.ReactElement {
                   event.currentTarget.blur();
                 }}
               />
-              <datalist id="country-options">
-                {airportCountries.map((country) => (
-                  <option key={country.code} value={country.searchValue} />
+              <datalist id="airport-area-options">
+                {airportAreas.map((area) => (
+                  <option key={`${area.type}:${area.value}`} value={area.searchValue} />
                 ))}
               </datalist>
             </label>
@@ -356,11 +339,17 @@ function Options(): React.ReactElement {
               onClick={() =>
                 void persist({
                   ...settings,
-                  airportHelper: { ...settings.airportHelper, countries: [] },
+                  airportHelper: {
+                    ...settings.airportHelper,
+                    region: "",
+                    continent: "",
+                    countries: [],
+                    exclusions: [],
+                  },
                 })
               }
             >
-              Clear country
+              Clear area
             </button>
           </div>
         </div>
@@ -527,27 +516,6 @@ function hostPermissionOrigin(baseUrl: string): string {
   }
 }
 
-function Select(props: {
-  label: string;
-  value: string;
-  values: string[];
-  labels?: Map<string, string>;
-  onChange: (value: string) => void;
-}): React.ReactElement {
-  return (
-    <label>
-      {props.label}
-      <select value={props.value} onChange={(event) => props.onChange(event.currentTarget.value)}>
-        {props.values.map((value) => (
-          <option key={value || "any"} value={value}>
-            {props.labels?.get(value) || value || "Any"}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
 function providerReliabilityCopy(score: number): { tone: "high" | "medium" | "low"; label: string; help?: string } {
   const confidence = providerConfidence(score);
   if (confidence === "high") {
@@ -581,24 +549,6 @@ function categoryLabel(category: string): string {
 function flagEmoji(code: string): string {
   if (!/^[A-Za-z]{2}$/.test(code)) return "";
   return String.fromCodePoint(...[...code.toUpperCase()].map((character) => 0x1f1e6 + character.charCodeAt(0) - 65));
-}
-
-function googleFlightsCountryCodeFromSearchValue(
-  value: string,
-  countries: Array<{ code: string; label: string; searchValue: string }>,
-): string {
-  const query = value.trim();
-  if (!query) return "";
-
-  const directCode = query.toUpperCase();
-  if (countries.some((country) => country.code === directCode)) return directCode;
-
-  const parenthesizedCode = query.match(/\(([A-Z]{2})\)$/i)?.[1]?.toUpperCase();
-  if (parenthesizedCode && countries.some((country) => country.code === parenthesizedCode)) {
-    return parenthesizedCode;
-  }
-
-  return countries.find((country) => country.label.toLowerCase() === query.toLowerCase())?.code || "";
 }
 
 function countryDisplayName(code: string): string {

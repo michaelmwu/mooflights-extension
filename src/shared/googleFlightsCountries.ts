@@ -388,6 +388,24 @@ export function googleFlightsAvailableCountryOptions(): Array<{ code: string; la
   return googleFlightsCountryOptionsForCodes(AVAILABLE_GOOGLE_FLIGHTS_COUNTRY_CODES);
 }
 
+export function googleFlightsCountryCodeFromSearchValue(
+  value: string,
+  countries: Array<{ code: string; label: string; searchValue: string }> = googleFlightsAvailableCountryOptions(),
+): string {
+  const query = value.trim();
+  if (!query) return "";
+
+  const directCode = query.toUpperCase();
+  if (countries.some((country) => country.code === directCode)) return directCode;
+
+  const parenthesizedCode = query.match(/\(([A-Z]{2})\)$/i)?.[1]?.toUpperCase();
+  if (parenthesizedCode && countries.some((country) => country.code === parenthesizedCode)) {
+    return parenthesizedCode;
+  }
+
+  return countries.find((country) => country.label.toLowerCase() === query.toLowerCase())?.code || "";
+}
+
 function googleFlightsCountryOptionsForCodes(
   codes: string[],
 ): Array<{ code: string; label: string; searchValue: string }> {

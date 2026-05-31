@@ -1,4 +1,6 @@
 import {
+  airportAreaFromSearchValue,
+  airportAreaSearchValue,
   airportCodes,
   countryCodeFromSearchValue,
   countrySearchValue,
@@ -51,5 +53,39 @@ describe("airport helper", () => {
     expect(countryCodeFromSearchValue("United States (US)")).toBe("US");
     expect(countryCodeFromSearchValue("Japan")).toBe("JP");
     expect(countryCodeFromSearchValue("XX")).toBe("");
+  });
+
+  it("maps universal airport area search values to one active filter scope", () => {
+    expect(airportAreaFromSearchValue("Tokyo Area (region)")).toEqual({
+      region: "tokyo",
+      continent: "",
+      countries: [],
+    });
+    expect(airportAreaFromSearchValue("North America (continent)")).toEqual({
+      region: "",
+      continent: "North America",
+      countries: [],
+    });
+    expect(airportAreaFromSearchValue("Japan (JP)")).toEqual({
+      region: "",
+      continent: "",
+      countries: ["JP"],
+    });
+    expect(airportAreaFromSearchValue("jap")).toEqual({
+      region: "",
+      continent: "",
+      countries: ["JP"],
+    });
+    expect(airportAreaFromSearchValue("")).toEqual({
+      region: "",
+      continent: "",
+      countries: [],
+    });
+  });
+
+  it("formats the active airport area filter for search inputs", () => {
+    expect(airportAreaSearchValue({ ...DEFAULT_SETTINGS.airportHelper, region: "tokyo" })).toBe("Tokyo Area (region)");
+    expect(airportAreaSearchValue({ ...DEFAULT_SETTINGS.airportHelper, continent: "Asia" })).toBe("Asia (continent)");
+    expect(airportAreaSearchValue({ ...DEFAULT_SETTINGS.airportHelper, countries: ["JP"] })).toBe("Japan (JP)");
   });
 });

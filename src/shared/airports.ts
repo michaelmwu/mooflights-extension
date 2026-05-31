@@ -21,6 +21,13 @@ type AirportRegionPreset = {
   codes: string[];
 };
 
+export type AirportAreaOption = {
+  type: "region" | "continent" | "country";
+  value: string;
+  label: string;
+  searchValue: string;
+};
+
 const DATA = airportData as unknown as AirportData;
 export const AIRPORT_REGION_PRESETS = regionPresetData as AirportRegionPreset[];
 
@@ -96,6 +103,59 @@ export function uniqueAirportRegions(): AirportRegionPreset[] {
   return [...AIRPORT_REGION_PRESETS].sort((a, b) => a.label.localeCompare(b.label));
 }
 
+export function airportAreaOptions(): AirportAreaOption[] {
+  return [
+    ...uniqueAirportRegions().map((region) => ({
+      type: "region" as const,
+      value: region.id,
+      label: region.label,
+      searchValue: `${region.label} (region)`,
+    })),
+    ...uniqueAirportValues("continent").map((continent) => ({
+      type: "continent" as const,
+      value: continent,
+      label: continent,
+      searchValue: `${continent} (continent)`,
+    })),
+    ...uniqueAirportCountries().map((country) => ({
+      type: "country" as const,
+      value: country.code,
+      label: country.label,
+      searchValue: country.searchValue,
+    })),
+  ];
+}
+
+export function airportAreaSearchValue(filters: AirportFilters): string {
+  if (filters.region) {
+    const region = REGION_PRESETS_BY_ID.get(filters.region);
+    return region ? `${region.label} (region)` : filters.region;
+  }
+  if (filters.continent) return `${filters.continent} (continent)`;
+  if (filters.countries[0]) return countrySearchValue(filters.countries[0]);
+  return "";
+}
+
+export function airportAreaFromSearchValue(value: string): Pick<AirportFilters, "region" | "continent" | "countries"> {
+  const query = normalizeSearch(value);
+  if (!query) return { region: "", continent: "", countries: [] };
+
+  const options = airportAreaOptions();
+  const direct = options.find((option) => normalizeSearch(option.value) === query);
+  const exact = direct || options.find((option) => normalizeSearch(option.searchValue) === query);
+  const byLabel = exact || options.find((option) => normalizeSearch(option.label) === query);
+  const partial =
+    byLabel ||
+    options.find((option) => normalizeSearch(option.label).startsWith(query)) ||
+    options.find((option) => normalizeSearch(option.searchValue).includes(query));
+  const option = partial;
+
+  if (!option) return { region: "", continent: "", countries: [] };
+  if (option.type === "region") return { region: option.value, continent: "", countries: [] };
+  if (option.type === "continent") return { region: "", continent: option.value, countries: [] };
+  return { region: "", continent: "", countries: [option.value] };
+}
+
 export function airportCoordinate(code: string): { latitude: number; longitude: number } | undefined {
   const airport = AIRPORTS_BY_CODE.get(code.toUpperCase());
   if (!airport) return undefined;
@@ -128,4 +188,8 @@ function countryLabel(code: string): string {
   } catch {
     return code;
   }
+}
+
+function normalizeSearch(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
