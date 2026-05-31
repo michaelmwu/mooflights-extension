@@ -1,4 +1,23 @@
-export const DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES = ["US", "CA", "GB", "JP", "TW", "HK", "SG", "KR", "AU", "MY"];
+export const DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES = [
+  "US",
+  "CA",
+  "GB",
+  "JP",
+  "TW",
+  "HK",
+  "SG",
+  "KR",
+  "AU",
+  "MY",
+  "ES",
+  "VN",
+  "ZA",
+  "IN",
+  "PH",
+  "NZ",
+  "CN",
+  "ID",
+];
 const DEFAULT_GOOGLE_FLIGHTS_CURRENCY = "USD";
 
 export type GoogleFlightsBookingOption = {

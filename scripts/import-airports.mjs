@@ -3,7 +3,13 @@ import { dirname, resolve } from "node:path";
 
 const AIRPORTS_SOURCE = "https://davidmegginson.github.io/ourairports-data/airports.csv";
 const ATTRIBUTION_URL = "https://ourairports.com/data/";
+const ITA_MATRIX_LOCATION_SOURCE =
+  "https://alkalimatrix-pa.googleapis.com/v1/locationTypes/airportOrMultiAirportCity/locationCodes";
 const INCLUDED_TYPES = new Set(["large_airport", "medium_airport"]);
+const REQUIRED_SCHEDULED_SERVICE = "yes";
+const ITA_MATRIX_VALIDATION_CONCURRENCY = 24;
+const ITA_MATRIX_VALIDATION_RETRIES = 3;
+const ITA_MATRIX_RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
 
 const OUTPUT = "src/shared/data/airports.json";
 const airports = {};
@@ -31,9 +37,11 @@ for (const row of rows) {
   const city = row[index.municipality];
   const country = row[index.iso_country];
   const continent = CONTINENTS[row[index.continent]] || row[index.continent];
+  const scheduledService = row[index.scheduled_service];
   const lat = Number(row[index.latitude_deg]);
   const lon = Number(row[index.longitude_deg]);
   if (!INCLUDED_TYPES.has(type)) continue;
+  if (scheduledService !== REQUIRED_SCHEDULED_SERVICE) continue;
   if (!/^[A-Z0-9]{3}$/.test(code) || !Number.isFinite(lat) || !Number.isFinite(lon)) continue;
   airports[code] = [
     compactString(name),
@@ -45,12 +53,20 @@ for (const row of rows) {
   ];
 }
 
+const itaMatrixUnsupportedCodes = await unsupportedItaMatrixAirportCodes(Object.keys(airports));
+for (const code of itaMatrixUnsupportedCodes) {
+  delete airports[code];
+}
+
 const output = {
   provider: "OurAirports",
   license: "Public Domain",
-  source_urls: [AIRPORTS_SOURCE, ATTRIBUTION_URL],
+  source_urls: [AIRPORTS_SOURCE, ATTRIBUTION_URL, ITA_MATRIX_LOCATION_SOURCE],
   fetched_at: new Date().toISOString(),
   included_types: Array.from(INCLUDED_TYPES).sort(),
+  required_scheduled_service: REQUIRED_SCHEDULED_SERVICE,
+  validated_with_ita_matrix_location_codes: true,
+  excluded_unsupported_ita_matrix_codes: itaMatrixUnsupportedCodes,
   fields: ["name", "city", "country", "continent", "latitude", "longitude"],
   precision: "latitude and longitude are stored as integer degrees * 10000",
   airports,
@@ -59,7 +75,42 @@ const output = {
 const target = resolve(process.cwd(), OUTPUT);
 await mkdir(dirname(target), { recursive: true });
 await writeFile(target, `${JSON.stringify(output)}\n`);
-console.log(`Wrote ${Object.keys(airports).length} medium/large airports to ${OUTPUT}`);
+console.log(`Wrote ${Object.keys(airports).length} medium/large airports accepted by ITA Matrix to ${OUTPUT}`);
+
+async function unsupportedItaMatrixAirportCodes(codes) {
+  const unsupported = [];
+  let index = 0;
+
+  async function worker() {
+    while (index < codes.length) {
+      const code = codes[index++];
+      if (!(await supportsItaMatrixAirportCode(code))) unsupported.push(code);
+    }
+  }
+
+  await Promise.all(Array.from({ length: ITA_MATRIX_VALIDATION_CONCURRENCY }, worker));
+  return unsupported.sort();
+}
+
+async function supportsItaMatrixAirportCode(code) {
+  for (let attempt = 0; attempt <= ITA_MATRIX_VALIDATION_RETRIES; attempt++) {
+    const response = await fetch(`${ITA_MATRIX_LOCATION_SOURCE}/${code}`);
+    if (response.status === 400 || response.status === 404) return false;
+    if (response.ok) {
+      const location = await response.json();
+      return location?.code === code;
+    }
+    if (!ITA_MATRIX_RETRYABLE_STATUSES.has(response.status) || attempt === ITA_MATRIX_VALIDATION_RETRIES) {
+      throw new Error(`Failed to validate ${code} with ITA Matrix: ${response.status}`);
+    }
+    await sleep(500 * 2 ** attempt);
+  }
+  return false;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function compactString(value) {
   return String(value || "").trim();

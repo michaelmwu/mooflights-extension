@@ -29,7 +29,7 @@ describe("settings", () => {
         },
         debugMode: 1,
         googleFlights: {
-          countryCodes: ["jp", "MY", "not-a-country", null, "JP"],
+          countryCodes: ["jp", "MY", "AQ", "not-a-country", null, "JP"],
         },
         airportHelper: {
           region: 7,
@@ -79,5 +79,57 @@ describe("settings", () => {
         },
       }).googleFlights.countryCodes,
     ).toEqual(DEFAULT_SETTINGS.googleFlights.countryCodes);
+  });
+
+  it("removes unsupported Google Flights countries from stored settings", () => {
+    expect(
+      mergeSettings({
+        googleFlights: {
+          countryCodes: ["US", "AQ", "JP"],
+        },
+      }).googleFlights.countryCodes,
+    ).toEqual(["US", "JP"]);
+  });
+
+  it("migrates the legacy recommended Google Flights countries to current defaults", () => {
+    expect(
+      mergeSettings({
+        googleFlights: {
+          countryCodes: ["US", "CA", "GB", "JP", "TW", "HK", "SG", "KR", "AU", "MY"],
+        },
+      }).googleFlights.countryCodes,
+    ).toEqual(DEFAULT_SETTINGS.googleFlights.countryCodes);
+  });
+
+  it("migrates legacy recommended variants to current Google Flights defaults", () => {
+    expect(
+      mergeSettings({
+        googleFlights: {
+          countryCodes: ["US", "CA", "GB", "JP", "TW", "HK", "SG", "KR", "AU", "MY", "VN"],
+        },
+      }).googleFlights.countryCodes,
+    ).toEqual(DEFAULT_SETTINGS.googleFlights.countryCodes);
+  });
+
+  it("preserves custom Google Flights country selections", () => {
+    expect(
+      mergeSettings({
+        googleFlights: {
+          countryCodes: ["US", "CA", "BR"],
+        },
+      }).googleFlights.countryCodes,
+    ).toEqual(["US", "CA", "BR"]);
+  });
+
+  it("removes always-shown providers from stored provider preferences", () => {
+    expect(
+      mergeSettings({
+        hiddenProviderIds: ["where-to-credit", "google-flights", "kayak"],
+        preferredProviderIds: ["where-to-credit", "google-flights", "momondo"],
+      }),
+    ).toMatchObject({
+      hiddenProviderIds: ["kayak"],
+      preferredProviderIds: ["momondo"],
+    });
   });
 });

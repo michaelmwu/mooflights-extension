@@ -1,4 +1,5 @@
 import { sendRuntimeMessage } from "../shared/chromeRuntime";
+import { flagEmoji } from "../shared/flags";
 import {
   DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES,
   type GoogleFlightsCountryResult,
@@ -8,8 +9,16 @@ import {
   parseGoogleFlightsCountryInput,
   parseGoogleFlightsMatrixSearch,
 } from "../shared/googleFlightsBooking";
+import {
+  allGoogleFlightsCountryCodes,
+  filterAvailableGoogleFlightsCountryCodes,
+  googleFlightsAvailableCountryOptions,
+  googleFlightsCountryCodeFromSearchValue,
+  isAllGoogleFlightsCountryCodes,
+} from "../shared/googleFlightsCountries";
 import { mileageCarrierName } from "../shared/mileageCarriers";
 import { loadSettings } from "../shared/storage";
+import { muTravelPanelHeaderStyles, renderMuTravelPanelHeader } from "./panelChrome";
 
 type CompareState = {
   comparing: boolean;
@@ -24,12 +33,11 @@ type CompareState = {
   panelMinimized: boolean;
   panelPosition: PanelPosition;
   panelCollapsePosition: PanelPosition | null;
-};
-
-type CompareResponse = {
-  ok: boolean;
-  results?: GoogleFlightsCountryResult[];
-  error?: string;
+  comparingRequestId: string;
+  comparingCountryCodes: string[];
+  progressCompleted: number;
+  progressTotal: number;
+  countrySearch: string;
 };
 
 type PanelEdge = "top" | "right" | "bottom" | "left";
@@ -51,6 +59,7 @@ const GOOGLE_FLIGHTS_HEADER_BUFFER_PX = 12;
 const PANEL_CORNER_SNAP_PX = 96;
 const PANEL_MINIMIZED_ICON_SIZE_PX = 42;
 const STORED_OPTIONS_LIMIT = 24;
+const COUNTRY_OPTIONS = googleFlightsAvailableCountryOptions();
 let regionDisplayNames: Intl.DisplayNames | null | undefined;
 let countryCodeByDisplayName: Map<string, string> | null | undefined;
 let suppressPanelRestoreClick = false;
@@ -69,6 +78,11 @@ const state: CompareState = {
   panelMinimized: panelUi.minimized,
   panelPosition: panelUi.position,
   panelCollapsePosition: panelUi.collapsePosition,
+  comparingRequestId: "",
+  comparingCountryCodes: [],
+  progressCompleted: 0,
+  progressTotal: 0,
+  countrySearch: "",
 };
 
 const resultCache = new Map<
@@ -218,9 +232,19 @@ function isGoogleFlightsBookingOption(value: unknown): value is GoogleFlightsCou
 }
 
 chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
-  const payload = message as { command?: string };
-  if (payload.command !== "parseGoogleFlightsBookingOptions") return false;
-  sendResponse(parseCurrentBookingPage());
+  const payload = message as { command?: string; requestId?: unknown; result?: unknown; ok?: unknown; error?: unknown };
+  if (payload.command === "parseGoogleFlightsBookingOptions") {
+    sendResponse(parseCurrentBookingPage());
+    return false;
+  }
+  if (payload.command === "googleFlightsCountryComparisonResult") {
+    applyGoogleFlightsCountryProgress(payload);
+    return false;
+  }
+  if (payload.command === "googleFlightsCountryComparisonComplete") {
+    applyGoogleFlightsCountryComplete(payload);
+    return false;
+  }
   return false;
 });
 
@@ -229,7 +253,7 @@ void init();
 async function init(): Promise<void> {
   try {
     const settings = await loadSettings();
-    state.countryInput = settings.googleFlights.countryCodes.join(", ");
+    state.countryInput = filterAvailableGoogleFlightsCountryCodes(settings.googleFlights.countryCodes).join(", ");
   } catch {
     state.countryInput = DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES.join(", ");
   }
@@ -307,6 +331,9 @@ function scheduleRender(): void {
     state.resultsCachedAt = 0;
     state.error = "";
     state.comparing = false;
+    state.comparingRequestId = "";
+    state.progressCompleted = 0;
+    state.progressTotal = 0;
     return;
   }
 
@@ -320,6 +347,9 @@ function scheduleRender(): void {
     state.baselineSignature = "";
     state.error = "";
     state.comparing = false;
+    state.comparingRequestId = "";
+    state.progressCompleted = 0;
+    state.progressTotal = 0;
     applyCachedResults(readCachedResults(cacheKey));
     void loadStoredCachedResults(cacheKey);
   } else if (state.baselineSignature && state.baselineSignature !== baselineSignature) {
@@ -360,8 +390,8 @@ function currentBookingPageKeyForCountry(includeCountry: boolean): string {
 function render(): void {
   const shadow = getShadowRoot();
   if (!shadow) return;
-  const baseline = state.baseline || parseCurrentBookingPage();
   const matrixSearch = parseGoogleFlightsMatrixSearch(window.location.href);
+  const selectedCodes = selectedGoogleFlightsCountries();
 
   shadow.innerHTML = `
     <style>${styles()}</style>
@@ -369,27 +399,18 @@ function render(): void {
       ${
         state.panelMinimized
           ? `<button type="button" class="panel-icon" data-action="restore-panel" aria-label="Expand Mu Travel panel">Mu</button>`
-          : `<header data-role="panel-header">
-              <div>
-                <strong>Mu Travel</strong>
-                <span>Country price check</span>
-              </div>
-              <button type="button" class="icon-button" data-action="minimize-panel" aria-label="Minimize panel" title="Minimize">-</button>
-            </header>
-            ${renderBaseline(baseline)}
+          : `${renderMuTravelPanelHeader({ optionsAction: "open-options" })}
             ${renderMilesEstimatePrompt(matrixSearch)}
-            <label class="country-input">
-              Countries
-              <input type="text" value="${escapeHtml(state.countryInput)}" data-role="country-input" spellcheck="false" />
-            </label>
+            <div class="section-heading">Compare country pricing</div>
+            ${renderCountrySelect(selectedCodes)}
             <div class="actions">
-              <button type="button" ${state.comparing ? "disabled" : ""} data-action="compare-countries">
-                ${state.comparing ? "Checking..." : "Compare countries"}
+              ${renderMatrixAction(matrixSearch)}
+              <button type="button" class="wide" ${state.comparing || selectedCodes.length === 0 ? "disabled" : ""} data-action="compare-countries">
+                ${state.comparing ? "Checking..." : `Compare (${selectedCodes.length})`}
               </button>
-              ${matrixSearch ? '<button type="button" class="secondary" data-action="open-matrix">Search Matrix</button>' : ""}
-              <button type="button" class="secondary" data-action="open-options">Options</button>
             </div>
             ${state.error ? `<p class="error">${escapeHtml(state.error)}</p>` : ""}
+            ${renderComparisonNotice()}
             ${renderCacheNotice()}
             ${renderResults(state.results)}`
       }
@@ -420,28 +441,217 @@ function render(): void {
   shadow.querySelector<HTMLElement>('[data-action="restore-panel"]')?.addEventListener("pointerdown", onPanelDragStart);
   shadow.querySelector<HTMLElement>('[data-role="panel-header"]')?.addEventListener("pointerdown", onPanelDragStart);
 
-  const input = shadow.querySelector<HTMLInputElement>('[data-role="country-input"]');
-  input?.addEventListener("input", () => {
-    state.countryInput = input.value;
+  const countrySearch = shadow.querySelector<HTMLInputElement>('[data-role="country-search"]');
+  const countryDropdown = shadow.querySelector<HTMLElement>('[data-role="country-dropdown"]');
+  countrySearch?.addEventListener("input", () => {
+    state.countrySearch = countrySearch.value;
+    if (state.error) {
+      state.error = "";
+      shadow.querySelector(".error")?.remove();
+    }
+    if (state.countrySearch.includes(",")) {
+      addCountrySearchValue(true);
+      return;
+    }
+    renderCountryDropdown(countryDropdown);
+  });
+  countrySearch?.addEventListener("paste", (event) => {
+    const pasted = event.clipboardData?.getData("text") || "";
+    if (!pasted || parseGoogleFlightsCountryInput(pasted).length === 0) return;
+    event.preventDefault();
+    state.countrySearch = pasted;
+    addCountrySearchValue(true);
+  });
+  countrySearch?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      addCountrySearchValue(false);
+      return;
+    }
+    if (event.key === "Escape") {
+      state.countrySearch = "";
+      countrySearch.value = "";
+      renderCountryDropdown(countryDropdown);
+      return;
+    }
+    if (event.key === "Backspace" && countrySearch.value === "") {
+      removeGoogleFlightsCountry(selectedGoogleFlightsCountries().at(-1) || "");
+    }
+  });
+  countrySearch?.addEventListener("focus", () => {
+    renderCountryDropdown(countryDropdown);
+  });
+  shadow.querySelectorAll<HTMLElement>('[data-action="add-country"]').forEach((button) => {
+    button.addEventListener("mousedown", (event) => event.preventDefault());
+    button.addEventListener("click", () => {
+      const code = button.dataset.code || "";
+      if (!code) return;
+      addGoogleFlightsCountries([code], true);
+    });
+  });
+  shadow.querySelectorAll<HTMLElement>('[data-action="remove-country"]').forEach((button) => {
+    button.addEventListener("click", () => {
+      removeGoogleFlightsCountry(button.dataset.code || "");
+    });
+  });
+  shadow.querySelector('[data-action="country-recommended"]')?.addEventListener("click", () => {
+    if (state.comparing) return;
+    updateGoogleFlightsCountrySelection(DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES);
+    render();
+  });
+  shadow.querySelector('[data-action="country-all"]')?.addEventListener("click", () => {
+    if (state.comparing) return;
+    updateGoogleFlightsCountrySelection(allGoogleFlightsCountryCodes());
+    render();
+  });
+  shadow.querySelector('[data-action="country-clear"]')?.addEventListener("click", () => {
+    if (state.comparing) return;
+    updateGoogleFlightsCountrySelection([]);
+    render();
   });
   shadow.querySelector('[data-action="compare-countries"]')?.addEventListener("click", () => {
     void compareCountries();
-  });
-  shadow.querySelector('[data-action="open-matrix"]')?.addEventListener("click", () => {
-    if (!matrixSearch) return;
-    window.open(matrixSearch.matrixUrl, "_blank", "noopener,noreferrer");
   });
   shadow.querySelector('[data-action="open-options"]')?.addEventListener("click", () => {
     sendRuntimeMessage({ command: "openOptionsPage" });
   });
 }
 
-function renderBaseline(result: GoogleFlightsCountryResult): string {
+function renderCountrySelect(selectedCodes: string[]): string {
+  const dropdownOptions = countryDropdownOptions();
+  const disabled = state.comparing ? "disabled" : "";
   return `
-    <dl>
-      <div><dt>This page</dt><dd>${escapeHtml(countryDisplayName(result.country))}</dd></div>
-    </dl>
+    <div class="country-select">
+      <div class="country-head">
+        <span>Countries</span>
+        <small>${selectedCodes.length} selected</small>
+      </div>
+      <div class="country-combo">
+        <input type="search" data-role="country-search" aria-label="Add a country" placeholder="Add a country..." autocomplete="off" spellcheck="false" value="${escapeHtml(state.countrySearch)}" ${disabled}>
+        <ul class="country-dropdown" data-role="country-dropdown" ${dropdownOptions.length === 0 ? "hidden" : ""}>
+          ${renderCountryDropdownRows(dropdownOptions)}
+        </ul>
+      </div>
+      <div class="country-chips" data-role="country-chips">
+        ${selectedCodes
+          .map(
+            (code) => `
+              <button type="button" class="country-chip" data-action="remove-country" data-code="${escapeHtml(code)}" aria-label="Remove ${escapeHtml(countryDisplayName(code))}" ${disabled}>
+                <span class="flag" aria-hidden="true">${escapeHtml(flagEmoji(code))}</span>${escapeHtml(code)}<span class="x">x</span>
+              </button>
+            `,
+          )
+          .join("")}
+      </div>
+      <div class="country-toolbar">
+        <button type="button" class="link" data-action="country-recommended" ${disabled}>Recommended</button>
+        <button type="button" class="link" data-action="country-all" ${disabled}>All useful</button>
+        <button type="button" class="link" data-action="country-clear" ${disabled}>Clear</button>
+      </div>
+    </div>
   `;
+}
+
+function countryDropdownOptions(): Array<{ code: string; label: string; searchValue: string }> {
+  const query = normalizeCountryName(state.countrySearch);
+  if (!query) return [];
+  const selectedCodes = new Set(selectedGoogleFlightsCountries());
+  return COUNTRY_OPTIONS.filter((country) => {
+    if (selectedCodes.has(country.code)) return false;
+    return (
+      country.code.toLowerCase().includes(query) ||
+      normalizeCountryName(country.label).includes(query) ||
+      normalizeCountryName(country.searchValue).includes(query)
+    );
+  }).slice(0, 8);
+}
+
+function renderCountryDropdownRows(countries: Array<{ code: string; label: string }>): string {
+  const disabled = state.comparing ? "disabled" : "";
+  return countries
+    .map(
+      (country, index) => `
+        <li>
+          <button type="button" class="${index === 0 ? "active" : ""}" data-action="add-country" data-code="${escapeHtml(country.code)}" ${disabled}>
+            <span class="flag" aria-hidden="true">${escapeHtml(flagEmoji(country.code))}</span>
+            <span>${escapeHtml(country.label)}</span>
+            <small>${escapeHtml(country.code)}</small>
+          </button>
+        </li>
+      `,
+    )
+    .join("");
+}
+
+function renderCountryDropdown(dropdown: HTMLElement | null): void {
+  if (!dropdown) return;
+  const countries = countryDropdownOptions();
+  dropdown.hidden = countries.length === 0;
+  dropdown.innerHTML = renderCountryDropdownRows(countries);
+  dropdown.querySelectorAll<HTMLElement>('[data-action="add-country"]').forEach((button) => {
+    button.addEventListener("mousedown", (event) => event.preventDefault());
+    button.addEventListener("click", () => {
+      const code = button.dataset.code || "";
+      if (!code) return;
+      addGoogleFlightsCountries([code], true);
+    });
+  });
+}
+
+function addCountrySearchValue(parseAsList: boolean): void {
+  if (state.comparing) return;
+  const parsedCodes = parseAsList
+    ? filterAvailableGoogleFlightsCountryCodes(parseGoogleFlightsCountryInput(state.countrySearch))
+    : [];
+  const firstMatch = countryDropdownOptions()[0]?.code || "";
+  const code = googleFlightsCountryCodeFromSearchValue(state.countrySearch, COUNTRY_OPTIONS) || firstMatch;
+  const countryCodes = parsedCodes.length > 0 ? parsedCodes : code ? [code] : [];
+  addGoogleFlightsCountries(countryCodes, true);
+}
+
+function addGoogleFlightsCountries(countryCodes: string[], refocusSearch: boolean): void {
+  if (state.comparing) return;
+  const availableCountryCodes = filterAvailableGoogleFlightsCountryCodes(countryCodes);
+  if (availableCountryCodes.length === 0) {
+    state.error = "Choose an available Google Flights country.";
+    render();
+    if (refocusSearch) focusCountrySearch();
+    return;
+  }
+  const nextCountries = filterAvailableGoogleFlightsCountryCodes([
+    ...selectedGoogleFlightsCountries(),
+    ...availableCountryCodes,
+  ]);
+  if (nextCountries.length === 0) return;
+  updateGoogleFlightsCountrySelection(nextCountries);
+  render();
+  if (refocusSearch) focusCountrySearch();
+}
+
+function removeGoogleFlightsCountry(countryCode: string): void {
+  if (state.comparing) return;
+  if (!countryCode) return;
+  const nextCountries = selectedGoogleFlightsCountries().filter((code) => code !== countryCode);
+  updateGoogleFlightsCountrySelection(nextCountries);
+  render();
+}
+
+function updateGoogleFlightsCountrySelection(countryCodes: string[]): void {
+  const nextCountries = filterAvailableGoogleFlightsCountryCodes(countryCodes);
+  const selectedCountrySet = new Set(nextCountries);
+  state.countryInput = nextCountries.join(", ");
+  state.countrySearch = "";
+  state.results = state.results.filter((result) => selectedCountrySet.has(result.country));
+  state.resultsCachedAt = 0;
+  state.error = "";
+}
+
+function selectedGoogleFlightsCountries(): string[] {
+  return filterAvailableGoogleFlightsCountryCodes(parseGoogleFlightsCountryInput(state.countryInput));
+}
+
+function focusCountrySearch(): void {
+  getShadowRoot()?.querySelector<HTMLInputElement>('[data-role="country-search"]')?.focus();
 }
 
 function renderCacheNotice(now = Date.now()): string {
@@ -449,6 +659,19 @@ function renderCacheNotice(now = Date.now()): string {
   const minutes = Math.max(0, Math.floor((now - state.resultsCachedAt) / 60000));
   const age = minutes <= 0 ? "just now" : `${minutes} min ago`;
   return `<p class="cache-note">Cached country comparison from ${escapeHtml(age)}.</p>`;
+}
+
+function renderComparisonNotice(): string {
+  if (state.comparing) {
+    return `<p class="cache-note">${state.progressCompleted} of ${state.progressTotal} countries checked.</p>`;
+  }
+  const selectedCountries = selectedGoogleFlightsCountries();
+  const selectedCount = selectedCountries.length;
+  if (selectedCount <= DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES.length) return "";
+  if (isAllGoogleFlightsCountryCodes(selectedCountries)) {
+    return `<p class="cache-note">All useful countries excludes unsupported and not-useful markets. Large checks can take a long time.</p>`;
+  }
+  return `<p class="cache-note">Large country selections can take a long time. Results appear as each country finishes.</p>`;
 }
 
 function renderMilesEstimatePrompt(matrixSearch: GoogleFlightsMatrixSearch | null): string {
@@ -461,9 +684,14 @@ function renderMilesEstimatePrompt(matrixSearch: GoogleFlightsMatrixSearch | nul
   return `
     <div class="mileage-prompt">
       <strong>Miles earning</strong>
-      <span>Search ITA Matrix to see booking classes and mileage earning details for ${escapeHtml(carrierLabels)}.</span>
+      <span><a href="${escapeHtml(matrixSearch.matrixUrl)}" target="_blank" rel="noopener noreferrer" data-action="open-matrix">Search ITA Matrix</a> to see booking classes and mileage earning details for ${escapeHtml(carrierLabels)}.</span>
     </div>
   `;
+}
+
+function renderMatrixAction(matrixSearch: GoogleFlightsMatrixSearch | null): string {
+  if (!matrixSearch) return "";
+  return `<a class="button-link" href="${escapeHtml(matrixSearch.matrixUrl)}" target="_blank" rel="noopener noreferrer">Search ITA Matrix</a>`;
 }
 
 function renderResults(results: GoogleFlightsCountryResult[]): string {
@@ -912,7 +1140,7 @@ function normalizeCountryName(value: string): string {
 }
 
 async function compareCountries(): Promise<void> {
-  const selectedCountries = parseGoogleFlightsCountryInput(state.countryInput);
+  const selectedCountries = selectedGoogleFlightsCountries();
   if (selectedCountries.length === 0) {
     state.error = "Enter at least one country code.";
     render();
@@ -920,49 +1148,77 @@ async function compareCountries(): Promise<void> {
   }
   state.countryInput = selectedCountries.join(", ");
   state.comparing = true;
+  state.comparingCountryCodes = selectedCountries;
   state.error = "";
+  state.comparingRequestId = `${Date.now()}:${Math.random().toString(36).slice(2)}`;
+  state.progressCompleted = 0;
   const previousResults = state.results;
-  const previousCachedAt = state.resultsCachedAt;
   const currentUrl = new URL(window.location.href);
   const hasComparableCurrency = currentUrl.searchParams.has("curr");
-  state.baseline = hasComparableCurrency ? parseCurrentBookingPage() : null;
   const comparePageKey = state.pageKey;
-  const compareCacheKey = state.cacheKey;
-  const baseline = state.baseline;
   const baseUrl = googleFlightsCountryUrl(window.location.href, currentComparableCountryCode());
-  render();
-
   const currentCountry = currentComparableCountryCode();
+  state.baseline = hasComparableCurrency ? parseCurrentBookingPage() : null;
+  const baseline = state.baseline && selectedCountries.includes(currentCountry) ? state.baseline : null;
   const countries = selectedCountries.filter((country) => !hasComparableCurrency || country !== currentCountry);
+  state.progressTotal = countries.length;
+  if (baseline) {
+    state.results = mergeCountryResults(previousResults, [baseline], selectedCountries).results;
+    state.resultsCachedAt = 0;
+  }
+  const requestId = state.comparingRequestId;
+  render();
   try {
     const response = (await chrome.runtime.sendMessage({
       command: "compareGoogleFlightsCountries",
       baseUrl,
       countries,
       baselineOptionCount: baseline?.options.length ?? 0,
-    })) as CompareResponse;
-    if (state.pageKey !== comparePageKey) return;
+      requestId,
+    })) as { ok?: boolean; error?: string } | undefined;
+    if (state.pageKey !== comparePageKey || state.comparingRequestId !== requestId) return;
     if (!response?.ok) throw new Error(response?.error || "Country comparison failed.");
-    const updates = baseline ? [baseline, ...(response.results || [])] : response.results || [];
-    const merged = mergeCountryResults(previousResults, updates, selectedCountries);
-    state.results = merged.results;
-    state.resultsCachedAt = merged.retained ? previousCachedAt || Date.now() : 0;
-    if (comparePageKey) {
-      pruneExpiredResultCache();
-      void storeCachedResults(compareCacheKey || comparePageKey, state.results);
-    }
   } catch (error) {
-    if (state.pageKey !== comparePageKey) return;
+    if (state.pageKey !== comparePageKey || state.comparingRequestId !== requestId) return;
     state.error = error instanceof Error ? error.message : "Country comparison failed.";
-  } finally {
-    if (state.pageKey === comparePageKey) {
-      state.comparing = false;
-      render();
-    } else {
-      state.comparing = false;
-      scheduleRender();
-    }
+    state.comparing = false;
+    state.comparingRequestId = "";
+    state.comparingCountryCodes = [];
+    render();
   }
+}
+
+function applyGoogleFlightsCountryProgress(payload: { requestId?: unknown; result?: unknown }): void {
+  if (
+    typeof payload.requestId !== "string" ||
+    payload.requestId !== state.comparingRequestId ||
+    !isGoogleFlightsCountryResult(payload.result)
+  ) {
+    return;
+  }
+
+  const selectedCountries =
+    state.comparingCountryCodes.length > 0 ? state.comparingCountryCodes : selectedGoogleFlightsCountries();
+  state.results = mergeCountryResults(state.results, [payload.result], selectedCountries).results;
+  state.resultsCachedAt = 0;
+  state.progressCompleted = Math.min(state.progressTotal, state.progressCompleted + 1);
+  render();
+}
+
+function applyGoogleFlightsCountryComplete(payload: { requestId?: unknown; ok?: unknown; error?: unknown }): void {
+  if (typeof payload.requestId !== "string" || payload.requestId !== state.comparingRequestId) return;
+  if (!payload.ok) {
+    state.error = typeof payload.error === "string" ? payload.error : "Country comparison failed.";
+  } else if (state.cacheKey || state.pageKey) {
+    state.resultsCachedAt = Date.now();
+    pruneExpiredResultCache();
+    void storeCachedResults(state.cacheKey || state.pageKey, state.results, state.resultsCachedAt);
+  }
+  state.progressCompleted = state.progressTotal;
+  state.comparing = false;
+  state.comparingRequestId = "";
+  state.comparingCountryCodes = [];
+  render();
 }
 
 function getShadowRoot(): ShadowRoot | null {
@@ -988,7 +1244,7 @@ function styles(): string {
     .panel {
       position: fixed;
       z-index: 2147483647;
-      width: min(360px, calc(100vw - 32px));
+      width: min(340px, calc(100vw - 32px));
       max-height: min(560px, calc(100vh - 32px));
       overflow-x: hidden;
       overflow-y: auto;
@@ -997,7 +1253,7 @@ function styles(): string {
       background: #ffffff;
       color: #172033;
       box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18);
-      font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font: 12px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     .panel.minimized {
       width: auto;
@@ -1008,18 +1264,7 @@ function styles(): string {
       background: transparent;
       box-shadow: none;
     }
-    header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 10px 12px;
-      border-bottom: 1px solid #e2e8f0;
-      cursor: grab;
-      user-select: none;
-    }
-    header:active { cursor: grabbing; }
-    header span { color: #64748b; }
+    ${muTravelPanelHeaderStyles()}
     .panel-icon {
       display: inline-grid;
       place-items: center;
@@ -1048,20 +1293,6 @@ function styles(): string {
       font-size: 18px;
       line-height: 1;
     }
-    dl {
-      display: grid;
-      gap: 6px;
-      margin: 0;
-      padding: 10px 12px;
-      border-bottom: 1px solid #e2e8f0;
-    }
-    dl div {
-      display: grid;
-      grid-template-columns: 72px 1fr;
-      gap: 8px;
-    }
-    dt { color: #64748b; font-weight: 650; }
-    dd { margin: 0; text-align: right; }
     .mileage-prompt {
       display: grid;
       gap: 3px;
@@ -1073,14 +1304,41 @@ function styles(): string {
     }
     .mileage-prompt strong { color: #172033; }
     .mileage-prompt span { color: #64748b; }
-    .country-input {
+    .mileage-prompt a {
+      color: #0f766e;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .mileage-prompt a:hover {
+      text-decoration: underline;
+    }
+    .section-heading {
+      padding: 10px 12px 0;
+      color: #172033;
+      font-weight: 750;
+    }
+    .country-select {
       display: grid;
       gap: 6px;
-      padding: 10px 12px 0;
+      padding: 6px 12px 0;
+    }
+    .country-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
       color: #64748b;
       font-weight: 650;
     }
-    .country-input input {
+    .country-head small {
+      color: #94a3b8;
+      font-size: 11px;
+      font-weight: 650;
+    }
+    .country-combo {
+      position: relative;
+    }
+    .country-combo input {
       width: 100%;
       min-width: 0;
       border: 1px solid #cbd5e1;
@@ -1089,26 +1347,126 @@ function styles(): string {
       color: #172033;
       -webkit-text-fill-color: #172033;
       appearance: none;
-      padding: 7px 9px;
+      padding: 7px 8px;
       font: inherit;
       font-weight: 400;
+      min-height: 32px;
+    }
+    .country-dropdown {
+      position: absolute;
+      z-index: 2;
+      left: 0;
+      right: 0;
+      top: calc(100% + 2px);
+      max-height: 200px;
+      overflow: auto;
+      margin: 0;
+      padding: 4px;
+      list-style: none;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      background: #ffffff;
+      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+    }
+    .country-dropdown[hidden] {
+      display: none;
+    }
+    .country-dropdown button {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 7px;
+      width: 100%;
+      border: 0;
+      border-radius: 5px;
+      background: transparent;
+      color: #172033;
+      padding: 6px 7px;
+      text-align: left;
+      font-weight: 550;
+    }
+    .country-dropdown button:hover,
+    .country-dropdown button.active {
+      background: #f1f5f9;
+    }
+    .country-dropdown small {
+      color: #94a3b8;
+      font-size: 11px;
+      font-weight: 650;
+    }
+    .country-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+    .country-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      min-height: 0;
+      border: 1px solid #cbd5e1;
+      border-radius: 999px;
+      background: #f8fafc;
+      color: #172033;
+      padding: 2px 6px 2px 5px;
+      font-weight: 600;
+    }
+    .country-chip .flag {
+      font-weight: 400;
+    }
+    .country-chip .x {
+      color: #94a3b8;
+    }
+    .country-chip:hover .x {
+      color: #dc2626;
+    }
+    .country-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    button.link {
+      min-height: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: #0f766e;
+      padding: 0;
+      font-weight: 650;
     }
     .actions {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 8px;
-      padding: 10px 12px;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 6px;
+      padding: 9px 12px;
+    }
+    .actions .button-link {
+      display: inline-grid;
+      place-items: center;
+      min-height: 32px;
+      border: 1px solid #0f766e;
+      border-radius: 6px;
+      background: #ffffff;
+      color: #0f766e;
+      font-weight: 650;
+      text-decoration: none;
+    }
+    .actions .wide {
+      grid-column: 1 / -1;
     }
     button {
       border: 1px solid #0f766e;
       border-radius: 6px;
       background: #0f766e;
       color: #ffffff;
-      padding: 8px 10px;
+      padding: 7px 9px;
       font: inherit;
       font-weight: 650;
       cursor: pointer;
       min-width: 0;
+      min-height: 32px;
     }
     button.secondary {
       border-color: #94a3b8;

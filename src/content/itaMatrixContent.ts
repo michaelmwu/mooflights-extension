@@ -1,16 +1,15 @@
 import { airportDistanceMiles } from "../shared/airportCoordinates";
 import {
+  type AirportAreaOption,
+  airportAreaFromSearchValue,
+  airportAreaOptions,
+  airportAreaSearchValue,
   airportCodes,
-  countryCodeFromSearchValue,
-  countrySearchValue,
-  parseAirportCodes,
-  uniqueAirportCountries,
-  uniqueAirportRegions,
-  uniqueAirportValues,
 } from "../shared/airports";
 import { fetchRemoteProviderMetadata } from "../shared/backendClient";
 import { runtimeUrl, safeChromeCall, sendRuntimeMessage } from "../shared/chromeRuntime";
 import { loadUsdCurrencyRates, type UsdCurrencyRates } from "../shared/currencyRates";
+import { flagEmoji } from "../shared/flags";
 import { flattenSegments, parseItaBookingDetails, parseItineraryJson } from "../shared/itinerary";
 import {
   type EarningsEstimate,
@@ -20,9 +19,10 @@ import {
   mileageProgramTierOptions,
   uniqueMileagePrograms,
 } from "../shared/mileageEarnings";
-import { rankProviderLinks, summarizeItinerary } from "../shared/providers";
+import { ALWAYS_SHOWN_PROVIDER_IDS, rankProviderLinks, summarizeItinerary } from "../shared/providers";
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from "../shared/storage";
 import type { ExtensionSettings, ItinerarySegment, NormalizedItinerary, RankedProviderLink } from "../shared/types";
+import { muTravelPanelHeaderStyles, renderMuTravelPanelHeader } from "./panelChrome";
 
 type PanelEdge = "top" | "right" | "bottom" | "left";
 
@@ -50,6 +50,7 @@ type PanelState = {
   panelPosition: PanelPosition;
   panelCollapsePosition: PanelPosition | null;
   currencyRates: UsdCurrencyRates | null;
+  airportAreaSearch: string;
 };
 
 type ResultMileageSummary = {
@@ -93,6 +94,7 @@ let autoCaptureCheckTimer: number | undefined;
 let flightResultAnnotationTimer: number | undefined;
 let autoSearchTimer: number | undefined;
 let autoOpenTimer: number | undefined;
+let locationClearButtonInstallFrame: number | undefined;
 let autoSearchStartedAt = 0;
 let autoSearchDone = false;
 let autoSearchLocationKey = "";
@@ -123,17 +125,17 @@ const state: PanelState = {
   panelPosition: panelUi.position,
   panelCollapsePosition: panelUi.collapsePosition,
   currencyRates: null,
+  airportAreaSearch: "",
 };
 
-const AIRPORT_REGION_OPTIONS = uniqueAirportRegions();
-const AIRPORT_COUNTRY_OPTIONS = uniqueAirportCountries();
-const AIRPORT_CONTINENT_OPTIONS = uniqueAirportValues("continent");
+const AIRPORT_AREA_OPTIONS = airportAreaOptions();
 
 void init();
 
 async function init(): Promise<void> {
   injectPageBridge();
   installChipClearShortcut();
+  installLocationClearButtons();
   window.addEventListener("message", onBridgeMessage);
   state.settings = await safeChromeCall(loadSettings, DEFAULT_SETTINGS);
   state.airportPreview = airportCodes(state.settings.airportHelper).slice(0, 120);
@@ -153,6 +155,11 @@ async function init(): Promise<void> {
 }
 
 function render(): void {
+  if (shouldHidePanel()) {
+    removePanel();
+    return;
+  }
+
   const shadow = getShadowRoot();
   if (!shadow) return;
   const settings = state.settings;
@@ -164,13 +171,7 @@ function render(): void {
       ${
         state.panelMinimized
           ? `<button type="button" class="panel-icon" data-action="restore-panel" aria-label="Expand Mu Travel panel">Mu</button>`
-          : `<header data-role="panel-header">
-              <div>
-                <strong>Mu Travel</strong>
-                <span>ITA Matrix companion</span>
-              </div>
-              <button type="button" class="icon-button" data-action="minimize-panel" aria-label="Minimize panel" title="Minimize">-</button>
-            </header>`
+          : renderMuTravelPanelHeader({ optionsAction: "options" })
       }
 
       ${state.panelMinimized ? "" : renderStatusMessage()}
@@ -179,13 +180,6 @@ function render(): void {
       ${!state.panelMinimized && isItineraryPage() ? renderLinksPanel() : ""}
       ${!state.panelMinimized && isSearchPage() ? renderAirportHelper(settings) : ""}
 
-      ${
-        state.panelMinimized
-          ? ""
-          : `<footer>
-              <button type="button" class="link-button" data-action="options">Options</button>
-            </footer>`
-      }
     </section>
   `;
 
@@ -194,6 +188,7 @@ function render(): void {
 
 function renderStatusMessage(): string {
   if (state.error) return `<p class="message error">${escapeHtml(state.error)}</p>`;
+  if (isSearchPage() && state.status === "Ready") return "";
   if (isItineraryPage() && state.itinerary && state.status === "Itinerary captured.") return "";
   return `<p class="message">${escapeHtml(state.status)}</p>`;
 }
@@ -261,14 +256,6 @@ function bind(root: ShadowRoot): void {
     const input = root.querySelector<HTMLTextAreaElement>('[data-role="json-input"]');
     if (input?.value) void parseAndSetItinerary(input.value);
   });
-  root.querySelector('[data-action="insert-airports"]')?.addEventListener("click", () => {
-    const ok = insertAirportCodes(state.airportPreview);
-    if (ok) {
-      setStatus("Inserted airport codes into the active field.");
-      return;
-    }
-    void copyAirportPreview("Copied airport codes; no active ITA input was found.");
-  });
   root.querySelector('[data-action="copy-airports"]')?.addEventListener("click", () => {
     void copyAirportPreview("Copied airport codes.");
   });
@@ -292,22 +279,33 @@ function bind(root: ShadowRoot): void {
       render();
     });
 
-  root.querySelectorAll<HTMLSelectElement>("select[data-setting]").forEach((select) => {
-    select.addEventListener("change", () => {
-      void updateAirportSetting(select.dataset.setting || "", select.value);
-    });
-  });
-  root.querySelectorAll<HTMLInputElement>('input[data-setting="country"]').forEach((input) => {
+  root.querySelectorAll<HTMLInputElement>('input[data-setting="area"]').forEach((input) => {
     input.addEventListener("change", () => {
-      void updateAirportSetting("country", input.value);
+      if (!input.value.trim()) return;
+      void updateAirportSetting("area", input.value);
     });
     input.addEventListener("input", () => {
-      if (!input.value.trim()) void updateAirportSetting("country", "");
+      state.airportAreaSearch = input.value;
+      renderAirportAreaDropdown(root.querySelector<HTMLElement>('[data-role="airport-area-dropdown"]'));
+    });
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        state.airportAreaSearch = "";
+        input.value = "";
+        renderAirportAreaDropdown(root.querySelector<HTMLElement>('[data-role="airport-area-dropdown"]'));
+        return;
+      }
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      const firstOption = airportAreaDropdownOptions()[0];
+      void updateAirportSetting("area", firstOption?.searchValue || input.value);
     });
   });
-  root.querySelector<HTMLInputElement>('input[data-setting="exclusions"]')?.addEventListener("change", (event) => {
-    const target = event.currentTarget as HTMLInputElement;
-    void updateAirportSetting("exclusions", target.value);
+  bindAirportAreaDropdown(root);
+  root.querySelectorAll<HTMLButtonElement>('[data-action="remove-airport-code"]').forEach((button) => {
+    button.addEventListener("click", () => {
+      void removeAirportCode(button.dataset.code || "");
+    });
   });
 }
 
@@ -667,39 +665,52 @@ function isAllowedGoogleFlightsUrl(value: string): boolean {
 
 async function updateAirportSetting(key: string, value: string): Promise<void> {
   if (!state.settings) return;
-  const countryCode = key === "country" ? countryCodeFromSearchValue(value) : "";
+  const area = key === "area" ? airportAreaFromSearchValue(value) : null;
+  if (key === "area" && value.trim() && area && !hasAirportArea(area)) {
+    state.airportAreaSearch = "";
+    render();
+    return;
+  }
+  const areaChanged = area ? airportAreaChanged(state.settings.airportHelper, area) : false;
   const next: ExtensionSettings = {
     ...state.settings,
     airportHelper: {
       ...state.settings.airportHelper,
-      ...(key === "continent" ? { continent: value } : {}),
-      ...(key === "region" ? { region: value } : {}),
-      ...(key === "country" ? { countries: countryCode ? [countryCode] : [] } : {}),
-      ...(key === "exclusions" ? { exclusions: parseAirportCodes(value) } : {}),
+      ...(area ? { ...area, exclusions: areaChanged ? [] : state.settings.airportHelper.exclusions } : {}),
+    },
+  };
+  state.settings = next;
+  state.airportAreaSearch = "";
+  state.airportPreview = airportCodes(next.airportHelper).slice(0, 120);
+  await safeChromeCall(() => saveSettings(next), undefined);
+  render();
+}
+
+function hasAirportArea(area: Pick<ExtensionSettings["airportHelper"], "region" | "continent" | "countries">): boolean {
+  return Boolean(area.region || area.continent || area.countries.length > 0);
+}
+
+function airportAreaChanged(
+  current: ExtensionSettings["airportHelper"],
+  nextArea: Pick<ExtensionSettings["airportHelper"], "region" | "continent" | "countries">,
+): boolean {
+  return airportAreaSearchValue(current) !== airportAreaSearchValue({ ...current, ...nextArea });
+}
+
+async function removeAirportCode(code: string): Promise<void> {
+  if (!state.settings || !/^[A-Z0-9]{3}$/.test(code)) return;
+  const exclusions = Array.from(new Set([...state.settings.airportHelper.exclusions, code])).sort();
+  const next: ExtensionSettings = {
+    ...state.settings,
+    airportHelper: {
+      ...state.settings.airportHelper,
+      exclusions,
     },
   };
   state.settings = next;
   state.airportPreview = airportCodes(next.airportHelper).slice(0, 120);
   await safeChromeCall(() => saveSettings(next), undefined);
   render();
-}
-
-function insertAirportCodes(codes: string[]): boolean {
-  if (codes.length === 0) return false;
-  const active = document.activeElement;
-  const input =
-    active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement
-      ? active
-      : document.querySelector<HTMLInputElement>(
-          ".mat-mdc-chip-input, input[aria-label*='airport' i], input[placeholder*='airport' i]",
-        );
-
-  if (!input) return false;
-  input.focus();
-  input.value = codes.join(", ");
-  input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: input.value }));
-  input.dispatchEvent(new Event("change", { bubbles: true }));
-  return true;
 }
 
 function injectPageBridge(): void {
@@ -784,11 +795,19 @@ function installFlightResultObserver(): void {
 
 function installSearchAutoSubmitObserver(): void {
   const observer = new MutationObserver(() => {
-    if (isSearchPage()) scheduleAutoSubmitMatrixSearch();
+    if (!isSearchPage()) return;
+    scheduleAutoSubmitMatrixSearch();
+    scheduleLocationClearButtonInstall();
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
-  window.addEventListener("popstate", scheduleAutoSubmitMatrixSearch);
-  window.addEventListener("hashchange", scheduleAutoSubmitMatrixSearch);
+  window.addEventListener("popstate", scheduleSearchPageWork);
+  window.addEventListener("hashchange", scheduleSearchPageWork);
+}
+
+function scheduleSearchPageWork(): void {
+  if (!isSearchPage()) return;
+  scheduleAutoSubmitMatrixSearch();
+  scheduleLocationClearButtonInstall();
 }
 
 function scheduleAutoCaptureCheck(): void {
@@ -1494,7 +1513,7 @@ function installFlightResultStyles(): void {
       font-weight: 600;
     }
   `;
-  document.head.appendChild(style);
+  appendToDocumentHead(style);
 }
 
 function compactMileageCalculation(formulas: MileageFormula[]): string {
@@ -1564,36 +1583,152 @@ function isFlightsPage(): boolean {
   return window.location.pathname.startsWith("/flights");
 }
 
-function renderAirportHelper(settings: ExtensionSettings): string {
-  const countryDatalistId = "mu-travel-country-options";
+function shouldHidePanel(): boolean {
+  return isFlightsPage();
+}
+
+function airportAreaDropdownOptions(): AirportAreaOption[] {
+  const query = normalizeAirportAreaSearch(state.airportAreaSearch);
+  if (!query) return [];
+  return AIRPORT_AREA_OPTIONS.map((option) => ({
+    option,
+    score: airportAreaOptionScore(option, query),
+  }))
+    .filter((match) => match.score >= 0)
+    .sort((left, right) => left.score - right.score || left.option.label.localeCompare(right.option.label))
+    .map((match) => match.option)
+    .slice(0, 8);
+}
+
+function airportAreaOptionScore(option: AirportAreaOption, query: string): number {
+  const label = normalizeAirportAreaSearch(option.label);
+  const value = normalizeAirportAreaSearch(option.value);
+  const searchValue = normalizeAirportAreaSearch(option.searchValue);
+  if (option.type === "country" && value === query) return 0;
+  if (label === query) return 1;
+  if (label.startsWith(query)) return 2;
+  if (searchValue.startsWith(query)) return 3;
+  if (label.includes(query)) return 4;
+  if (searchValue.includes(query)) return 5;
+  if (value.includes(query)) return 6;
+  return -1;
+}
+
+function renderAirportAreaDropdownRows(options: AirportAreaOption[]): string {
+  return options
+    .map((option, index) => {
+      const typeLabel = option.type === "country" ? "" : option.type === "continent" ? "Continent" : "Region";
+      return `
+        <li role="presentation">
+          <button type="button" class="${index === 0 ? "active" : ""}" data-action="select-airport-area" data-value="${escapeHtml(option.searchValue)}" role="option">
+            ${option.type === "country" ? `<span class="flag" aria-hidden="true">${escapeHtml(flagEmoji(option.value))}</span>` : ""}
+            <span>${escapeHtml(option.label)}</span>
+            ${typeLabel ? `<small>${escapeHtml(typeLabel)}</small>` : ""}
+          </button>
+        </li>
+      `;
+    })
+    .join("");
+}
+
+function renderAirportAreaDropdown(dropdown: HTMLElement | null): void {
+  if (!dropdown) return;
+  const options = airportAreaDropdownOptions();
+  dropdown.hidden = options.length === 0;
+  dropdown.innerHTML = renderAirportAreaDropdownRows(options);
+  const input =
+    dropdown.getRootNode() instanceof ShadowRoot
+      ? (dropdown.getRootNode() as ShadowRoot).querySelector<HTMLInputElement>('input[data-setting="area"]')
+      : null;
+  input?.setAttribute("aria-expanded", options.length > 0 ? "true" : "false");
+  bindAirportAreaDropdown(dropdown);
+}
+
+function bindAirportAreaDropdown(root: ParentNode): void {
+  root.querySelectorAll<HTMLButtonElement>('[data-action="select-airport-area"]').forEach((button) => {
+    button.addEventListener("mousedown", (event) => event.preventDefault());
+    button.addEventListener("click", () => {
+      const value = button.dataset.value || "";
+      if (!value) return;
+      void updateAirportSetting("area", value);
+    });
+  });
+}
+
+function normalizeAirportAreaSearch(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function activeAirportAreaOption(filters: ExtensionSettings["airportHelper"]): AirportAreaOption | null {
+  if (filters.region)
+    return AIRPORT_AREA_OPTIONS.find((option) => option.type === "region" && option.value === filters.region) || null;
+  if (filters.continent)
+    return (
+      AIRPORT_AREA_OPTIONS.find((option) => option.type === "continent" && option.value === filters.continent) || null
+    );
+  if (filters.countries[0])
+    return (
+      AIRPORT_AREA_OPTIONS.find((option) => option.type === "country" && option.value === filters.countries[0]) || null
+    );
+  return null;
+}
+
+function renderAirportAreaSelection(settings: ExtensionSettings): string {
+  const option = activeAirportAreaOption(settings.airportHelper);
+  if (!option) return '<p class="airport-note">Choose an area to build an airport code list.</p>';
+  const typeLabel = option.type === "country" ? "Country" : option.type === "continent" ? "Continent" : "Region";
   return `
-    <details>
+    <p class="airport-area-selection">
+      <span>Selected</span>
+      <strong>
+        ${option.type === "country" ? `<span class="flag" aria-hidden="true">${escapeHtml(flagEmoji(option.value))}</span>` : ""}
+        ${escapeHtml(option.label)}
+      </strong>
+      <small>${escapeHtml(typeLabel)}</small>
+    </p>
+  `;
+}
+
+function renderAirportHelper(settings: ExtensionSettings): string {
+  const areaInputId = "mu-travel-airport-area";
+  const areaDropdownId = "mu-travel-airport-area-dropdown";
+  const areaInputValue = state.airportAreaSearch;
+  const areaDropdownOptions = airportAreaDropdownOptions();
+  return `
+    <details open>
       <summary>Airport helper</summary>
-      <div class="grid">
-        ${selectHtml(
-          "region",
-          "Region",
-          ["", ...AIRPORT_REGION_OPTIONS.map((region) => region.id)],
-          settings.airportHelper.region,
-          new Map(AIRPORT_REGION_OPTIONS.map((region) => [region.id, region.label])),
-        )}
-        ${selectHtml("continent", "Continent", ["", ...AIRPORT_CONTINENT_OPTIONS], settings.airportHelper.continent)}
-        <label>
-          Country
-          <input type="search" data-setting="country" list="${countryDatalistId}" value="${escapeHtml(countrySearchValue(settings.airportHelper.countries[0] || ""))}" placeholder="Search country">
-          <datalist id="${countryDatalistId}">
-            ${AIRPORT_COUNTRY_OPTIONS.map((country) => `<option value="${escapeHtml(country.searchValue)}"></option>`).join("")}
-          </datalist>
-        </label>
+      <div class="airport-area-field">
+        <label for="${areaInputId}">Area</label>
+        <div class="airport-area-combo">
+          <input id="${areaInputId}" type="search" data-setting="area" value="${escapeHtml(areaInputValue)}" placeholder="Search region, continent, or country" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="${areaDropdownOptions.length > 0 ? "true" : "false"}" aria-controls="${areaDropdownId}">
+          <ul id="${areaDropdownId}" class="airport-area-dropdown" data-role="airport-area-dropdown" role="listbox" ${areaDropdownOptions.length === 0 ? "hidden" : ""}>
+            ${renderAirportAreaDropdownRows(areaDropdownOptions)}
+          </ul>
+        </div>
       </div>
-      <label>
-        Exclude codes
-        <input type="text" data-setting="exclusions" value="${escapeHtml(settings.airportHelper.exclusions.join(", "))}" placeholder="JFK, LGA">
-      </label>
-      <div class="airport-output">${escapeHtml(state.airportPreview.join(", "))}</div>
-      <div class="actions">
-        <button type="button" data-action="insert-airports">Insert into active field</button>
-        <button type="button" class="secondary" data-action="copy-airports">Copy codes</button>
+      ${renderAirportAreaSelection(settings)}
+      <div class="airport-output-row">
+        <div class="airport-chip-list">
+          ${
+            state.airportPreview.length > 0
+              ? state.airportPreview
+                  .map(
+                    (code) => `
+                      <button type="button" class="airport-chip" data-action="remove-airport-code" data-code="${escapeHtml(code)}" aria-label="Remove ${escapeHtml(code)}">
+                        ${escapeHtml(code)}<span aria-hidden="true">x</span>
+                      </button>
+                    `,
+                  )
+                  .join("")
+              : '<span class="muted">No airports selected.</span>'
+          }
+        </div>
+        <button type="button" class="copy-button" data-action="copy-airports" aria-label="Copy airport codes" title="Copy airport codes" ${state.airportPreview.length === 0 ? "disabled" : ""}>
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <rect x="8" y="8" width="10" height="12" rx="2"></rect>
+            <path d="M6 16H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+        </button>
       </div>
     </details>
   `;
@@ -1604,10 +1739,142 @@ function installChipClearShortcut(): void {
     if (event.key !== "F8") return;
     const active = document.activeElement;
     if (!(active instanceof HTMLElement) || !active.classList.contains("mat-mdc-chip-input")) return;
-    const chipGrid = active.closest("mat-chip-grid");
-    const icons = Array.from(chipGrid?.querySelectorAll<HTMLElement>("mat-icon[matchipremove]") || []);
-    for (const icon of icons) icon.click();
+    void clearLocationChipGrid(active.closest("mat-chip-grid"));
   });
+}
+
+function installLocationClearButtons(): void {
+  installLocationClearButtonStyles();
+  scheduleLocationClearButtonInstall();
+}
+
+function scheduleLocationClearButtonInstall(): void {
+  if (locationClearButtonInstallFrame !== undefined) return;
+  locationClearButtonInstallFrame = window.requestAnimationFrame(() => {
+    locationClearButtonInstallFrame = undefined;
+    addLocationClearButtons();
+  });
+}
+
+function addLocationClearButtons(): void {
+  if (!isSearchPage()) return;
+  document
+    .querySelectorAll<HTMLButtonElement>('button.add-airport, button[aria-label="add location"]')
+    .forEach((nearbyAirportButton) => {
+      const suffix = nearbyAirportButton.closest(".mat-mdc-form-field-icon-suffix");
+      const existingClearButton = suffix?.querySelector<HTMLButtonElement>(".mu-travel-location-clear");
+      if (existingClearButton) {
+        syncLocationClearButton(existingClearButton, nearbyAirportButton);
+        return;
+      }
+      if (!suffix) return;
+      const clearButton = document.createElement("button");
+      clearButton.type = "button";
+      clearButton.className = "mu-travel-location-clear";
+      clearButton.setAttribute("aria-label", "Clear selected airports");
+      clearButton.setAttribute("title", "Clear selected airports");
+      clearButton.tabIndex = -1;
+      clearButton.innerHTML = '<span class="material-icons" aria-hidden="true">close</span>';
+      clearButton.addEventListener("mousedown", (event) => event.preventDefault());
+      clearButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        void clearLocationField(nearbyAirportButton);
+      });
+      suffix.insertBefore(clearButton, nearbyAirportButton);
+      syncLocationClearButton(clearButton, nearbyAirportButton);
+      const formField = nearbyAirportButton.closest("mat-form-field");
+      formField?.addEventListener("input", () => syncLocationClearButton(clearButton, nearbyAirportButton));
+      formField?.addEventListener("change", () => syncLocationClearButton(clearButton, nearbyAirportButton));
+    });
+}
+
+function syncLocationClearButton(clearButton: HTMLButtonElement, anchor: HTMLElement): void {
+  clearButton.hidden = !locationFieldHasValue(anchor.closest("mat-form-field"));
+}
+
+function locationFieldHasValue(formField: Element | null): boolean {
+  const input = formField?.querySelector<HTMLInputElement>(".mat-mdc-chip-input");
+  if (input?.value.trim()) return true;
+  const chipGrid = formField?.querySelector("mat-chip-grid");
+  return Boolean(
+    chipGrid &&
+      Array.from(chipGrid.querySelectorAll("mat-chip-row, mat-chip, .mat-mdc-chip")).some((chip) =>
+        Boolean(chip.textContent?.trim()),
+      ),
+  );
+}
+
+async function clearLocationField(anchor: HTMLElement): Promise<void> {
+  const formField = anchor.closest("mat-form-field");
+  await clearLocationChipGrid(formField?.querySelector("mat-chip-grid") || null);
+  const input = formField?.querySelector<HTMLInputElement>(".mat-mdc-chip-input");
+  if (input) {
+    input.value = "";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    input.focus();
+  }
+  const clearButton = formField?.querySelector<HTMLButtonElement>(".mu-travel-location-clear");
+  if (clearButton) syncLocationClearButton(clearButton, anchor);
+}
+
+async function clearLocationChipGrid(chipGrid: Element | null): Promise<void> {
+  const selector = "mat-icon[matchipremove], mat-icon[matChipRemove], [matchipremove], [matChipRemove]";
+  for (;;) {
+    const removeControl = chipGrid?.querySelector<HTMLElement>(selector);
+    if (!removeControl) return;
+    removeControl.click();
+    await new Promise((resolve) => window.requestAnimationFrame(resolve));
+  }
+}
+
+function installLocationClearButtonStyles(): void {
+  if (document.getElementById("mu-travel-location-clear-styles")) return;
+  const style = document.createElement("style");
+  style.id = "mu-travel-location-clear-styles";
+  style.textContent = `
+    .mu-travel-location-clear {
+      align-items: center;
+      background: #ffffff;
+      border: 0;
+      border-radius: 999px;
+      box-shadow: none;
+      box-sizing: border-box;
+      color: rgba(0, 0, 0, 0.72);
+      cursor: pointer;
+      display: inline-flex;
+      flex: 0 0 22px;
+      height: 22px;
+      justify-content: center;
+      margin: 0 -9px 0 0;
+      max-width: 22px;
+      min-width: 22px;
+      padding: 0;
+      pointer-events: auto;
+      position: relative;
+      vertical-align: middle;
+      width: 22px;
+      z-index: 2;
+    }
+    .mu-travel-location-clear[hidden] {
+      display: none;
+    }
+    .mu-travel-location-clear:hover,
+    .mu-travel-location-clear:focus-visible {
+      background: #f8fafc;
+      color: rgba(0, 0, 0, 0.86);
+      outline: none;
+    }
+    .mu-travel-location-clear .material-icons {
+      font-size: 16px;
+      line-height: 1;
+    }
+  `;
+  appendToDocumentHead(style);
+}
+
+function appendToDocumentHead(element: HTMLElement): void {
+  (document.head || document.documentElement).appendChild(element);
 }
 
 function getShadowRoot(): ShadowRoot | null {
@@ -1620,16 +1887,23 @@ function getShadowRoot(): ShadowRoot | null {
   return host.shadowRoot || host.attachShadow({ mode: "open" });
 }
 
+function removePanel(): void {
+  document.getElementById(PANEL_ID)?.remove();
+}
+
 function renderLinks(links: RankedProviderLink[]): string {
   if (!state.itinerary) return `<p class="muted">Capture an itinerary to rank links.</p>`;
   return links
     .map((link) => {
       const confidence = providerConfidenceCopy(link);
+      const confidenceBadge = confidence
+        ? `<em class="confidence"><i aria-hidden="true"></i>${escapeHtml(confidence.label)}</em>`
+        : "";
       const issue = link.provider.knownIssues ? `<small>${escapeHtml(link.provider.knownIssues)}</small>` : "";
       return `
         <a href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer" class="provider ${link.confidence}">
           <span>${escapeHtml(link.provider.label)}</span>
-          <em class="confidence"><i aria-hidden="true"></i>${escapeHtml(confidence.label)}</em>
+          ${confidenceBadge}
           ${issue}
         </a>
       `;
@@ -1637,7 +1911,8 @@ function renderLinks(links: RankedProviderLink[]): string {
     .join("");
 }
 
-function providerConfidenceCopy(link: RankedProviderLink): { label: string } {
+function providerConfidenceCopy(link: RankedProviderLink): { label: string } | null {
+  if (ALWAYS_SHOWN_PROVIDER_IDS.includes(link.provider.id as (typeof ALWAYS_SHOWN_PROVIDER_IDS)[number])) return null;
   if (link.confidence === "high") {
     return {
       label: "Reliable",
@@ -2014,23 +2289,6 @@ function creditSegmentKey(
     .join(":");
 }
 
-function selectHtml(
-  name: string,
-  label: string,
-  values: string[],
-  selected: string,
-  labels = new Map<string, string>(),
-): string {
-  return `
-    <label>
-      ${escapeHtml(label)}
-      <select data-setting="${escapeHtml(name)}">
-        ${values.map((value) => `<option value="${escapeHtml(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(labels.get(value) || value || "Any")}</option>`).join("")}
-      </select>
-    </label>
-  `;
-}
-
 function setStatus(message: string): void {
   state.status = message;
   state.error = "";
@@ -2044,7 +2302,7 @@ function setError(message: string): void {
 
 async function copyAirportPreview(successMessage: string): Promise<void> {
   try {
-    await navigator.clipboard.writeText(state.airportPreview.join(", "));
+    await navigator.clipboard.writeText(state.airportPreview.join(" "));
     setStatus(successMessage);
   } catch (error) {
     setError(`Could not copy airport codes: ${error instanceof Error ? error.message : String(error)}`);
@@ -2084,11 +2342,9 @@ function styles(): string {
       background: transparent;
       box-shadow: none;
     }
-    header, footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px; border-bottom: 1px solid #e2e8f0; }
-    header { cursor: grab; user-select: none; }
-    header:active { cursor: grabbing; }
-    footer { border-top: 1px solid #e2e8f0; border-bottom: 0; }
+    ${muTravelPanelHeaderStyles()}
     strong { display: block; font-size: 15px; }
+    .brand strong { font-size: 18px; }
     header span, .muted, small { color: #64748b; }
     button, select, input, textarea { font: inherit; }
     button { border: 1px solid #0f766e; background: #0f766e; color: white; border-radius: 6px; padding: 6px 9px; cursor: pointer; }
@@ -2211,7 +2467,142 @@ function styles(): string {
     .provider.medium .confidence i { background: #d97706; }
     .provider.low .confidence { color: #b91c1c; }
     .provider.low .confidence i { background: #dc2626; }
-    .airport-output { min-height: 42px; max-height: 88px; overflow: auto; margin: 10px 0; padding: 8px; border-radius: 6px; background: #f8fafc; color: #334155; word-break: break-word; }
+    .airport-output-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: start;
+      gap: 8px;
+      margin: 10px 0;
+    }
+    .airport-area-field {
+      display: grid;
+      gap: 4px;
+      margin-top: 8px;
+      color: #334155;
+    }
+    .airport-area-combo {
+      position: relative;
+    }
+    .airport-area-dropdown {
+      position: absolute;
+      z-index: 2;
+      left: 0;
+      right: 0;
+      top: calc(100% + 2px);
+      max-height: 198px;
+      overflow: auto;
+      margin: 0;
+      padding: 4px;
+      list-style: none;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      background: #ffffff;
+      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+    }
+    .airport-area-dropdown[hidden] {
+      display: none;
+    }
+    .airport-area-dropdown button {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 7px;
+      width: 100%;
+      border: 0;
+      border-radius: 5px;
+      background: transparent;
+      color: #162033;
+      padding: 6px 7px;
+      text-align: left;
+      font-weight: 550;
+    }
+    .airport-area-dropdown button:hover,
+    .airport-area-dropdown button.active {
+      background: #f1f5f9;
+    }
+    .airport-area-dropdown small {
+      color: #94a3b8;
+      font-size: 11px;
+      font-weight: 650;
+    }
+    .airport-area-dropdown .flag {
+      font-weight: 400;
+    }
+    .airport-area-selection {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 7px 0 0;
+      color: #64748b;
+      font-size: 12px;
+    }
+    .airport-area-selection strong {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+      color: #162033;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .airport-area-selection small {
+      color: #94a3b8;
+      font-size: 11px;
+      font-weight: 650;
+    }
+    .airport-note {
+      margin: 8px 0 0;
+      color: #64748b;
+      font-size: 12px;
+    }
+    .airport-chip-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      min-height: 42px;
+      max-height: 112px;
+      overflow: auto;
+      padding: 8px;
+      border-radius: 6px;
+      background: #f8fafc;
+      color: #334155;
+    }
+    .airport-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      height: 24px;
+      padding: 0 6px;
+      border-color: #cbd5e1;
+      background: #ffffff;
+      color: #334155;
+      font-size: 12px;
+      line-height: 1;
+    }
+    .airport-chip span {
+      color: #64748b;
+      font-size: 13px;
+      line-height: 1;
+    }
+    .copy-button {
+      display: inline-grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      border-color: #cbd5e1;
+      background: #ffffff;
+      color: #0f766e;
+    }
+    .copy-button svg {
+      width: 18px;
+      height: 18px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
     .actions { display: flex; gap: 8px; }
     .inline { display: flex; grid-template-columns: none; align-items: center; gap: 6px; margin: 0; }
     .inline input { width: auto; }

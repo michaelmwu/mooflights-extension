@@ -72,6 +72,555 @@
   {
     "id": "hawaii",
     "label": "Hawaii",
-    "codes": ["HNL", "ITO", "KOA", "LIH", "OGG"]
+    "codes": ["HNL", "HNM", "ITO", "JHM", "KOA", "LIH", "LNY", "MKK", "MUE", "OGG"]
+  },
+  {
+    "id": "us-al",
+    "label": "Alabama",
+    "codes": ["BHM", "DHN", "HSV", "MGM", "MOB", "MSL"]
+  },
+  {
+    "id": "us-ak",
+    "label": "Alaska",
+    "codes": [
+      "ABL",
+      "ADK",
+      "ADQ",
+      "AIN",
+      "AKN",
+      "AKP",
+      "ANC",
+      "ANI",
+      "ANV",
+      "ARC",
+      "ATK",
+      "BET",
+      "BRW",
+      "BTI",
+      "CDB",
+      "CDV",
+      "DLG",
+      "DRG",
+      "DUT",
+      "EGX",
+      "EMK",
+      "ENA",
+      "FAI",
+      "FYU",
+      "GAL",
+      "GAM",
+      "GST",
+      "HCR",
+      "HNS",
+      "HOM",
+      "HSL",
+      "IAN",
+      "ILI",
+      "JNU",
+      "KLW",
+      "KTN",
+      "LUR",
+      "MCG",
+      "MYU",
+      "NUI",
+      "OME",
+      "OTZ",
+      "PIZ",
+      "PSG",
+      "PTH",
+      "PTU",
+      "RBY",
+      "SCC",
+      "SDP",
+      "SIT",
+      "SNP",
+      "STG",
+      "SVA",
+      "UNK",
+      "WRG",
+      "YAK"
+    ]
+  },
+  {
+    "id": "us-az",
+    "label": "Arizona",
+    "codes": ["AZA", "FLG", "GCN", "PGA", "PHX", "PRC", "SOW", "TUS", "YUM"]
+  },
+  {
+    "id": "us-ar",
+    "label": "Arkansas",
+    "codes": ["ELD", "FSM", "HOT", "HRO", "JBR", "LIT", "TXK", "XNA"]
+  },
+  {
+    "id": "us-ca",
+    "label": "California",
+    "codes": [
+      "ACV",
+      "BFL",
+      "BIH",
+      "BUR",
+      "CCR",
+      "CEC",
+      "CLD",
+      "FAT",
+      "HHR",
+      "IPL",
+      "LAX",
+      "LGB",
+      "MCE",
+      "MMH",
+      "MRY",
+      "OAK",
+      "ONT",
+      "PSP",
+      "RDD",
+      "SAN",
+      "SBA",
+      "SBD",
+      "SBP",
+      "SCK",
+      "SFO",
+      "SJC",
+      "SMF",
+      "SMX",
+      "SNA",
+      "STS"
+    ]
+  },
+  {
+    "id": "us-co",
+    "label": "Colorado",
+    "codes": ["ALS", "ASE", "CEZ", "COS", "DEN", "DRO", "EGE", "GJT", "GUC", "HDN", "MTJ", "PUB", "TEX"]
+  },
+  {
+    "id": "us-fl",
+    "label": "Florida",
+    "codes": [
+      "DAB",
+      "DSI",
+      "ECP",
+      "EYW",
+      "FLL",
+      "GNV",
+      "JAX",
+      "LAL",
+      "MCO",
+      "MIA",
+      "MLB",
+      "OPF",
+      "PBI",
+      "PGD",
+      "PIE",
+      "PNS",
+      "RSW",
+      "SFB",
+      "SRQ",
+      "TLH",
+      "TPA",
+      "VPS",
+      "VRB"
+    ]
+  },
+  {
+    "id": "us-ga",
+    "label": "Georgia",
+    "codes": ["ABY", "AGS", "ATL", "BQK", "CSG", "MCN", "SAV", "VLD"]
+  },
+  {
+    "id": "us-id",
+    "label": "Idaho",
+    "codes": ["BOI", "IDA", "LWS", "PIH", "SUN", "TWF"]
+  },
+  {
+    "id": "us-il",
+    "label": "Illinois",
+    "codes": ["BLV", "BMI", "CMI", "DEC", "MDW", "MLI", "MWA", "ORD", "PIA", "RFD", "SPI", "UIN"]
+  },
+  {
+    "id": "us-in",
+    "label": "Indiana",
+    "codes": ["EVV", "FWA", "IND", "LAF", "SBN"]
+  },
+  {
+    "id": "us-ia",
+    "label": "Iowa",
+    "codes": ["ALO", "BRL", "CID", "DSM", "FOD", "MCW", "SUX"]
+  },
+  {
+    "id": "us-ks",
+    "label": "Kansas",
+    "codes": ["DDC", "GCK", "HYS", "ICT", "LBL", "MHK", "SLN"]
+  },
+  {
+    "id": "us-ky",
+    "label": "Kentucky",
+    "codes": ["CVG", "LEX", "OWB", "PAH", "SDF"]
+  },
+  {
+    "id": "us-la",
+    "label": "Louisiana",
+    "codes": ["AEX", "BTR", "LCH", "LFT", "MLU", "MSY", "SHV"]
+  },
+  {
+    "id": "us-me",
+    "label": "Maine",
+    "codes": ["AUG", "BGR", "BHB", "PQI", "PWM", "RKD"]
+  },
+  {
+    "id": "us-ma",
+    "label": "Massachusetts",
+    "codes": ["ACK", "BED", "BOS", "EWB", "HYA", "ORH"]
+  },
+  {
+    "id": "us-mi",
+    "label": "Michigan",
+    "codes": ["APN", "AZO", "CIU", "CMX", "DTW", "ESC", "FNT", "GRR", "IMT", "LAN", "MBS", "MKG", "MQT", "PLN", "TVC"]
+  },
+  {
+    "id": "us-mn",
+    "label": "Minnesota",
+    "codes": ["BRD", "DLH", "HIB", "INL", "MSP", "RST", "STC", "TVF"]
+  },
+  {
+    "id": "us-ms",
+    "label": "Mississippi",
+    "codes": ["GLH", "GPT", "GTR", "JAN", "MEI", "PIB", "TUP"]
+  },
+  {
+    "id": "us-mo",
+    "label": "Missouri",
+    "codes": ["CGI", "COU", "IRK", "JLN", "MCI", "SGF", "STL", "TBN"]
+  },
+  {
+    "id": "us-mt",
+    "label": "Montana",
+    "codes": ["BIL", "BTM", "BZN", "FCA", "GDV", "GGW", "GTF", "HLN", "HVR", "MSO", "OLF", "SDY", "WYS"]
+  },
+  {
+    "id": "us-ne",
+    "label": "Nebraska",
+    "codes": ["AIA", "BFF", "CDR", "EAR", "GRI", "LBF", "LNK", "MCK", "OMA"]
+  },
+  {
+    "id": "us-nv",
+    "label": "Nevada",
+    "codes": ["BLD", "EKO", "LAS", "RNO"]
+  },
+  {
+    "id": "us-nj",
+    "label": "New Jersey",
+    "codes": ["ACY", "EWR", "TEB", "TTN"]
+  },
+  {
+    "id": "us-nm",
+    "label": "New Mexico",
+    "codes": ["ABQ", "CNM", "CVN", "GUP", "HOB", "LRU", "ROW", "SAF", "SVC", "TSM"]
+  },
+  {
+    "id": "us-ny",
+    "label": "New York State",
+    "codes": [
+      "ALB",
+      "ART",
+      "BGM",
+      "BUF",
+      "ELM",
+      "HPN",
+      "IAG",
+      "ISP",
+      "ITH",
+      "JFK",
+      "LGA",
+      "MSS",
+      "OGS",
+      "PBG",
+      "ROC",
+      "SLK",
+      "SWF",
+      "SYR"
+    ]
+  },
+  {
+    "id": "us-nc",
+    "label": "North Carolina",
+    "codes": ["AVL", "CLT", "EWN", "FAY", "GSO", "ILM", "OAJ", "PGV", "RDU", "USA"]
+  },
+  {
+    "id": "us-nd",
+    "label": "North Dakota",
+    "codes": ["BIS", "DIK", "DVL", "FAR", "GFK", "JMS", "MOT", "XWA"]
+  },
+  {
+    "id": "us-oh",
+    "label": "Ohio",
+    "codes": ["CAK", "CLE", "CMH", "DAY", "LCK", "TOL"]
+  },
+  {
+    "id": "us-ok",
+    "label": "Oklahoma",
+    "codes": ["LAW", "OKC", "SWO", "TUL"]
+  },
+  {
+    "id": "us-or",
+    "label": "Oregon",
+    "codes": ["EUG", "MFR", "OTH", "PDT", "PDX", "RDM"]
+  },
+  {
+    "id": "us-pa",
+    "label": "Pennsylvania",
+    "codes": ["ABE", "AOO", "AVP", "BFD", "DUJ", "ERI", "IPT", "JST", "LNS", "MDT", "PHL", "PIT", "SCE"]
+  },
+  {
+    "id": "us-sc",
+    "label": "South Carolina",
+    "codes": ["CAE", "CHS", "FLO", "GSP", "HHH", "MYR"]
+  },
+  {
+    "id": "us-sd",
+    "label": "South Dakota",
+    "codes": ["ABR", "ATY", "FSD", "PIR", "RAP"]
+  },
+  {
+    "id": "us-tn",
+    "label": "Tennessee",
+    "codes": ["BNA", "CHA", "MEM", "MKL", "TRI", "TYS"]
+  },
+  {
+    "id": "us-tx",
+    "label": "Texas",
+    "codes": [
+      "ABI",
+      "ACT",
+      "AMA",
+      "AUS",
+      "BPT",
+      "BRO",
+      "CLL",
+      "CRP",
+      "DAL",
+      "DFW",
+      "ELP",
+      "FTW",
+      "GGG",
+      "GRK",
+      "HOU",
+      "HRL",
+      "IAH",
+      "LBB",
+      "LRD",
+      "MAF",
+      "MFE",
+      "SAT",
+      "SJT",
+      "SPS",
+      "TYR",
+      "VCT"
+    ]
+  },
+  {
+    "id": "us-ut",
+    "label": "Utah",
+    "codes": ["CDC", "CNY", "OGD", "PVU", "SGU", "SLC", "VEL"]
+  },
+  {
+    "id": "us-va",
+    "label": "Virginia",
+    "codes": ["CHO", "IAD", "LYH", "ORF", "PHF", "RIC", "ROA", "SHD"]
+  },
+  {
+    "id": "us-wa",
+    "label": "Washington State",
+    "codes": ["ALW", "BFI", "BLI", "EAT", "ESD", "FRD", "GEG", "PAE", "PSC", "PUW", "SEA", "YKM"]
+  },
+  {
+    "id": "us-wv",
+    "label": "West Virginia",
+    "codes": ["BKW", "CKB", "CRW", "HTS", "LWB", "MGW", "PKB"]
+  },
+  {
+    "id": "us-wi",
+    "label": "Wisconsin",
+    "codes": ["ATW", "CWA", "EAU", "GRB", "LSE", "MKE", "MSN", "RHI"]
+  },
+  {
+    "id": "us-wy",
+    "label": "Wyoming",
+    "codes": ["COD", "CPR", "CYS", "GCC", "JAC", "LAR", "RIW", "RKS", "SHR"]
+  },
+  {
+    "id": "jp-hokkaido",
+    "label": "Hokkaido",
+    "codes": ["AKJ", "CTS", "HKD", "KUH", "MBE", "MMB", "OBO", "OIR", "OKD", "RIS", "SHB", "WKJ"]
+  },
+  {
+    "id": "jp-honshu",
+    "label": "Honshu",
+    "codes": [
+      "AOJ",
+      "MSJ",
+      "HNA",
+      "SDJ",
+      "AXT",
+      "ONJ",
+      "GAJ",
+      "SYO",
+      "FKS",
+      "IBR",
+      "NRT",
+      "HAC",
+      "HND",
+      "KIJ",
+      "TOY",
+      "KMQ",
+      "NTQ",
+      "MMJ",
+      "FSZ",
+      "NGO",
+      "NKM",
+      "ITM",
+      "KIX",
+      "TJH",
+      "UKB",
+      "SHM",
+      "TTJ",
+      "YGJ",
+      "IWJ",
+      "IZO",
+      "OKI",
+      "OKJ",
+      "HIJ",
+      "IWK",
+      "UBJ"
+    ]
+  },
+  {
+    "id": "jp-kyushu",
+    "label": "Kyushu",
+    "codes": [
+      "FUK",
+      "KKJ",
+      "HSG",
+      "FUJ",
+      "IKI",
+      "NGS",
+      "TSJ",
+      "AXJ",
+      "KMJ",
+      "OIT",
+      "KMI",
+      "ASJ",
+      "KKX",
+      "KOJ",
+      "KUM",
+      "OKE",
+      "RNJ",
+      "TKN",
+      "TNE"
+    ]
+  },
+  {
+    "id": "jp-okinawa",
+    "label": "Okinawa",
+    "codes": ["ISG", "MMY", "OKA", "SHI", "UEO"]
+  },
+  {
+    "id": "jp-shikoku",
+    "label": "Shikoku",
+    "codes": ["KCZ", "MYJ", "TAK", "TKS"]
+  },
+  {
+    "id": "au-nsw",
+    "label": "New South Wales",
+    "codes": ["BNK", "CFS", "NTL", "SYD", "WSI"]
+  },
+  {
+    "id": "au-nt",
+    "label": "Northern Territory",
+    "codes": ["ASP", "AYQ", "DRW"]
+  },
+  {
+    "id": "au-qld",
+    "label": "Queensland",
+    "codes": ["BNE", "CNS", "HTI", "MCY", "MKY", "OOL", "TSV"]
+  },
+  {
+    "id": "au-sa",
+    "label": "South Australia",
+    "codes": ["ADL", "MGB", "PLO"]
+  },
+  {
+    "id": "au-tas",
+    "label": "Tasmania",
+    "codes": ["HBA", "LST"]
+  },
+  {
+    "id": "au-vic",
+    "label": "Victoria",
+    "codes": ["AVV", "MEB", "MEL", "MQL"]
+  },
+  {
+    "id": "au-wa",
+    "label": "Western Australia",
+    "codes": ["BME", "GET", "KTA", "PER", "PHE"]
+  },
+  {
+    "id": "ca-ab",
+    "label": "Alberta",
+    "codes": ["YEG", "YMM", "YQL", "YYC"]
+  },
+  {
+    "id": "ca-bc",
+    "label": "British Columbia",
+    "codes": ["YLW", "YVR", "YXS", "YXX", "YYJ"]
+  },
+  {
+    "id": "ca-mb",
+    "label": "Manitoba",
+    "codes": ["YBR", "YQD", "YTH", "YWG", "YYQ"]
+  },
+  {
+    "id": "ca-nb",
+    "label": "New Brunswick",
+    "codes": ["YFC", "YQM", "YSJ", "ZBF"]
+  },
+  {
+    "id": "ca-nl",
+    "label": "Newfoundland and Labrador",
+    "codes": ["YQX", "YYT"]
+  },
+  {
+    "id": "ca-nt",
+    "label": "Northwest Territories",
+    "codes": ["YEV", "YFS", "YHY", "YSM", "YVQ", "YZF"]
+  },
+  {
+    "id": "ca-ns",
+    "label": "Nova Scotia",
+    "codes": ["YHZ", "YQY"]
+  },
+  {
+    "id": "ca-nu",
+    "label": "Nunavut",
+    "codes": ["YBK", "YCB", "YFB", "YRB", "YRT", "YUX", "YZS"]
+  },
+  {
+    "id": "ca-on",
+    "label": "Ontario",
+    "codes": ["YHM", "YOW", "YQT", "YTZ", "YXU", "YYZ"]
+  },
+  {
+    "id": "ca-qc",
+    "label": "Quebec",
+    "codes": ["YBG", "YHU", "YMX", "YQB", "YUL"]
+  },
+  {
+    "id": "ca-sk",
+    "label": "Saskatchewan",
+    "codes": ["YNL", "YPA", "YQR", "YSF", "YVC", "YXE"]
+  },
+  {
+    "id": "ca-yt",
+    "label": "Yukon",
+    "codes": ["YDA", "YXY"]
   }
 ]
