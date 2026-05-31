@@ -1818,8 +1818,11 @@ function installLocationClearButtonStyles(): void {
       max-width: 22px;
       min-width: 22px;
       padding: 0;
+      pointer-events: auto;
+      position: relative;
       vertical-align: middle;
       width: 22px;
+      z-index: 2;
     }
     .mu-travel-location-clear[hidden] {
       display: none;
