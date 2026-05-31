@@ -13,7 +13,7 @@ import {
   normalizeGoogleFlightsCountryCodes,
   parseGoogleFlightsCountryInput,
 } from "../shared/googleFlightsBooking";
-import { allGoogleFlightsCountryCodes } from "../shared/googleFlightsCountries";
+import { allGoogleFlightsCountryCodes, isAllGoogleFlightsCountryCodes } from "../shared/googleFlightsCountries";
 import {
   type MileageProgramOption,
   mileageProgramTierOptions,
@@ -31,7 +31,7 @@ function Options(): React.ReactElement {
   const [saved, setSaved] = useState(false);
   const countries = useMemo(() => uniqueAirportCountries(), []);
   const allGoogleFlightsCountries = useMemo(() => allGoogleFlightsCountryCodes(), []);
-  const googleFlightsCountryCount = settings.googleFlights.countryCodes.length;
+  const usesAllGoogleFlightsCountries = isAllGoogleFlightsCountryCodes(settings.googleFlights.countryCodes);
   const continents = useMemo(() => uniqueAirportValues("continent"), []);
   const regions = useMemo(() => uniqueAirportRegions(), []);
   const mileagePrograms = useMemo(() => uniqueMileageProgramOptions(), []);
@@ -204,7 +204,7 @@ function Options(): React.ReactElement {
             All useful countries
           </button>
         </div>
-        {googleFlightsCountryCount > DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES.length ? (
+        {usesAllGoogleFlightsCountries ? (
           <p className="note country-warning">
             All useful countries excludes unsupported and not-useful markets. Results appear as each country finishes.
           </p>

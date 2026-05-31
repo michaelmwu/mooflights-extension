@@ -9,7 +9,11 @@ import {
   parseGoogleFlightsCountryInput,
   parseGoogleFlightsMatrixSearch,
 } from "../shared/googleFlightsBooking";
-import { allGoogleFlightsCountryCodes, googleFlightsAvailableCountryOptions } from "../shared/googleFlightsCountries";
+import {
+  allGoogleFlightsCountryCodes,
+  googleFlightsAvailableCountryOptions,
+  isAllGoogleFlightsCountryCodes,
+} from "../shared/googleFlightsCountries";
 import { mileageCarrierName } from "../shared/mileageCarriers";
 import { loadSettings } from "../shared/storage";
 import { muTravelPanelHeaderStyles, renderMuTravelPanelHeader } from "./panelChrome";
@@ -323,6 +327,9 @@ function scheduleRender(): void {
     state.resultsCachedAt = 0;
     state.error = "";
     state.comparing = false;
+    state.comparingRequestId = "";
+    state.progressCompleted = 0;
+    state.progressTotal = 0;
     return;
   }
 
@@ -336,6 +343,9 @@ function scheduleRender(): void {
     state.baselineSignature = "";
     state.error = "";
     state.comparing = false;
+    state.comparingRequestId = "";
+    state.progressCompleted = 0;
+    state.progressTotal = 0;
     applyCachedResults(readCachedResults(cacheKey));
     void loadStoredCachedResults(cacheKey);
   } else if (state.baselineSignature && state.baselineSignature !== baselineSignature) {
@@ -643,9 +653,13 @@ function renderComparisonNotice(): string {
   if (state.comparing) {
     return `<p class="cache-note">${state.progressCompleted} of ${state.progressTotal} countries checked.</p>`;
   }
-  const selectedCount = parseGoogleFlightsCountryInput(state.countryInput).length;
+  const selectedCountries = parseGoogleFlightsCountryInput(state.countryInput);
+  const selectedCount = selectedCountries.length;
   if (selectedCount <= DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES.length) return "";
-  return `<p class="cache-note">All useful countries excludes unsupported and not-useful markets. Large checks can take a long time.</p>`;
+  if (isAllGoogleFlightsCountryCodes(selectedCountries)) {
+    return `<p class="cache-note">All useful countries excludes unsupported and not-useful markets. Large checks can take a long time.</p>`;
+  }
+  return `<p class="cache-note">Large country selections can take a long time. Results appear as each country finishes.</p>`;
 }
 
 function renderMilesEstimatePrompt(matrixSearch: GoogleFlightsMatrixSearch | null): string {

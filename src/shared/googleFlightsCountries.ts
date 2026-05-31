@@ -349,7 +349,7 @@ const NOT_USEFUL_GOOGLE_FLIGHTS_COUNTRY_CODES = new Set([
   "ZW",
 ]);
 
-const COUNTRY_DISPLAY = typeof Intl !== "undefined" ? new Intl.DisplayNames(["en"], { type: "region" }) : undefined;
+const COUNTRY_DISPLAY = createCountryDisplayNames();
 
 export function allGoogleFlightsCountryCodes(): string[] {
   const defaultCodes = new Set(DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES);
@@ -358,6 +358,13 @@ export function allGoogleFlightsCountryCodes(): string[] {
   );
 
   return [...DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES, ...remainingCodes];
+}
+
+export function isAllGoogleFlightsCountryCodes(codes: readonly string[]): boolean {
+  const allCountries = allGoogleFlightsCountryCodes();
+  const selectedCodes = new Set(codes.map((code) => code.trim().toUpperCase()).filter(Boolean));
+
+  return selectedCodes.size === allCountries.length && allCountries.every((code) => selectedCodes.has(code));
 }
 
 export function googleFlightsCountryOptions(): Array<{ code: string; label: string; searchValue: string }> {
@@ -398,5 +405,15 @@ function googleFlightsCountryLabel(code: string): string {
     return COUNTRY_DISPLAY?.of(code) || code;
   } catch {
     return code;
+  }
+}
+
+function createCountryDisplayNames(): Intl.DisplayNames | undefined {
+  if (typeof Intl === "undefined" || typeof Intl.DisplayNames !== "function") return undefined;
+
+  try {
+    return new Intl.DisplayNames(["en"], { type: "region" });
+  } catch {
+    return undefined;
   }
 }
