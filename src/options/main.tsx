@@ -548,7 +548,19 @@ function categoryLabel(category: string): string {
 }
 
 function airportHelperWithArea(airportHelper: AirportFilters, value: string): AirportFilters {
+  if (!value.trim()) {
+    return {
+      ...airportHelper,
+      region: "",
+      continent: "",
+      countries: [],
+      exclusions: [],
+    };
+  }
+
   const area = airportAreaFromSearchValue(value);
+  if (!hasAirportArea(area)) return airportHelper;
+
   const currentAreaValue = airportAreaSearchValue(airportHelper);
   const nextAreaValue = airportAreaSearchValue({ ...airportHelper, ...area });
   const areaChanged = currentAreaValue !== nextAreaValue;
@@ -558,6 +570,10 @@ function airportHelperWithArea(airportHelper: AirportFilters, value: string): Ai
     ...area,
     exclusions: areaChanged ? [] : airportHelper.exclusions,
   };
+}
+
+function hasAirportArea(area: Pick<AirportFilters, "region" | "continent" | "countries">): boolean {
+  return Boolean(area.region || area.continent || area.countries.length > 0);
 }
 
 function countryDisplayName(code: string): string {
