@@ -281,19 +281,17 @@ function bind(root: ShadowRoot): void {
 
   root.querySelectorAll<HTMLInputElement>('input[data-setting="area"]').forEach((input) => {
     input.addEventListener("change", () => {
-      if (input.value === airportAreaSearchValue(state.settings?.airportHelper || DEFAULT_SETTINGS.airportHelper))
-        return;
+      if (!input.value.trim()) return;
       void updateAirportSetting("area", input.value);
     });
     input.addEventListener("input", () => {
       state.airportAreaSearch = input.value;
       renderAirportAreaDropdown(root.querySelector<HTMLElement>('[data-role="airport-area-dropdown"]'));
-      if (!input.value.trim()) void updateAirportSetting("area", "");
     });
     input.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
         state.airportAreaSearch = "";
-        input.value = airportAreaSearchValue(state.settings?.airportHelper || DEFAULT_SETTINGS.airportHelper);
+        input.value = "";
         renderAirportAreaDropdown(root.querySelector<HTMLElement>('[data-role="airport-area-dropdown"]'));
         return;
       }
@@ -1661,11 +1659,40 @@ function normalizeAirportAreaSearch(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+function activeAirportAreaOption(filters: ExtensionSettings["airportHelper"]): AirportAreaOption | null {
+  if (filters.region)
+    return AIRPORT_AREA_OPTIONS.find((option) => option.type === "region" && option.value === filters.region) || null;
+  if (filters.continent)
+    return (
+      AIRPORT_AREA_OPTIONS.find((option) => option.type === "continent" && option.value === filters.continent) || null
+    );
+  if (filters.countries[0])
+    return (
+      AIRPORT_AREA_OPTIONS.find((option) => option.type === "country" && option.value === filters.countries[0]) || null
+    );
+  return null;
+}
+
+function renderAirportAreaSelection(settings: ExtensionSettings): string {
+  const option = activeAirportAreaOption(settings.airportHelper);
+  if (!option) return '<p class="airport-note">Choose an area to build an airport code list.</p>';
+  const typeLabel = option.type === "country" ? "Country" : option.type === "continent" ? "Continent" : "Region";
+  return `
+    <p class="airport-area-selection">
+      <span>Selected</span>
+      <strong>
+        ${option.type === "country" ? `<span class="flag" aria-hidden="true">${escapeHtml(flagEmoji(option.value))}</span>` : ""}
+        ${escapeHtml(option.label)}
+      </strong>
+      <small>${escapeHtml(typeLabel)}</small>
+    </p>
+  `;
+}
+
 function renderAirportHelper(settings: ExtensionSettings): string {
   const areaInputId = "mu-travel-airport-area";
   const areaDropdownId = "mu-travel-airport-area-dropdown";
-  const areaValue = airportAreaSearchValue(settings.airportHelper);
-  const areaInputValue = state.airportAreaSearch || areaValue;
+  const areaInputValue = state.airportAreaSearch;
   const areaDropdownOptions = airportAreaDropdownOptions();
   return `
     <details open>
@@ -1679,7 +1706,7 @@ function renderAirportHelper(settings: ExtensionSettings): string {
           </ul>
         </div>
       </div>
-      ${areaValue ? "" : '<p class="airport-note">Choose an area to build an airport code list.</p>'}
+      ${renderAirportAreaSelection(settings)}
       <div class="airport-output-row">
         <div class="airport-chip-list">
           ${
@@ -2500,6 +2527,28 @@ function styles(): string {
     }
     .airport-area-dropdown .flag {
       font-weight: 400;
+    }
+    .airport-area-selection {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 7px 0 0;
+      color: #64748b;
+      font-size: 12px;
+    }
+    .airport-area-selection strong {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+      color: #162033;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .airport-area-selection small {
+      color: #94a3b8;
+      font-size: 11px;
+      font-weight: 650;
     }
     .airport-note {
       margin: 8px 0 0;
