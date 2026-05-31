@@ -130,6 +130,21 @@ describe("airport helper", () => {
       continent: "",
       countries: ["JP"],
     });
+    expect(airportAreaFromSearchValue("Georgia (GE)")).toEqual({
+      region: "",
+      continent: "",
+      countries: ["GE"],
+    });
+    expect(airportAreaFromSearchValue("Georgia (region)")).toEqual({
+      region: "us-ga",
+      continent: "",
+      countries: [],
+    });
+    expect(airportAreaFromSearchValue("Georgia")).toEqual({
+      region: "",
+      continent: "",
+      countries: [],
+    });
     expect(airportAreaFromSearchValue("jap")).toEqual({
       region: "",
       continent: "",

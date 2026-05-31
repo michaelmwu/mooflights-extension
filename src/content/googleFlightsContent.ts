@@ -492,23 +492,17 @@ function render(): void {
   });
   shadow.querySelector('[data-action="country-recommended"]')?.addEventListener("click", () => {
     if (state.comparing) return;
-    state.countryInput = DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES.join(", ");
-    state.countrySearch = "";
-    state.error = "";
+    updateGoogleFlightsCountrySelection(DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES);
     render();
   });
   shadow.querySelector('[data-action="country-all"]')?.addEventListener("click", () => {
     if (state.comparing) return;
-    state.countryInput = allGoogleFlightsCountryCodes().join(", ");
-    state.countrySearch = "";
-    state.error = "";
+    updateGoogleFlightsCountrySelection(allGoogleFlightsCountryCodes());
     render();
   });
   shadow.querySelector('[data-action="country-clear"]')?.addEventListener("click", () => {
     if (state.comparing) return;
-    state.countryInput = "";
-    state.countrySearch = "";
-    state.error = "";
+    updateGoogleFlightsCountrySelection([]);
     render();
   });
   shadow.querySelector('[data-action="compare-countries"]')?.addEventListener("click", () => {
@@ -539,7 +533,7 @@ function renderCountrySelect(selectedCodes: string[]): string {
           .map(
             (code) => `
               <button type="button" class="country-chip" data-action="remove-country" data-code="${escapeHtml(code)}" aria-label="Remove ${escapeHtml(countryDisplayName(code))}" ${disabled}>
-                <span class="flag">${escapeHtml(flagEmoji(code))}</span>${escapeHtml(code)}<span class="x">x</span>
+                <span class="flag" aria-hidden="true">${escapeHtml(flagEmoji(code))}</span>${escapeHtml(code)}<span class="x">x</span>
               </button>
             `,
           )
@@ -575,7 +569,7 @@ function renderCountryDropdownRows(countries: Array<{ code: string; label: strin
       (country, index) => `
         <li>
           <button type="button" class="${index === 0 ? "active" : ""}" data-action="add-country" data-code="${escapeHtml(country.code)}" ${disabled}>
-            <span class="flag">${escapeHtml(flagEmoji(country.code))}</span>
+            <span class="flag" aria-hidden="true">${escapeHtml(flagEmoji(country.code))}</span>
             <span>${escapeHtml(country.label)}</span>
             <small>${escapeHtml(country.code)}</small>
           </button>
@@ -625,9 +619,7 @@ function addGoogleFlightsCountries(countryCodes: string[], refocusSearch: boolea
     ...availableCountryCodes,
   ]);
   if (nextCountries.length === 0) return;
-  state.countryInput = nextCountries.join(", ");
-  state.countrySearch = "";
-  state.error = "";
+  updateGoogleFlightsCountrySelection(nextCountries);
   render();
   if (refocusSearch) focusCountrySearch();
 }
@@ -636,9 +628,18 @@ function removeGoogleFlightsCountry(countryCode: string): void {
   if (state.comparing) return;
   if (!countryCode) return;
   const nextCountries = selectedGoogleFlightsCountries().filter((code) => code !== countryCode);
-  state.countryInput = nextCountries.join(", ");
-  state.error = "";
+  updateGoogleFlightsCountrySelection(nextCountries);
   render();
+}
+
+function updateGoogleFlightsCountrySelection(countryCodes: string[]): void {
+  const nextCountries = filterAvailableGoogleFlightsCountryCodes(countryCodes);
+  const selectedCountrySet = new Set(nextCountries);
+  state.countryInput = nextCountries.join(", ");
+  state.countrySearch = "";
+  state.results = state.results.filter((result) => selectedCountrySet.has(result.country));
+  state.resultsCachedAt = 0;
+  state.error = "";
 }
 
 function selectedGoogleFlightsCountries(): string[] {
@@ -1150,11 +1151,11 @@ async function compareCountries(): Promise<void> {
   const previousResults = state.results;
   const currentUrl = new URL(window.location.href);
   const hasComparableCurrency = currentUrl.searchParams.has("curr");
-  state.baseline = hasComparableCurrency ? parseCurrentBookingPage() : null;
   const comparePageKey = state.pageKey;
-  const baseline = state.baseline;
   const baseUrl = googleFlightsCountryUrl(window.location.href, currentComparableCountryCode());
   const currentCountry = currentComparableCountryCode();
+  state.baseline = hasComparableCurrency ? parseCurrentBookingPage() : null;
+  const baseline = state.baseline && selectedCountries.includes(currentCountry) ? state.baseline : null;
   const countries = selectedCountries.filter((country) => !hasComparableCurrency || country !== currentCountry);
   state.progressTotal = countries.length;
   if (baseline) {
@@ -1205,8 +1206,9 @@ function applyGoogleFlightsCountryComplete(payload: { requestId?: unknown; ok?: 
   if (!payload.ok) {
     state.error = typeof payload.error === "string" ? payload.error : "Country comparison failed.";
   } else if (state.cacheKey || state.pageKey) {
+    state.resultsCachedAt = Date.now();
     pruneExpiredResultCache();
-    void storeCachedResults(state.cacheKey || state.pageKey, state.results);
+    void storeCachedResults(state.cacheKey || state.pageKey, state.results, state.resultsCachedAt);
   }
   state.progressCompleted = state.progressTotal;
   state.comparing = false;

@@ -92,6 +92,7 @@ async function unsupportedItaMatrixAirportCodes(codes) {
 
 async function supportsItaMatrixAirportCode(code) {
   const response = await fetch(`${ITA_MATRIX_LOCATION_SOURCE}/${code}`);
+  if (response.status === 400 || response.status === 404) return false;
   if (!response.ok) throw new Error(`Failed to validate ${code} with ITA Matrix: ${response.status}`);
   const location = await response.json();
   return location?.code === code;

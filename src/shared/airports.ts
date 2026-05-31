@@ -142,19 +142,31 @@ export function airportAreaFromSearchValue(value: string): Pick<AirportFilters, 
   if (!query) return { region: "", continent: "", countries: [] };
 
   const options = airportAreaOptions();
-  const direct = options.find((option) => normalizeSearch(option.value) === query);
-  const exact = direct || options.find((option) => normalizeSearch(option.searchValue) === query);
-  const byLabel = exact || options.find((option) => normalizeSearch(option.label) === query);
-  const partial =
-    byLabel ||
-    options.find((option) => normalizeSearch(option.label).startsWith(query)) ||
-    options.find((option) => normalizeSearch(option.searchValue).includes(query));
-  const option = partial;
+  const direct = uniqueAirportAreaOption(options.filter((option) => normalizeSearch(option.value) === query));
+  const exactSearchValue = uniqueAirportAreaOption(
+    options.filter((option) => normalizeSearch(option.searchValue) === query),
+  );
+  const exactCountrySearchValue = options.find(
+    (option) => option.type === "country" && normalizeSearch(option.searchValue) === query,
+  );
+  const exactLabel = uniqueAirportAreaOption(options.filter((option) => normalizeSearch(option.label) === query));
+  const partialLabel = uniqueAirportAreaOption(
+    options.filter((option) => normalizeSearch(option.label).startsWith(query)),
+  );
+  const partialSearchValue = uniqueAirportAreaOption(
+    options.filter((option) => normalizeSearch(option.searchValue).includes(query)),
+  );
+  const option =
+    direct || exactCountrySearchValue || exactSearchValue || exactLabel || partialLabel || partialSearchValue;
 
   if (!option) return { region: "", continent: "", countries: [] };
   if (option.type === "region") return { region: option.value, continent: "", countries: [] };
   if (option.type === "continent") return { region: "", continent: option.value, countries: [] };
   return { region: "", continent: "", countries: [option.value] };
+}
+
+function uniqueAirportAreaOption(options: AirportAreaOption[]): AirportAreaOption | null {
+  return options.length === 1 ? options[0] : null;
 }
 
 export function airportCoordinate(code: string): { latitude: number; longitude: number } | undefined {

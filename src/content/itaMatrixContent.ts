@@ -650,6 +650,10 @@ function isAllowedGoogleFlightsUrl(value: string): boolean {
 async function updateAirportSetting(key: string, value: string): Promise<void> {
   if (!state.settings) return;
   const area = key === "area" ? airportAreaFromSearchValue(value) : null;
+  if (key === "area" && value.trim() && area && !hasAirportArea(area)) {
+    render();
+    return;
+  }
   const areaChanged = area ? airportAreaChanged(state.settings.airportHelper, area) : false;
   const next: ExtensionSettings = {
     ...state.settings,
@@ -662,6 +666,10 @@ async function updateAirportSetting(key: string, value: string): Promise<void> {
   state.airportPreview = airportCodes(next.airportHelper).slice(0, 120);
   await safeChromeCall(() => saveSettings(next), undefined);
   render();
+}
+
+function hasAirportArea(area: Pick<ExtensionSettings["airportHelper"], "region" | "continent" | "countries">): boolean {
+  return Boolean(area.region || area.continent || area.countries.length > 0);
 }
 
 function airportAreaChanged(
