@@ -1495,7 +1495,7 @@ function installFlightResultStyles(): void {
       font-weight: 600;
     }
   `;
-  document.head.appendChild(style);
+  appendToDocumentHead(style);
 }
 
 function compactMileageCalculation(formulas: MileageFormula[]): string {
@@ -1703,7 +1703,11 @@ function installLocationClearButtonStyles(): void {
       line-height: 1;
     }
   `;
-  document.head.appendChild(style);
+  appendToDocumentHead(style);
+}
+
+function appendToDocumentHead(element: HTMLElement): void {
+  (document.head || document.documentElement).appendChild(element);
 }
 
 function getShadowRoot(): ShadowRoot | null {
