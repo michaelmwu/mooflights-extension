@@ -7,6 +7,7 @@ import {
   airportAreaSearchValue,
   countrySearchValue,
 } from "../shared/airports";
+import { flagEmoji } from "../shared/flags";
 import { DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES, parseGoogleFlightsCountryInput } from "../shared/googleFlightsBooking";
 import {
   allGoogleFlightsCountryCodes,
@@ -544,11 +545,6 @@ function categoryLabel(category: string): string {
   if (category === "ota") return "booking site";
   if (category === "airline") return "airline";
   return category;
-}
-
-function flagEmoji(code: string): string {
-  if (!/^[A-Za-z]{2}$/.test(code)) return "";
-  return String.fromCodePoint(...[...code.toUpperCase()].map((character) => 0x1f1e6 + character.charCodeAt(0) - 65));
 }
 
 function airportHelperWithArea(airportHelper: AirportFilters, value: string): AirportFilters {

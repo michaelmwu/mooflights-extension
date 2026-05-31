@@ -39,6 +39,14 @@ describe("airport helper", () => {
     expect(uniqueAirportRegions().map((region) => region.id)).toContain("tokyo");
   });
 
+  it("uses US state region presets for broader airport searches", () => {
+    const codes = airportCodes({ ...DEFAULT_SETTINGS.airportHelper, region: "us-ca" });
+
+    expect(codes).toEqual(expect.arrayContaining(["LAX", "SFO", "SAN", "SMF"]));
+    expect(codes).not.toContain("JFK");
+    expect(uniqueAirportRegions().map((region) => region.id)).toContain("us-ca");
+  });
+
   it("excludes airport codes that ITA Matrix does not resolve", () => {
     const unsupportedCodes = new Set(
       (airportData as { excluded_unsupported_ita_matrix_codes?: string[] }).excluded_unsupported_ita_matrix_codes || [],

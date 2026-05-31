@@ -1,4 +1,5 @@
 import { DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES, normalizeGoogleFlightsCountryCodes } from "./googleFlightsBooking";
+import { filterAvailableGoogleFlightsCountryCodes } from "./googleFlightsCountries";
 import { ALWAYS_SHOWN_PROVIDER_IDS } from "./providers";
 import type { ExtensionSettings } from "./types";
 
@@ -107,7 +108,9 @@ function providerPreferenceArray(value: unknown, fallback: string[]): string[] {
 
 function googleFlightsCountryCodes(value: unknown): string[] {
   if (Array.isArray(value) && value.length === 0) return [];
-  const countryCodes = normalizeGoogleFlightsCountryCodes(value, DEFAULT_SETTINGS.googleFlights.countryCodes);
+  const normalizedCountryCodes = normalizeGoogleFlightsCountryCodes(value, DEFAULT_SETTINGS.googleFlights.countryCodes);
+  const countryCodes = filterAvailableGoogleFlightsCountryCodes(normalizedCountryCodes);
+  if (countryCodes.length === 0) return [...DEFAULT_SETTINGS.googleFlights.countryCodes];
   return isLegacyGoogleFlightsRecommendedSet(countryCodes)
     ? [...DEFAULT_SETTINGS.googleFlights.countryCodes]
     : countryCodes;

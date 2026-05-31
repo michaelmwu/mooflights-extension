@@ -29,7 +29,7 @@ describe("settings", () => {
         },
         debugMode: 1,
         googleFlights: {
-          countryCodes: ["jp", "MY", "not-a-country", null, "JP"],
+          countryCodes: ["jp", "MY", "AQ", "not-a-country", null, "JP"],
         },
         airportHelper: {
           region: 7,
@@ -79,6 +79,16 @@ describe("settings", () => {
         },
       }).googleFlights.countryCodes,
     ).toEqual(DEFAULT_SETTINGS.googleFlights.countryCodes);
+  });
+
+  it("removes unsupported Google Flights countries from stored settings", () => {
+    expect(
+      mergeSettings({
+        googleFlights: {
+          countryCodes: ["US", "AQ", "JP"],
+        },
+      }).googleFlights.countryCodes,
+    ).toEqual(["US", "JP"]);
   });
 
   it("migrates the legacy recommended Google Flights countries to current defaults", () => {

@@ -1,4 +1,5 @@
 import { sendRuntimeMessage } from "../shared/chromeRuntime";
+import { flagEmoji } from "../shared/flags";
 import {
   DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES,
   type GoogleFlightsCountryResult,
@@ -33,6 +34,7 @@ type CompareState = {
   panelPosition: PanelPosition;
   panelCollapsePosition: PanelPosition | null;
   comparingRequestId: string;
+  comparingCountryCodes: string[];
   progressCompleted: number;
   progressTotal: number;
   countrySearch: string;
@@ -77,6 +79,7 @@ const state: CompareState = {
   panelPosition: panelUi.position,
   panelCollapsePosition: panelUi.collapsePosition,
   comparingRequestId: "",
+  comparingCountryCodes: [],
   progressCompleted: 0,
   progressTotal: 0,
   countrySearch: "",
@@ -488,18 +491,21 @@ function render(): void {
     });
   });
   shadow.querySelector('[data-action="country-recommended"]')?.addEventListener("click", () => {
+    if (state.comparing) return;
     state.countryInput = DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES.join(", ");
     state.countrySearch = "";
     state.error = "";
     render();
   });
   shadow.querySelector('[data-action="country-all"]')?.addEventListener("click", () => {
+    if (state.comparing) return;
     state.countryInput = allGoogleFlightsCountryCodes().join(", ");
     state.countrySearch = "";
     state.error = "";
     render();
   });
   shadow.querySelector('[data-action="country-clear"]')?.addEventListener("click", () => {
+    if (state.comparing) return;
     state.countryInput = "";
     state.countrySearch = "";
     state.error = "";
@@ -515,6 +521,7 @@ function render(): void {
 
 function renderCountrySelect(selectedCodes: string[]): string {
   const dropdownOptions = countryDropdownOptions();
+  const disabled = state.comparing ? "disabled" : "";
   return `
     <div class="country-select">
       <div class="country-head">
@@ -522,7 +529,7 @@ function renderCountrySelect(selectedCodes: string[]): string {
         <small>${selectedCodes.length} selected</small>
       </div>
       <div class="country-combo">
-        <input type="search" data-role="country-search" aria-label="Add a country" placeholder="Add a country..." autocomplete="off" spellcheck="false" value="${escapeHtml(state.countrySearch)}">
+        <input type="search" data-role="country-search" aria-label="Add a country" placeholder="Add a country..." autocomplete="off" spellcheck="false" value="${escapeHtml(state.countrySearch)}" ${disabled}>
         <ul class="country-dropdown" data-role="country-dropdown" ${dropdownOptions.length === 0 ? "hidden" : ""}>
           ${renderCountryDropdownRows(dropdownOptions)}
         </ul>
@@ -531,7 +538,7 @@ function renderCountrySelect(selectedCodes: string[]): string {
         ${selectedCodes
           .map(
             (code) => `
-              <button type="button" class="country-chip" data-action="remove-country" data-code="${escapeHtml(code)}" aria-label="Remove ${escapeHtml(countryDisplayName(code))}">
+              <button type="button" class="country-chip" data-action="remove-country" data-code="${escapeHtml(code)}" aria-label="Remove ${escapeHtml(countryDisplayName(code))}" ${disabled}>
                 <span class="flag">${escapeHtml(flagEmoji(code))}</span>${escapeHtml(code)}<span class="x">x</span>
               </button>
             `,
@@ -539,9 +546,9 @@ function renderCountrySelect(selectedCodes: string[]): string {
           .join("")}
       </div>
       <div class="country-toolbar">
-        <button type="button" class="link" data-action="country-recommended">Recommended</button>
-        <button type="button" class="link" data-action="country-all">All useful</button>
-        <button type="button" class="link" data-action="country-clear">Clear</button>
+        <button type="button" class="link" data-action="country-recommended" ${disabled}>Recommended</button>
+        <button type="button" class="link" data-action="country-all" ${disabled}>All useful</button>
+        <button type="button" class="link" data-action="country-clear" ${disabled}>Clear</button>
       </div>
     </div>
   `;
@@ -562,11 +569,12 @@ function countryDropdownOptions(): Array<{ code: string; label: string; searchVa
 }
 
 function renderCountryDropdownRows(countries: Array<{ code: string; label: string }>): string {
+  const disabled = state.comparing ? "disabled" : "";
   return countries
     .map(
       (country, index) => `
         <li>
-          <button type="button" class="${index === 0 ? "active" : ""}" data-action="add-country" data-code="${escapeHtml(country.code)}">
+          <button type="button" class="${index === 0 ? "active" : ""}" data-action="add-country" data-code="${escapeHtml(country.code)}" ${disabled}>
             <span class="flag">${escapeHtml(flagEmoji(country.code))}</span>
             <span>${escapeHtml(country.label)}</span>
             <small>${escapeHtml(country.code)}</small>
@@ -593,6 +601,7 @@ function renderCountryDropdown(dropdown: HTMLElement | null): void {
 }
 
 function addCountrySearchValue(parseAsList: boolean): void {
+  if (state.comparing) return;
   const parsedCodes = parseAsList
     ? filterAvailableGoogleFlightsCountryCodes(parseGoogleFlightsCountryInput(state.countrySearch))
     : [];
@@ -603,6 +612,7 @@ function addCountrySearchValue(parseAsList: boolean): void {
 }
 
 function addGoogleFlightsCountries(countryCodes: string[], refocusSearch: boolean): void {
+  if (state.comparing) return;
   const availableCountryCodes = filterAvailableGoogleFlightsCountryCodes(countryCodes);
   if (availableCountryCodes.length === 0) {
     state.error = "Choose an available Google Flights country.";
@@ -623,6 +633,7 @@ function addGoogleFlightsCountries(countryCodes: string[], refocusSearch: boolea
 }
 
 function removeGoogleFlightsCountry(countryCode: string): void {
+  if (state.comparing) return;
   if (!countryCode) return;
   const nextCountries = selectedGoogleFlightsCountries().filter((code) => code !== countryCode);
   state.countryInput = nextCountries.join(", ");
@@ -1064,11 +1075,6 @@ function countryDisplayName(country: string): string {
   return code;
 }
 
-function flagEmoji(code: string): string {
-  if (!/^[A-Za-z]{2}$/.test(code)) return "";
-  return String.fromCodePoint(...[...code.toUpperCase()].map((character) => 0x1f1e6 + character.charCodeAt(0) - 65));
-}
-
 function urlCountryCode(): string {
   const country = new URL(window.location.href).searchParams.get("gl")?.toUpperCase() || "";
   return /^[A-Z]{2}$/.test(country) ? country : "";
@@ -1137,6 +1143,7 @@ async function compareCountries(): Promise<void> {
   }
   state.countryInput = selectedCountries.join(", ");
   state.comparing = true;
+  state.comparingCountryCodes = selectedCountries;
   state.error = "";
   state.comparingRequestId = `${Date.now()}:${Math.random().toString(36).slice(2)}`;
   state.progressCompleted = 0;
@@ -1171,6 +1178,7 @@ async function compareCountries(): Promise<void> {
     state.error = error instanceof Error ? error.message : "Country comparison failed.";
     state.comparing = false;
     state.comparingRequestId = "";
+    state.comparingCountryCodes = [];
     render();
   }
 }
@@ -1184,7 +1192,8 @@ function applyGoogleFlightsCountryProgress(payload: { requestId?: unknown; resul
     return;
   }
 
-  const selectedCountries = selectedGoogleFlightsCountries();
+  const selectedCountries =
+    state.comparingCountryCodes.length > 0 ? state.comparingCountryCodes : selectedGoogleFlightsCountries();
   state.results = mergeCountryResults(state.results, [payload.result], selectedCountries).results;
   state.resultsCachedAt = 0;
   state.progressCompleted = Math.min(state.progressTotal, state.progressCompleted + 1);
@@ -1202,6 +1211,7 @@ function applyGoogleFlightsCountryComplete(payload: { requestId?: unknown; ok?: 
   state.progressCompleted = state.progressTotal;
   state.comparing = false;
   state.comparingRequestId = "";
+  state.comparingCountryCodes = [];
   render();
 }
 

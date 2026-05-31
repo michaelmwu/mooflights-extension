@@ -130,6 +130,7 @@ void init();
 async function init(): Promise<void> {
   injectPageBridge();
   installChipClearShortcut();
+  installLocationClearButtons();
   window.addEventListener("message", onBridgeMessage);
   state.settings = await safeChromeCall(loadSettings, DEFAULT_SETTINGS);
   state.airportPreview = airportCodes(state.settings.airportHelper).slice(0, 120);
@@ -768,11 +769,19 @@ function installFlightResultObserver(): void {
 
 function installSearchAutoSubmitObserver(): void {
   const observer = new MutationObserver(() => {
-    if (isSearchPage()) scheduleAutoSubmitMatrixSearch();
+    if (!isSearchPage()) return;
+    scheduleAutoSubmitMatrixSearch();
+    scheduleLocationClearButtonInstall();
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
-  window.addEventListener("popstate", scheduleAutoSubmitMatrixSearch);
-  window.addEventListener("hashchange", scheduleAutoSubmitMatrixSearch);
+  window.addEventListener("popstate", scheduleSearchPageWork);
+  window.addEventListener("hashchange", scheduleSearchPageWork);
+}
+
+function scheduleSearchPageWork(): void {
+  if (!isSearchPage()) return;
+  scheduleAutoSubmitMatrixSearch();
+  scheduleLocationClearButtonInstall();
 }
 
 function scheduleAutoCaptureCheck(): void {
@@ -1597,10 +1606,96 @@ function installChipClearShortcut(): void {
     if (event.key !== "F8") return;
     const active = document.activeElement;
     if (!(active instanceof HTMLElement) || !active.classList.contains("mat-mdc-chip-input")) return;
-    const chipGrid = active.closest("mat-chip-grid");
-    const icons = Array.from(chipGrid?.querySelectorAll<HTMLElement>("mat-icon[matchipremove]") || []);
-    for (const icon of icons) icon.click();
+    void clearLocationChipGrid(active.closest("mat-chip-grid"));
   });
+}
+
+function installLocationClearButtons(): void {
+  installLocationClearButtonStyles();
+  scheduleLocationClearButtonInstall();
+}
+
+function scheduleLocationClearButtonInstall(): void {
+  window.requestAnimationFrame(addLocationClearButtons);
+}
+
+function addLocationClearButtons(): void {
+  if (!isSearchPage()) return;
+  document
+    .querySelectorAll<HTMLButtonElement>('button.add-airport, button[aria-label="add location"]')
+    .forEach((nearbyAirportButton) => {
+      const suffix = nearbyAirportButton.closest(".mat-mdc-form-field-icon-suffix");
+      if (!suffix || suffix.querySelector(".mu-travel-location-clear")) return;
+      const clearButton = document.createElement("button");
+      clearButton.type = "button";
+      clearButton.className = "mu-travel-location-clear";
+      clearButton.setAttribute("aria-label", "Clear locations");
+      clearButton.setAttribute("title", "Clear locations");
+      clearButton.tabIndex = -1;
+      clearButton.innerHTML = '<span class="material-icons" aria-hidden="true">backspace</span>';
+      clearButton.addEventListener("mousedown", (event) => event.preventDefault());
+      clearButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        void clearLocationField(nearbyAirportButton);
+      });
+      suffix.insertBefore(clearButton, nearbyAirportButton);
+    });
+}
+
+async function clearLocationField(anchor: HTMLElement): Promise<void> {
+  const formField = anchor.closest("mat-form-field");
+  await clearLocationChipGrid(formField?.querySelector("mat-chip-grid") || null);
+  const input = formField?.querySelector<HTMLInputElement>(".mat-mdc-chip-input");
+  if (input) {
+    input.value = "";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    input.focus();
+  }
+}
+
+async function clearLocationChipGrid(chipGrid: Element | null): Promise<void> {
+  const selector = "mat-icon[matchipremove], mat-icon[matChipRemove], [matchipremove], [matChipRemove]";
+  for (;;) {
+    const removeControl = chipGrid?.querySelector<HTMLElement>(selector);
+    if (!removeControl) return;
+    removeControl.click();
+    await new Promise((resolve) => window.requestAnimationFrame(resolve));
+  }
+}
+
+function installLocationClearButtonStyles(): void {
+  if (document.getElementById("mu-travel-location-clear-styles")) return;
+  const style = document.createElement("style");
+  style.id = "mu-travel-location-clear-styles";
+  style.textContent = `
+    .mu-travel-location-clear {
+      align-items: center;
+      background: transparent;
+      border: 0;
+      border-radius: 999px;
+      color: rgba(0, 0, 0, 0.54);
+      cursor: pointer;
+      display: inline-flex;
+      height: 40px;
+      justify-content: center;
+      margin: 0 2px;
+      min-width: 40px;
+      padding: 0;
+      vertical-align: middle;
+    }
+    .mu-travel-location-clear:hover,
+    .mu-travel-location-clear:focus-visible {
+      background: rgba(0, 0, 0, 0.06);
+      color: rgba(0, 0, 0, 0.72);
+      outline: none;
+    }
+    .mu-travel-location-clear .material-icons {
+      font-size: 22px;
+      line-height: 1;
+    }
+  `;
+  document.head.appendChild(style);
 }
 
 function getShadowRoot(): ShadowRoot | null {
