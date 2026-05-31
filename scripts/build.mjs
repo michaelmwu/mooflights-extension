@@ -78,7 +78,7 @@ async function copyStaticFiles() {
   manifest.web_accessible_resources = [
     {
       matches: ["https://matrix.itasoftware.com/*"],
-      resources: ["content/itaMatrixPageBridge.js"],
+      resources: ["content/itaMatrixPageBridge.js", "assets/extension-icons/icon-32.png"],
     },
     {
       matches: ["https://www.google.com/*", "https://google.com/*"],

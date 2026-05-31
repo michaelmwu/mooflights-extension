@@ -12,6 +12,7 @@ import {
 import { allGoogleFlightsCountryCodes, googleFlightsAvailableCountryOptions } from "../shared/googleFlightsCountries";
 import { mileageCarrierName } from "../shared/mileageCarriers";
 import { loadSettings } from "../shared/storage";
+import { muTravelPanelHeaderStyles, renderMuTravelPanelHeader } from "./panelChrome";
 
 type CompareState = {
   comparing: boolean;
@@ -57,7 +58,6 @@ const GOOGLE_FLIGHTS_HEADER_BUFFER_PX = 12;
 const PANEL_CORNER_SNAP_PX = 96;
 const PANEL_MINIMIZED_ICON_SIZE_PX = 42;
 const STORED_OPTIONS_LIMIT = 24;
-const PANEL_ICON_URL = chrome.runtime.getURL("assets/extension-icons/icon-32.png");
 const COUNTRY_OPTIONS = googleFlightsAvailableCountryOptions();
 let regionDisplayNames: Intl.DisplayNames | null | undefined;
 let countryCodeByDisplayName: Map<string, string> | null | undefined;
@@ -385,16 +385,7 @@ function render(): void {
       ${
         state.panelMinimized
           ? `<button type="button" class="panel-icon" data-action="restore-panel" aria-label="Expand Mu Travel panel">Mu</button>`
-          : `<header data-role="panel-header">
-              <div class="brand">
-                <img src="${escapeHtml(PANEL_ICON_URL)}" alt="" width="32" height="32">
-                <strong>Mu Travel Flights</strong>
-              </div>
-              <div class="header-actions">
-                <button type="button" class="icon-button" data-action="open-options" aria-label="Open options" title="Options">⚙</button>
-                <button type="button" class="icon-button" data-action="minimize-panel" aria-label="Minimize panel" title="Minimize">-</button>
-              </div>
-            </header>
+          : `${renderMuTravelPanelHeader({ optionsAction: "open-options" })}
             ${renderMilesEstimatePrompt(matrixSearch)}
             <div class="section-heading">Compare country pricing</div>
             ${renderCountrySelect(selectedCodes)}
@@ -1245,41 +1236,7 @@ function styles(): string {
       background: transparent;
       box-shadow: none;
     }
-    header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 10px 12px;
-      border-bottom: 1px solid #e2e8f0;
-      cursor: grab;
-      user-select: none;
-    }
-    header:active { cursor: grabbing; }
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      min-width: 0;
-    }
-    .brand img {
-      width: 32px;
-      height: 32px;
-      border-radius: 6px;
-      flex: 0 0 auto;
-    }
-    .brand strong {
-      min-width: 0;
-      font-size: 18px;
-      line-height: 1.2;
-      font-weight: 800;
-    }
-    .header-actions {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      flex: 0 0 auto;
-    }
+    ${muTravelPanelHeaderStyles()}
     .panel-icon {
       display: inline-grid;
       place-items: center;

@@ -23,6 +23,7 @@ import {
 import { ALWAYS_SHOWN_PROVIDER_IDS, rankProviderLinks, summarizeItinerary } from "../shared/providers";
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from "../shared/storage";
 import type { ExtensionSettings, ItinerarySegment, NormalizedItinerary, RankedProviderLink } from "../shared/types";
+import { muTravelPanelHeaderStyles, renderMuTravelPanelHeader } from "./panelChrome";
 
 type PanelEdge = "top" | "right" | "bottom" | "left";
 
@@ -164,13 +165,7 @@ function render(): void {
       ${
         state.panelMinimized
           ? `<button type="button" class="panel-icon" data-action="restore-panel" aria-label="Expand Mu Travel panel">Mu</button>`
-          : `<header data-role="panel-header">
-              <div>
-                <strong>Mu Travel</strong>
-                <span>ITA Matrix companion</span>
-              </div>
-              <button type="button" class="icon-button" data-action="minimize-panel" aria-label="Minimize panel" title="Minimize">-</button>
-            </header>`
+          : renderMuTravelPanelHeader({ optionsAction: "options" })
       }
 
       ${state.panelMinimized ? "" : renderStatusMessage()}
@@ -179,13 +174,6 @@ function render(): void {
       ${!state.panelMinimized && isItineraryPage() ? renderLinksPanel() : ""}
       ${!state.panelMinimized && isSearchPage() ? renderAirportHelper(settings) : ""}
 
-      ${
-        state.panelMinimized
-          ? ""
-          : `<footer>
-              <button type="button" class="link-button" data-action="options">Options</button>
-            </footer>`
-      }
     </section>
   `;
 
@@ -2088,11 +2076,9 @@ function styles(): string {
       background: transparent;
       box-shadow: none;
     }
-    header, footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px; border-bottom: 1px solid #e2e8f0; }
-    header { cursor: grab; user-select: none; }
-    header:active { cursor: grabbing; }
-    footer { border-top: 1px solid #e2e8f0; border-bottom: 0; }
+    ${muTravelPanelHeaderStyles()}
     strong { display: block; font-size: 15px; }
+    .brand strong { font-size: 18px; }
     header span, .muted, small { color: #64748b; }
     button, select, input, textarea { font: inherit; }
     button { border: 1px solid #0f766e; background: #0f766e; color: white; border-radius: 6px; padding: 6px 9px; cursor: pointer; }
