@@ -21,6 +21,77 @@ export const DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES = [
 const DEFAULT_GOOGLE_FLIGHTS_CURRENCY = "USD";
 const GOOGLE_FLIGHTS_BOOKING_PATH_RE = /^\/travel\/flights\/booking/;
 const GOOGLE_FLIGHTS_ITINERARY_PATH = "/travel/flights";
+const GOOGLE_FLIGHTS_CURRENCIES = new Set([
+  "ALL",
+  "AMD",
+  "ARS",
+  "AUD",
+  "AWG",
+  "AZN",
+  "BAM",
+  "BHD",
+  "BMD",
+  "BRL",
+  "BSD",
+  "BYN",
+  "CAD",
+  "CHF",
+  "CLP",
+  "CNY",
+  "COP",
+  "CRC",
+  "CUP",
+  "CZK",
+  "DKK",
+  "DOP",
+  "DZD",
+  "EGP",
+  "EUR",
+  "GBP",
+  "GEL",
+  "HKD",
+  "HUF",
+  "IDR",
+  "ILS",
+  "INR",
+  "IRR",
+  "ISK",
+  "JMD",
+  "JOD",
+  "JPY",
+  "KRW",
+  "KWD",
+  "KZT",
+  "LBP",
+  "MAD",
+  "MDL",
+  "MKD",
+  "MXN",
+  "MYR",
+  "NGN",
+  "NOK",
+  "NZD",
+  "OMR",
+  "PAB",
+  "PEN",
+  "PHP",
+  "PKR",
+  "PLN",
+  "QAR",
+  "RON",
+  "RSD",
+  "RUB",
+  "SAR",
+  "SEK",
+  "SGD",
+  "THB",
+  "TRY",
+  "TWD",
+  "UAH",
+  "USD",
+  "XPF",
+  "ZAR",
+]);
 
 export type GoogleFlightsBookingOption = {
   provider: string;
@@ -147,7 +218,7 @@ export function inferGoogleFlightsCurrency(root: ParentNode): string {
 export function normalizeGoogleFlightsCurrency(value: unknown): string {
   if (typeof value !== "string") return "";
   const currency = value.trim().toUpperCase();
-  return /^[A-Z]{3}$/.test(currency) ? currency : "";
+  return GOOGLE_FLIGHTS_CURRENCIES.has(currency) ? currency : "";
 }
 
 export function parseGoogleFlightsCountryInput(value: string): string[] {
@@ -510,7 +581,7 @@ function parsePriceAmount(value: string): { price: number; currency: string; pri
 }
 
 function currencyCodeFromText(value: string): string {
-  return value.match(/\b[A-Z]{3}\b/)?.[0] || "";
+  return normalizeGoogleFlightsCurrency(value.match(/\b[A-Z]{3}\b/)?.[0]);
 }
 
 function priceLikeTextFromValue(value: string): string {

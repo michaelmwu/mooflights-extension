@@ -178,6 +178,7 @@ describe("Google Flights booking option parser", () => {
   it("infers the visible Google Flights currency from price text", () => {
     document.body.innerHTML = `
       <div>
+        <span role="text">HKG to TPE 3 hr 50 min</span>
         <span aria-label="1,230 Hong Kong dollars" role="text">HK$1,230</span>
       </div>
     `;
@@ -197,6 +198,8 @@ describe("Google Flights booking option parser", () => {
 
   it("normalizes Google Flights currency codes", () => {
     expect(normalizeGoogleFlightsCurrency(" hkd ")).toBe("HKD");
+    expect(normalizeGoogleFlightsCurrency("HKG")).toBe("");
+    expect(normalizeGoogleFlightsCurrency("TPE")).toBe("");
     expect(normalizeGoogleFlightsCurrency("HK")).toBe("");
     expect(normalizeGoogleFlightsCurrency("123")).toBe("");
   });
