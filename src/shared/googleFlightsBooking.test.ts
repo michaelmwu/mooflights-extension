@@ -198,6 +198,8 @@ describe("Google Flights booking option parser", () => {
 
   it("normalizes Google Flights currency codes", () => {
     expect(normalizeGoogleFlightsCurrency(" hkd ")).toBe("HKD");
+    expect(normalizeGoogleFlightsCurrency("AED")).toBe("AED");
+    expect(normalizeGoogleFlightsCurrency("vnd")).toBe("VND");
     expect(normalizeGoogleFlightsCurrency("HKG")).toBe("");
     expect(normalizeGoogleFlightsCurrency("TPE")).toBe("");
     expect(normalizeGoogleFlightsCurrency("HK")).toBe("");
