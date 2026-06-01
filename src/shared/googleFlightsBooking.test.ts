@@ -1,7 +1,10 @@
 import {
   DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES,
   googleFlightsCountryUrl,
+  googleFlightsPanelPageKey,
+  inferGoogleFlightsCurrency,
   normalizeGoogleFlightsCountryCodes,
+  normalizeGoogleFlightsCurrency,
   parseGoogleFlightsBookingOptions,
   parseGoogleFlightsCountryInput,
   parseGoogleFlightsMatrixSearch,
@@ -97,6 +100,70 @@ describe("Google Flights booking option parser", () => {
     const url = googleFlightsCountryUrl("https://www.google.com/travel/flights/booking?tfs=abc&gl=TW", "MY");
 
     expect(url).toBe("https://www.google.com/travel/flights/booking?tfs=abc&gl=MY&curr=USD");
+  });
+
+  it("uses inferred currency when building comparable country URLs without curr", () => {
+    const url = googleFlightsCountryUrl("https://www.google.com/travel/flights/booking?tfs=abc&gl=TW", "MY", "HKD");
+
+    expect(url).toBe("https://www.google.com/travel/flights/booking?tfs=abc&gl=MY&curr=HKD");
+  });
+
+  it("keeps explicit URL currency ahead of inferred currency", () => {
+    const url = googleFlightsCountryUrl(
+      "https://www.google.com/travel/flights/booking?tfs=abc&curr=TWD&gl=TW",
+      "MY",
+      "HKD",
+    );
+
+    expect(url).toBe("https://www.google.com/travel/flights/booking?tfs=abc&curr=TWD&gl=MY");
+  });
+
+  it("recognizes ITA Matrix handoff itinerary pages as Google Flights panel pages", () => {
+    const url =
+      "https://www.google.com/travel/flights?tfs=CDIQAho_EgoyMDI2LTA4LTI3Ih8KA0hLRxIKMjAyNi0wOC0yNxoDVFBFKgJKWDIDMjM2agcIARIDSEtHcgcIARIDVFBFQAFIAZgBAg&source=ita_matrix";
+
+    expect(googleFlightsPanelPageKey(url, "HK", true)).toBe(
+      "/travel/flights?tfs=CDIQAho_EgoyMDI2LTA4LTI3Ih8KA0hLRxIKMjAyNi0wOC0yNxoDVFBFKgJKWDIDMjM2agcIARIDSEtHcgcIARIDVFBFQAFIAZgBAg&curr=USD&gl=HK",
+    );
+    expect(parseGoogleFlightsMatrixSearch(url)).toMatchObject({
+      tripType: "one-way",
+      carriers: ["JX"],
+      slices: [
+        {
+          origin: "HKG",
+          destination: "TPE",
+          departureDate: "2026-08-27",
+          segments: [
+            {
+              carrier: "JX",
+              flightNumber: "236",
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("uses inferred currency in Google Flights panel page keys", () => {
+    const url = "https://www.google.com/travel/flights/booking?tfs=abc&gl=TW";
+
+    expect(googleFlightsPanelPageKey(url, "TW", true, "HKD")).toBe("/travel/flights/booking?tfs=abc&curr=HKD&gl=TW");
+  });
+
+  it("infers the visible Google Flights currency from price text", () => {
+    document.body.innerHTML = `
+      <div>
+        <span aria-label="1,230 Hong Kong dollars" role="text">HK$1,230</span>
+      </div>
+    `;
+
+    expect(inferGoogleFlightsCurrency(document)).toBe("HKD");
+  });
+
+  it("normalizes Google Flights currency codes", () => {
+    expect(normalizeGoogleFlightsCurrency(" hkd ")).toBe("HKD");
+    expect(normalizeGoogleFlightsCurrency("HK")).toBe("");
+    expect(normalizeGoogleFlightsCurrency("123")).toBe("");
   });
 
   it("parses non-USD booking prices while preserving visible price text", () => {

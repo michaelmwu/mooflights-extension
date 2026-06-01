@@ -30,14 +30,15 @@ debugging can work without runtime permission prompts. Production builds do not 
   `muTravelAutoOpen=1`.
 
 `src/content/googleFlightsContent.ts` runs on Google Flights pages so it can survive Google Flights SPA navigation. It
-only injects the visible panel on booking pages. It:
+injects the visible panel on booking pages and on ITA Matrix handoff itinerary pages with `source=ita_matrix`. It:
 
 - Parses visible booking options, prices, and direct-airline markers from the current booking page.
 - Lets the user start an opt-in country price comparison.
 - Builds ITA Matrix `/search?search=...&muTravelAutoSearch=1&muTravelAutoOpen=1` handoff URLs from Google Flights
   booking-page data.
 - Asks the background service worker to open temporary inactive Google Flights tabs with different `gl` country codes
-  while preserving the current itinerary URL and currency.
+  while preserving the current itinerary URL and currency. If the URL omits `curr`, the content script infers the
+  visible currency from Google Flights price text before falling back to USD.
 - Shows the cheapest offer, direct-airline offer, option count, and sparse-result retry status by country.
 
 `src/background/serviceWorker.ts` runs the country checks with bounded concurrency, retries sparse country results once

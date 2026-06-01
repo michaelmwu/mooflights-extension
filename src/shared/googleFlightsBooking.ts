@@ -19,6 +19,8 @@ export const DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES = [
   "ID",
 ];
 const DEFAULT_GOOGLE_FLIGHTS_CURRENCY = "USD";
+const GOOGLE_FLIGHTS_BOOKING_PATH_RE = /^\/travel\/flights\/booking/;
+const GOOGLE_FLIGHTS_ITINERARY_PATH = "/travel/flights";
 
 export type GoogleFlightsBookingOption = {
   provider: string;
@@ -62,11 +64,50 @@ export type GoogleFlightsMatrixSearch = {
   matrixUrl: string;
 };
 
-export function googleFlightsCountryUrl(baseUrl: string, country: string): string {
+export function googleFlightsCountryUrl(
+  baseUrl: string,
+  country: string,
+  currency = DEFAULT_GOOGLE_FLIGHTS_CURRENCY,
+): string {
   const url = new URL(baseUrl);
   url.searchParams.set("gl", country);
-  if (!url.searchParams.has("curr")) url.searchParams.set("curr", DEFAULT_GOOGLE_FLIGHTS_CURRENCY);
+  const normalizedCurrency = normalizeGoogleFlightsCurrency(currency) || DEFAULT_GOOGLE_FLIGHTS_CURRENCY;
+  if (!url.searchParams.has("curr")) url.searchParams.set("curr", normalizedCurrency);
   return url.toString();
+}
+
+export function googleFlightsPanelPageKey(
+  url: string,
+  country: string,
+  includeCountry: boolean,
+  currency = DEFAULT_GOOGLE_FLIGHTS_CURRENCY,
+): string {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return "";
+  }
+  if (!isGoogleFlightsPanelPage(parsedUrl)) return "";
+
+  const params = new URLSearchParams();
+  for (const key of ["tfs", "tfu"]) {
+    const value = parsedUrl.searchParams.get(key);
+    if (value) params.set(key, value);
+  }
+  const normalizedCurrency = normalizeGoogleFlightsCurrency(currency) || DEFAULT_GOOGLE_FLIGHTS_CURRENCY;
+  params.set("curr", parsedUrl.searchParams.get("curr") || normalizedCurrency);
+  if (includeCountry) params.set("gl", country);
+  return `${parsedUrl.pathname}?${params.toString()}`;
+}
+
+function isGoogleFlightsPanelPage(url: URL): boolean {
+  if (GOOGLE_FLIGHTS_BOOKING_PATH_RE.test(url.pathname)) return true;
+  return (
+    url.pathname === GOOGLE_FLIGHTS_ITINERARY_PATH &&
+    url.searchParams.get("source") === "ita_matrix" &&
+    Boolean(url.searchParams.get("tfs"))
+  );
 }
 
 export function normalizeGoogleFlightsCountryCodes(
@@ -85,6 +126,22 @@ export function normalizeGoogleFlightsCountryCodes(
     });
 
   return codes.length > 0 ? codes : [...fallback];
+}
+
+export function inferGoogleFlightsCurrency(root: ParentNode): string {
+  for (const element of Array.from(root.querySelectorAll("[aria-label], [role='text']"))) {
+    const ariaLabel = element.getAttribute("aria-label") || "";
+    const visibleText = normalizedText(element.textContent || "");
+    const price = parsePriceText(ariaLabel, visibleText);
+    if (price?.currency && price.currency !== "UNKNOWN") return price.currency;
+  }
+  return "";
+}
+
+export function normalizeGoogleFlightsCurrency(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const currency = value.trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(currency) ? currency : "";
 }
 
 export function parseGoogleFlightsCountryInput(value: string): string[] {

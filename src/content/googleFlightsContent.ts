@@ -5,6 +5,9 @@ import {
   type GoogleFlightsCountryResult,
   type GoogleFlightsMatrixSearch,
   googleFlightsCountryUrl,
+  googleFlightsPanelPageKey,
+  inferGoogleFlightsCurrency,
+  normalizeGoogleFlightsCurrency,
   parseGoogleFlightsBookingOptions,
   parseGoogleFlightsCountryInput,
   parseGoogleFlightsMatrixSearch,
@@ -48,7 +51,6 @@ type PanelPosition = {
 };
 
 const PANEL_ID = "mu-travel-google-flights-panel";
-const BOOKING_PATH_RE = /^\/travel\/flights\/booking/;
 const RESULT_CACHE_TTL_MS = 10 * 60 * 1000;
 const RESULT_CACHE_STORAGE_KEY = "muTravelGoogleFlightsCountryResults";
 const PANEL_UI_STORAGE_KEY = "muTravelGoogleFlightsPanelUi";
@@ -261,10 +263,6 @@ async function init(): Promise<void> {
   installObserver();
 }
 
-function isBookingPage(): boolean {
-  return BOOKING_PATH_RE.test(window.location.pathname);
-}
-
 function currentCountryCode(): string {
   const country = urlCountryCode();
   if (country) return country;
@@ -279,6 +277,14 @@ function currentComparableCountryCode(): string {
     DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES[0] ||
     "US"
   );
+}
+
+function currentComparableCurrencyCode(): string {
+  return currentVisibleCurrencyCode() || "USD";
+}
+
+function currentVisibleCurrencyCode(): string {
+  return urlCurrencyCode() || inferGoogleFlightsCurrency(document);
 }
 
 function parseCurrentBookingPage(): GoogleFlightsCountryResult {
@@ -375,16 +381,12 @@ function currentComparisonCacheKey(): string {
 }
 
 function currentBookingPageKeyForCountry(includeCountry: boolean): string {
-  if (!isBookingPage()) return "";
-  const url = new URL(window.location.href);
-  const params = new URLSearchParams();
-  for (const key of ["tfs", "tfu"]) {
-    const value = url.searchParams.get(key);
-    if (value) params.set(key, value);
-  }
-  params.set("curr", url.searchParams.get("curr") || "USD");
-  if (includeCountry) params.set("gl", currentComparableCountryCode());
-  return `${url.pathname}?${params.toString()}`;
+  return googleFlightsPanelPageKey(
+    window.location.href,
+    currentComparableCountryCode(),
+    includeCountry,
+    currentComparableCurrencyCode(),
+  );
 }
 
 function render(): void {
@@ -1085,6 +1087,10 @@ function urlCountryCode(): string {
   return /^[A-Z]{2}$/.test(country) ? country : "";
 }
 
+function urlCurrencyCode(): string {
+  return normalizeGoogleFlightsCurrency(new URL(window.location.href).searchParams.get("curr"));
+}
+
 function visibleGoogleFlightsLocation(): string {
   const locationLabel = Array.from(document.querySelectorAll<HTMLElement>(".twocKe"))
     .map((element) => ({
@@ -1153,10 +1159,11 @@ async function compareCountries(): Promise<void> {
   state.comparingRequestId = `${Date.now()}:${Math.random().toString(36).slice(2)}`;
   state.progressCompleted = 0;
   const previousResults = state.results;
-  const currentUrl = new URL(window.location.href);
-  const hasComparableCurrency = currentUrl.searchParams.has("curr");
+  const visibleCurrency = currentVisibleCurrencyCode();
+  const comparableCurrency = currentComparableCurrencyCode();
+  const hasComparableCurrency = Boolean(visibleCurrency);
   const comparePageKey = state.pageKey;
-  const baseUrl = googleFlightsCountryUrl(window.location.href, currentComparableCountryCode());
+  const baseUrl = googleFlightsCountryUrl(window.location.href, currentComparableCountryCode(), comparableCurrency);
   const currentCountry = currentComparableCountryCode();
   state.baseline = hasComparableCurrency ? parseCurrentBookingPage() : null;
   const baseline = state.baseline && selectedCountries.includes(currentCountry) ? state.baseline : null;
