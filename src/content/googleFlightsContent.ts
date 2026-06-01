@@ -1175,10 +1175,11 @@ async function compareCountries(): Promise<void> {
   const hasComparableCurrency = Boolean(visibleCurrency);
   const comparePageKey = state.pageKey;
   const baseUrl = googleFlightsCountryUrl(window.location.href, currentComparableCountryCode(), comparableCurrency);
-  const currentCountry = currentComparableCountryCode();
-  state.baseline = hasComparableCurrency ? parseCurrentBookingPage() : null;
-  const baseline = state.baseline && selectedCountries.includes(currentCountry) ? state.baseline : null;
-  const countries = selectedCountries.filter((country) => !hasComparableCurrency || country !== currentCountry);
+  const baselineCandidate = hasComparableCurrency ? parseCurrentBookingPage() : null;
+  const baseline =
+    baselineCandidate && selectedCountries.includes(baselineCandidate.country) ? baselineCandidate : null;
+  state.baseline = baseline;
+  const countries = selectedCountries.filter((country) => country !== baseline?.country);
   state.progressTotal = countries.length;
   if (baseline) {
     state.results = mergeCountryResults(previousResults, [baseline], selectedCountries).results;
