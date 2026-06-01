@@ -2353,19 +2353,23 @@ function styles(): string {
     .panel-icon {
       display: inline-grid;
       place-items: center;
-      width: 56px;
-      height: 56px;
+      width: 64px;
+      height: 64px;
       padding: 0;
-      overflow: hidden;
+      border: 0;
+      overflow: visible;
       border-radius: 999px;
-      box-shadow: 0 8px 28px rgba(15, 23, 42, 0.24);
+      background: transparent;
+      color: #172033;
+      box-shadow: none;
       font-weight: 750;
       letter-spacing: 0;
     }
     .panel-icon img {
-      width: 48px;
-      height: 48px;
+      width: 64px;
+      height: 64px;
       border-radius: 10px;
+      transform: translate(-3px, -5px);
     }
     .icon-button {
       flex: 0 0 auto;
