@@ -5,6 +5,10 @@ import {
   type GoogleFlightsCountryResult,
   type GoogleFlightsMatrixSearch,
   googleFlightsCountryUrl,
+  googleFlightsPanelPageKey,
+  inferGoogleFlightsCurrency,
+  isGoogleFlightsPanelPageUrl,
+  normalizeGoogleFlightsCurrency,
   parseGoogleFlightsBookingOptions,
   parseGoogleFlightsCountryInput,
   parseGoogleFlightsMatrixSearch,
@@ -18,7 +22,7 @@ import {
 } from "../shared/googleFlightsCountries";
 import { mileageCarrierName } from "../shared/mileageCarriers";
 import { loadSettings } from "../shared/storage";
-import { muTravelPanelHeaderStyles, renderMuTravelPanelHeader } from "./panelChrome";
+import { muTravelPanelHeaderStyles, renderMuTravelMinimizedButton, renderMuTravelPanelHeader } from "./panelChrome";
 
 type CompareState = {
   comparing: boolean;
@@ -48,8 +52,8 @@ type PanelPosition = {
 };
 
 const PANEL_ID = "mu-travel-google-flights-panel";
-const BOOKING_PATH_RE = /^\/travel\/flights\/booking/;
 const RESULT_CACHE_TTL_MS = 10 * 60 * 1000;
+const INFERRED_CURRENCY_CACHE_TTL_MS = 5000;
 const RESULT_CACHE_STORAGE_KEY = "muTravelGoogleFlightsCountryResults";
 const PANEL_UI_STORAGE_KEY = "muTravelGoogleFlightsPanelUi";
 const DEFAULT_PANEL_POSITION: PanelPosition = { edge: "right", ratio: 1 };
@@ -57,12 +61,13 @@ const PANEL_EDGE_OFFSET_PX = 16;
 const GOOGLE_FLIGHTS_HEADER_HEIGHT_PX = 64;
 const GOOGLE_FLIGHTS_HEADER_BUFFER_PX = 12;
 const PANEL_CORNER_SNAP_PX = 96;
-const PANEL_MINIMIZED_ICON_SIZE_PX = 42;
+const PANEL_MINIMIZED_ICON_SIZE_PX = 64;
 const STORED_OPTIONS_LIMIT = 24;
 const COUNTRY_OPTIONS = googleFlightsAvailableCountryOptions();
 let regionDisplayNames: Intl.DisplayNames | null | undefined;
 let countryCodeByDisplayName: Map<string, string> | null | undefined;
 let suppressPanelRestoreClick = false;
+let inferredCurrencyCache: { href: string; currency: string; cachedAt: number } | null = null;
 const panelUi = loadPanelUiState();
 
 const state: CompareState = {
@@ -261,10 +266,6 @@ async function init(): Promise<void> {
   installObserver();
 }
 
-function isBookingPage(): boolean {
-  return BOOKING_PATH_RE.test(window.location.pathname);
-}
-
 function currentCountryCode(): string {
   const country = urlCountryCode();
   if (country) return country;
@@ -281,6 +282,26 @@ function currentComparableCountryCode(): string {
   );
 }
 
+function currentComparableCurrencyCode(): string {
+  return currentVisibleCurrencyCode() || "USD";
+}
+
+function currentVisibleCurrencyCode(): string {
+  const urlCurrency = urlCurrencyCode();
+  if (urlCurrency) return urlCurrency;
+  const now = Date.now();
+  if (
+    inferredCurrencyCache &&
+    inferredCurrencyCache.href === window.location.href &&
+    now - inferredCurrencyCache.cachedAt <= INFERRED_CURRENCY_CACHE_TTL_MS
+  ) {
+    return inferredCurrencyCache.currency;
+  }
+  const currency = inferGoogleFlightsCurrency(document);
+  inferredCurrencyCache = { href: window.location.href, currency, cachedAt: now };
+  return currency;
+}
+
 function parseCurrentBookingPage(): GoogleFlightsCountryResult {
   return parseGoogleFlightsBookingOptions(document, currentCountryCode(), window.location.href);
 }
@@ -295,9 +316,18 @@ function installObserver(): void {
     window.clearTimeout(timer);
     timer = window.setTimeout(scheduleRender, 250);
   };
-  const observer = new MutationObserver(schedule);
+  const observer = new MutationObserver(() => {
+    invalidatePositiveInferredCurrencyCache();
+    schedule();
+  });
   observer.observe(document.documentElement, { childList: true, subtree: true });
   installNavigationObserver(schedule);
+}
+
+function invalidatePositiveInferredCurrencyCache(): void {
+  if (inferredCurrencyCache?.currency) {
+    inferredCurrencyCache = null;
+  }
 }
 
 function installNavigationObserver(schedule: () => void): void {
@@ -375,16 +405,13 @@ function currentComparisonCacheKey(): string {
 }
 
 function currentBookingPageKeyForCountry(includeCountry: boolean): string {
-  if (!isBookingPage()) return "";
-  const url = new URL(window.location.href);
-  const params = new URLSearchParams();
-  for (const key of ["tfs", "tfu"]) {
-    const value = url.searchParams.get(key);
-    if (value) params.set(key, value);
-  }
-  params.set("curr", url.searchParams.get("curr") || "USD");
-  if (includeCountry) params.set("gl", currentComparableCountryCode());
-  return `${url.pathname}?${params.toString()}`;
+  if (!isGoogleFlightsPanelPageUrl(window.location.href)) return "";
+  return googleFlightsPanelPageKey(
+    window.location.href,
+    currentComparableCountryCode(),
+    includeCountry,
+    currentComparableCurrencyCode(),
+  );
 }
 
 function render(): void {
@@ -398,13 +425,12 @@ function render(): void {
     <section class="panel ${state.panelMinimized ? "minimized" : ""}" style="${panelPositionStyle(state.panelPosition)}" aria-label="Mu Travel country price comparison">
       ${
         state.panelMinimized
-          ? `<button type="button" class="panel-icon" data-action="restore-panel" aria-label="Expand Mu Travel panel">Mu</button>`
+          ? renderMuTravelMinimizedButton()
           : `${renderMuTravelPanelHeader({ optionsAction: "open-options" })}
             ${renderMilesEstimatePrompt(matrixSearch)}
             <div class="section-heading">Compare country pricing</div>
             ${renderCountrySelect(selectedCodes)}
             <div class="actions">
-              ${renderMatrixAction(matrixSearch)}
               <button type="button" class="wide" ${state.comparing || selectedCodes.length === 0 ? "disabled" : ""} data-action="compare-countries">
                 ${state.comparing ? "Checking..." : `Compare (${selectedCodes.length})`}
               </button>
@@ -679,19 +705,17 @@ function renderMilesEstimatePrompt(matrixSearch: GoogleFlightsMatrixSearch | nul
   const earningCarriers = matrixSearch.carriers
     .map((carrier) => ({ carrier, name: mileageCarrierName(carrier) }))
     .filter((carrier): carrier is { carrier: string; name: string } => Boolean(carrier.name));
-  if (earningCarriers.length === 0) return "";
   const carrierLabels = earningCarriers.map((carrier) => `${carrier.name} (${carrier.carrier})`).join(", ");
+  const promptText =
+    earningCarriers.length > 0
+      ? ` to see booking classes and mileage earning details for ${escapeHtml(carrierLabels)}.`
+      : " to see booking classes and mileage earning details.";
   return `
     <div class="mileage-prompt">
       <strong>Miles earning</strong>
-      <span><a href="${escapeHtml(matrixSearch.matrixUrl)}" target="_blank" rel="noopener noreferrer" data-action="open-matrix">Search ITA Matrix</a> to see booking classes and mileage earning details for ${escapeHtml(carrierLabels)}.</span>
+      <span><a href="${escapeHtml(matrixSearch.matrixUrl)}" target="_blank" rel="noopener noreferrer" data-action="open-matrix">Search ITA Matrix</a>${promptText}</span>
     </div>
   `;
-}
-
-function renderMatrixAction(matrixSearch: GoogleFlightsMatrixSearch | null): string {
-  if (!matrixSearch) return "";
-  return `<a class="button-link" href="${escapeHtml(matrixSearch.matrixUrl)}" target="_blank" rel="noopener noreferrer">Search ITA Matrix</a>`;
 }
 
 function renderResults(results: GoogleFlightsCountryResult[]): string {
@@ -1085,6 +1109,10 @@ function urlCountryCode(): string {
   return /^[A-Z]{2}$/.test(country) ? country : "";
 }
 
+function urlCurrencyCode(): string {
+  return normalizeGoogleFlightsCurrency(new URL(window.location.href).searchParams.get("curr"));
+}
+
 function visibleGoogleFlightsLocation(): string {
   const locationLabel = Array.from(document.querySelectorAll<HTMLElement>(".twocKe"))
     .map((element) => ({
@@ -1153,14 +1181,16 @@ async function compareCountries(): Promise<void> {
   state.comparingRequestId = `${Date.now()}:${Math.random().toString(36).slice(2)}`;
   state.progressCompleted = 0;
   const previousResults = state.results;
-  const currentUrl = new URL(window.location.href);
-  const hasComparableCurrency = currentUrl.searchParams.has("curr");
+  const visibleCurrency = currentVisibleCurrencyCode();
+  const comparableCurrency = currentComparableCurrencyCode();
+  const hasComparableCurrency = Boolean(visibleCurrency);
   const comparePageKey = state.pageKey;
-  const baseUrl = googleFlightsCountryUrl(window.location.href, currentComparableCountryCode());
-  const currentCountry = currentComparableCountryCode();
-  state.baseline = hasComparableCurrency ? parseCurrentBookingPage() : null;
-  const baseline = state.baseline && selectedCountries.includes(currentCountry) ? state.baseline : null;
-  const countries = selectedCountries.filter((country) => !hasComparableCurrency || country !== currentCountry);
+  const baseUrl = googleFlightsCountryUrl(window.location.href, currentComparableCountryCode(), comparableCurrency);
+  const baselineCandidate = hasComparableCurrency ? parseCurrentBookingPage() : null;
+  const baseline =
+    baselineCandidate && selectedCountries.includes(baselineCandidate.country) ? baselineCandidate : null;
+  state.baseline = baseline;
+  const countries = selectedCountries.filter((country) => country !== baseline?.country);
   state.progressTotal = countries.length;
   if (baseline) {
     state.results = mergeCountryResults(previousResults, [baseline], selectedCountries).results;
@@ -1268,17 +1298,24 @@ function styles(): string {
     .panel-icon {
       display: inline-grid;
       place-items: center;
-      width: 42px;
-      height: 42px;
-      border: 1px solid #0f766e;
+      width: 64px;
+      height: 64px;
+      border: 0;
       border-radius: 999px;
-      background: #0f766e;
-      color: #ffffff;
-      box-shadow: 0 8px 28px rgba(15, 23, 42, 0.24);
+      background: transparent;
+      color: #172033;
+      box-shadow: none;
       font: inherit;
       font-weight: 750;
       letter-spacing: 0;
       cursor: pointer;
+      overflow: visible;
+    }
+    .panel-icon img {
+      width: 64px;
+      height: 64px;
+      border-radius: 10px;
+      transform: translate(-3px, -5px);
     }
     .icon-button {
       flex: 0 0 auto;
@@ -1438,20 +1475,9 @@ function styles(): string {
     }
     .actions {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-columns: minmax(0, 1fr);
       gap: 6px;
       padding: 9px 12px;
-    }
-    .actions .button-link {
-      display: inline-grid;
-      place-items: center;
-      min-height: 32px;
-      border: 1px solid #0f766e;
-      border-radius: 6px;
-      background: #ffffff;
-      color: #0f766e;
-      font-weight: 650;
-      text-decoration: none;
     }
     .actions .wide {
       grid-column: 1 / -1;

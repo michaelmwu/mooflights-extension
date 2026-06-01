@@ -78,13 +78,22 @@ async function copyStaticFiles() {
   manifest.web_accessible_resources = [
     {
       matches: ["https://matrix.itasoftware.com/*"],
-      resources: ["content/itaMatrixPageBridge.js", "assets/extension-icons/icon-32.png"],
+      resources: [
+        "content/itaMatrixPageBridge.js",
+        "assets/extension-icons/icon-32.png",
+        "assets/extension-icons/icon-48.png",
+        "assets/extension-icons/icon-64.png",
+      ],
     },
     {
       // Chrome MV3 web_accessible_resources matches are origin-scoped; path-scoped
       // Google Flights patterns are rejected as invalid match patterns.
       matches: ["https://www.google.com/*", "https://google.com/*"],
-      resources: ["assets/extension-icons/icon-32.png"],
+      resources: [
+        "assets/extension-icons/icon-32.png",
+        "assets/extension-icons/icon-48.png",
+        "assets/extension-icons/icon-64.png",
+      ],
     },
   ];
   await writeFile(resolve(dist, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);

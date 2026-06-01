@@ -19,6 +19,13 @@ export const DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES = [
   "ID",
 ];
 const DEFAULT_GOOGLE_FLIGHTS_CURRENCY = "USD";
+const GOOGLE_FLIGHTS_BOOKING_PATH_RE = /^\/travel\/flights\/booking/;
+const GOOGLE_FLIGHTS_ITINERARY_PATH = "/travel/flights";
+const GOOGLE_FLIGHTS_CURRENCIES = new Set(
+  "AED AFN ALL AMD ANG AOA ARS AUD AWG AZN BAM BBD BDT BGN BHD BIF BMD BND BOB BOV BRL BSD BTN BWP BYN BZD CAD CDF CHE CHF CHW CLF CLP CNY COP COU CRC CUC CUP CVE CZK DJF DKK DOP DZD EGP ERN ETB EUR FJD FKP GBP GEL GHS GIP GMD GNF GTQ GYD HKD HNL HTG HUF IDR ILS INR IQD IRR ISK JMD JOD JPY KES KGS KHR KMF KPW KRW KWD KYD KZT LAK LBP LKR LRD LSL LYD MAD MDL MGA MKD MMK MNT MOP MRU MUR MVR MWK MXN MXV MYR MZN NAD NGN NIO NOK NPR NZD OMR PAB PEN PGK PHP PKR PLN PYG QAR RON RSD RUB RWF SAR SBD SCR SDG SEK SGD SHP SLE SLL SOS SRD SSP STN SVC SYP SZL THB TJS TMT TND TOP TRY TTD TWD TZS UAH UGX USD USN UYI UYU UYW UZS VED VES VND VUV WST XAF XCD XDR XOF XPF XSU XUA YER ZAR ZMW ZWG".split(
+    " ",
+  ),
+);
 
 export type GoogleFlightsBookingOption = {
   provider: string;
@@ -62,11 +69,60 @@ export type GoogleFlightsMatrixSearch = {
   matrixUrl: string;
 };
 
-export function googleFlightsCountryUrl(baseUrl: string, country: string): string {
+export function googleFlightsCountryUrl(
+  baseUrl: string,
+  country: string,
+  currency = DEFAULT_GOOGLE_FLIGHTS_CURRENCY,
+): string {
   const url = new URL(baseUrl);
   url.searchParams.set("gl", country);
-  if (!url.searchParams.has("curr")) url.searchParams.set("curr", DEFAULT_GOOGLE_FLIGHTS_CURRENCY);
+  const fallbackCurrency = normalizeGoogleFlightsCurrency(currency) || DEFAULT_GOOGLE_FLIGHTS_CURRENCY;
+  const urlCurrency = normalizeGoogleFlightsCurrency(url.searchParams.get("curr"));
+  url.searchParams.set("curr", urlCurrency || fallbackCurrency);
   return url.toString();
+}
+
+export function googleFlightsPanelPageKey(
+  url: string,
+  country: string,
+  includeCountry: boolean,
+  currency = DEFAULT_GOOGLE_FLIGHTS_CURRENCY,
+): string {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return "";
+  }
+  if (!isGoogleFlightsPanelPage(parsedUrl)) return "";
+
+  const params = new URLSearchParams();
+  for (const key of ["tfs", "tfu"]) {
+    const value = parsedUrl.searchParams.get(key);
+    if (value) params.set(key, value);
+  }
+  const fallbackCurrency = normalizeGoogleFlightsCurrency(currency) || DEFAULT_GOOGLE_FLIGHTS_CURRENCY;
+  const urlCurrency = normalizeGoogleFlightsCurrency(parsedUrl.searchParams.get("curr"));
+  params.set("curr", urlCurrency || fallbackCurrency);
+  if (includeCountry) params.set("gl", country);
+  return `${parsedUrl.pathname}?${params.toString()}`;
+}
+
+export function isGoogleFlightsPanelPageUrl(url: string): boolean {
+  try {
+    return isGoogleFlightsPanelPage(new URL(url));
+  } catch {
+    return false;
+  }
+}
+
+function isGoogleFlightsPanelPage(url: URL): boolean {
+  if (GOOGLE_FLIGHTS_BOOKING_PATH_RE.test(url.pathname)) return true;
+  return (
+    (url.pathname === GOOGLE_FLIGHTS_ITINERARY_PATH || url.pathname.startsWith(`${GOOGLE_FLIGHTS_ITINERARY_PATH}/`)) &&
+    url.searchParams.get("source") === "ita_matrix" &&
+    Boolean(url.searchParams.get("tfs"))
+  );
 }
 
 export function normalizeGoogleFlightsCountryCodes(
@@ -85,6 +141,25 @@ export function normalizeGoogleFlightsCountryCodes(
     });
 
   return codes.length > 0 ? codes : [...fallback];
+}
+
+export function inferGoogleFlightsCurrency(root: ParentNode): string {
+  for (const element of Array.from(root.querySelectorAll("[aria-label], [role='text']"))) {
+    const ariaLabel = element.getAttribute("aria-label") || "";
+    const visibleText = normalizedText(element.textContent || "");
+    const ariaCurrency = ariaLabel ? inferCurrencyFromPriceText(ariaLabel) : "";
+    if (ariaCurrency) return ariaCurrency;
+
+    const visibleCurrency = visibleText ? inferCurrencyFromPriceText(visibleText) : "";
+    if (visibleCurrency) return visibleCurrency;
+  }
+  return "";
+}
+
+export function normalizeGoogleFlightsCurrency(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const currency = value.trim().toUpperCase();
+  return GOOGLE_FLIGHTS_CURRENCIES.has(currency) ? currency : "";
 }
 
 export function parseGoogleFlightsCountryInput(value: string): string[] {
@@ -447,17 +522,36 @@ function parsePriceAmount(value: string): { price: number; currency: string; pri
 }
 
 function currencyCodeFromText(value: string): string {
-  return value.match(/\b[A-Z]{3}\b/)?.[0] || "";
+  return normalizeGoogleFlightsCurrency(value.match(/\b[A-Z]{3}\b/)?.[0]);
+}
+
+function inferCurrencyFromPriceText(value: string): string {
+  const text = normalizedText(value);
+  if (!/[0-9]/.test(text)) return "";
+  const code = currencyCodeNearAmount(text);
+  if (code) return code;
+  if (unknownDollarCurrencyPrefix(text)) return "";
+  return currencyFromText(text);
+}
+
+function currencyCodeNearAmount(value: string): string {
+  return (
+    normalizeGoogleFlightsCurrency(value.match(/\b([A-Z]{3})\s*[0-9]/)?.[1]) ||
+    normalizeGoogleFlightsCurrency(value.match(/[0-9][0-9.,\s'’]*\s*([A-Z]{3})\b/)?.[1])
+  );
 }
 
 function priceLikeTextFromValue(value: string): string {
   const trimmed = value.trim();
   if (trimmed.length > 40 || !/[0-9]/.test(trimmed)) return "";
   if (currencyCodeFromText(trimmed)) return trimmed;
-  if (/francs?|kron(?:er|a)|pesos?|dollars?|euros?|pounds?|yen|rupees?|won|baht|ringgit|yuan/i.test(trimmed)) {
-    return trimmed;
-  }
+  if (unknownDollarCurrencyPrefix(trimmed)) return trimmed;
+  if (hasCurrencyNameHint(trimmed)) return trimmed;
   return "";
+}
+
+function hasCurrencyNameHint(value: string): boolean {
+  return /francs?|kron(?:er|a)|pesos?|dollars?|euros?|pounds?|yen|rupees?|won|baht|ringgit|yuan/i.test(value);
 }
 
 function priceTextFromValue(value: string): string {
@@ -506,10 +600,15 @@ function parseSingleSeparatorNumber(value: string, separator: "," | "."): number
 function currencyFromText(value: string): string {
   if (/NT\$/i.test(value) || /Taiwan dollars?/i.test(value)) return "TWD";
   if (/HK\$/i.test(value) || /Hong Kong dollars?/i.test(value)) return "HKD";
+  if (/CA\$/i.test(value) || /Canadian dollars?/i.test(value)) return "CAD";
+  if (/AU\$/i.test(value) || /Australian dollars?/i.test(value)) return "AUD";
+  if (/NZ\$/i.test(value) || /New Zealand dollars?/i.test(value)) return "NZD";
+  if (/US\$/i.test(value) || /US dollars?|USD/i.test(value)) return "USD";
   if (/(?:^|[^\p{L}\p{N}])S\$/iu.test(value) || /Singapore dollars?/i.test(value)) return "SGD";
-  if (/C\$/i.test(value) || /Canadian dollars?/i.test(value)) return "CAD";
-  if (/A\$/i.test(value) || /Australian dollars?/i.test(value)) return "AUD";
-  if (/\$|US dollars?|USD/i.test(value)) return "USD";
+  if (/(?:^|[^\p{L}\p{N}])C\$/iu.test(value)) return "CAD";
+  if (/(?:^|[^\p{L}\p{N}])A\$/iu.test(value)) return "AUD";
+  if (unknownDollarCurrencyPrefix(value)) return "";
+  if (/\$/i.test(value)) return "USD";
   if (/€|euros?|EUR/i.test(value)) return "EUR";
   if (/£|pounds?|GBP/i.test(value)) return "GBP";
   if (/¥|￥|Japanese yen|JPY/i.test(value)) return "JPY";
@@ -519,6 +618,10 @@ function currencyFromText(value: string): string {
   if (/yuan|CNY|RMB/i.test(value)) return "CNY";
   if (/₹|rupees?|INR/i.test(value)) return "INR";
   return "";
+}
+
+function unknownDollarCurrencyPrefix(value: string): boolean {
+  return /\b(?!NT|HK|CA|AU|NZ|US)[A-Z]{2,3}\$/i.test(value);
 }
 
 function normalizedText(value: string): string {

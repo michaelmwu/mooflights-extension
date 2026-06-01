@@ -1,7 +1,10 @@
 import {
   DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES,
   googleFlightsCountryUrl,
+  googleFlightsPanelPageKey,
+  inferGoogleFlightsCurrency,
   normalizeGoogleFlightsCountryCodes,
+  normalizeGoogleFlightsCurrency,
   parseGoogleFlightsBookingOptions,
   parseGoogleFlightsCountryInput,
   parseGoogleFlightsMatrixSearch,
@@ -99,6 +102,162 @@ describe("Google Flights booking option parser", () => {
     expect(url).toBe("https://www.google.com/travel/flights/booking?tfs=abc&gl=MY&curr=USD");
   });
 
+  it("uses inferred currency when building comparable country URLs without curr", () => {
+    const url = googleFlightsCountryUrl("https://www.google.com/travel/flights/booking?tfs=abc&gl=TW", "MY", "HKD");
+
+    expect(url).toBe("https://www.google.com/travel/flights/booking?tfs=abc&gl=MY&curr=HKD");
+  });
+
+  it("keeps explicit URL currency ahead of inferred currency", () => {
+    const url = googleFlightsCountryUrl(
+      "https://www.google.com/travel/flights/booking?tfs=abc&curr=TWD&gl=TW",
+      "MY",
+      "HKD",
+    );
+
+    expect(url).toBe("https://www.google.com/travel/flights/booking?tfs=abc&curr=TWD&gl=MY");
+  });
+
+  it("normalizes invalid URL currency before building comparable country URLs", () => {
+    const url = googleFlightsCountryUrl(
+      "https://www.google.com/travel/flights/booking?tfs=abc&curr=&gl=TW",
+      "MY",
+      "hkd",
+    );
+
+    expect(url).toBe("https://www.google.com/travel/flights/booking?tfs=abc&curr=HKD&gl=MY");
+  });
+
+  it("recognizes ITA Matrix handoff itinerary pages as Google Flights panel pages", () => {
+    const url =
+      "https://www.google.com/travel/flights?tfs=CDIQAho_EgoyMDI2LTA4LTI3Ih8KA0hLRxIKMjAyNi0wOC0yNxoDVFBFKgJKWDIDMjM2agcIARIDSEtHcgcIARIDVFBFQAFIAZgBAg&source=ita_matrix";
+
+    expect(googleFlightsPanelPageKey(url, "HK", true)).toBe(
+      "/travel/flights?tfs=CDIQAho_EgoyMDI2LTA4LTI3Ih8KA0hLRxIKMjAyNi0wOC0yNxoDVFBFKgJKWDIDMjM2agcIARIDSEtHcgcIARIDVFBFQAFIAZgBAg&curr=USD&gl=HK",
+    );
+    expect(parseGoogleFlightsMatrixSearch(url)).toMatchObject({
+      tripType: "one-way",
+      carriers: ["JX"],
+      slices: [
+        {
+          origin: "HKG",
+          destination: "TPE",
+          departureDate: "2026-08-27",
+          segments: [
+            {
+              carrier: "JX",
+              flightNumber: "236",
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("recognizes ITA Matrix handoff itinerary pages with trailing path segments", () => {
+    const url =
+      "https://www.google.com/travel/flights/?tfs=CDIQAho_EgoyMDI2LTA4LTI3Ih8KA0hLRxIKMjAyNi0wOC0yNxoDVFBFKgJKWDIDMjM2agcIARIDSEtHcgcIARIDVFBFQAFIAZgBAg&source=ita_matrix&curr=hkd";
+
+    expect(googleFlightsPanelPageKey(url, "HK", true)).toBe(
+      "/travel/flights/?tfs=CDIQAho_EgoyMDI2LTA4LTI3Ih8KA0hLRxIKMjAyNi0wOC0yNxoDVFBFKgJKWDIDMjM2agcIARIDSEtHcgcIARIDVFBFQAFIAZgBAg&curr=HKD&gl=HK",
+    );
+  });
+
+  it("uses inferred currency in Google Flights panel page keys", () => {
+    const url = "https://www.google.com/travel/flights/booking?tfs=abc&gl=TW";
+
+    expect(googleFlightsPanelPageKey(url, "TW", true, "HKD")).toBe("/travel/flights/booking?tfs=abc&curr=HKD&gl=TW");
+  });
+
+  it("normalizes invalid URL currency in Google Flights panel page keys", () => {
+    const url = "https://www.google.com/travel/flights/booking?tfs=abc&curr=&gl=TW";
+
+    expect(googleFlightsPanelPageKey(url, "TW", true, "HKD")).toBe("/travel/flights/booking?tfs=abc&curr=HKD&gl=TW");
+  });
+
+  it("infers the visible Google Flights currency from price text", () => {
+    document.body.innerHTML = `
+      <div>
+        <span role="text">HKG to TPE 3 hr 50 min</span>
+        <span aria-label="1,230 Hong Kong dollars" role="text">HK$1,230</span>
+      </div>
+    `;
+
+    expect(inferGoogleFlightsCurrency(document)).toBe("HKD");
+  });
+
+  it("does not infer currency from route labels with currency-code airport collisions", () => {
+    document.body.innerHTML = `
+      <div>
+        <span role="text">MAD to JFK 8 hr</span>
+        <span role="text">BOB to PPT 5 hr</span>
+        <span role="text">AED 1,230</span>
+      </div>
+    `;
+
+    expect(inferGoogleFlightsCurrency(document)).toBe("AED");
+  });
+
+  it("infers trailing currency codes from price-shaped text", () => {
+    document.body.innerHTML = `
+      <div>
+        <span role="text">1,230 VND</span>
+      </div>
+    `;
+
+    expect(inferGoogleFlightsCurrency(document)).toBe("VND");
+  });
+
+  it("does not infer USD from ambiguous dollar prices with unmapped aria currency names", () => {
+    document.body.innerHTML = `
+      <div>
+        <span aria-label="4,000 Mexican pesos" role="text">MX$4,000</span>
+      </div>
+    `;
+
+    expect(inferGoogleFlightsCurrency(document)).toBe("");
+  });
+
+  it("infers Canadian dollars from CA-prefixed dollar prices", () => {
+    document.body.innerHTML = `
+      <div>
+        <span role="text">CA$1,230</span>
+      </div>
+    `;
+
+    expect(inferGoogleFlightsCurrency(document)).toBe("CAD");
+  });
+
+  it("infers New Zealand dollars from NZ-prefixed dollar prices", () => {
+    document.body.innerHTML = `
+      <div>
+        <span role="text">NZ$1,230</span>
+      </div>
+    `;
+
+    expect(inferGoogleFlightsCurrency(document)).toBe("NZD");
+  });
+
+  it("falls back to visible ISO price text when aria currency names are unmapped", () => {
+    document.body.innerHTML = `
+      <div>
+        <span aria-label="155 Swiss francs" role="text">CHF 155</span>
+      </div>
+    `;
+
+    expect(inferGoogleFlightsCurrency(document)).toBe("CHF");
+  });
+
+  it("normalizes Google Flights currency codes", () => {
+    expect(normalizeGoogleFlightsCurrency(" hkd ")).toBe("HKD");
+    expect(normalizeGoogleFlightsCurrency("AED")).toBe("AED");
+    expect(normalizeGoogleFlightsCurrency("vnd")).toBe("VND");
+    expect(normalizeGoogleFlightsCurrency("HKG")).toBe("");
+    expect(normalizeGoogleFlightsCurrency("TPE")).toBe("");
+    expect(normalizeGoogleFlightsCurrency("HK")).toBe("");
+    expect(normalizeGoogleFlightsCurrency("123")).toBe("");
+  });
+
   it("parses non-USD booking prices while preserving visible price text", () => {
     document.body.innerHTML = `
       <div class="gN1nAc">
@@ -180,6 +339,31 @@ describe("Google Flights booking option parser", () => {
     expect(result.options.map((option) => `${option.provider}:${option.currency}`)).toEqual([
       "Mytrip:USD",
       "Singapore OTA:SGD",
+    ]);
+  });
+
+  it("parses prefixed dollar currencies atomically", () => {
+    document.body.innerHTML = `
+      <div class="gN1nAc">
+        <div class="ogfYpf">Book with Canada OTA</div>
+        <span role="text">CA$1,230</span>
+      </div>
+      <div class="gN1nAc">
+        <div class="ogfYpf">Book with Australia OTA</div>
+        <span role="text">A$1,250</span>
+      </div>
+      <div class="gN1nAc">
+        <div class="ogfYpf">Book with Unknown OTA</div>
+        <span role="text">MX$1,200</span>
+      </div>
+    `;
+
+    const result = parseGoogleFlightsBookingOptions(document, "CA", "https://www.google.com/travel/flights/booking");
+
+    expect(result.options.map((option) => `${option.provider}:${option.currency}`)).toEqual([
+      "Unknown OTA:UNKNOWN",
+      "Canada OTA:CAD",
+      "Australia OTA:AUD",
     ]);
   });
 

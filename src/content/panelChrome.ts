@@ -1,4 +1,5 @@
 const PANEL_ICON_32_PATH = "assets/extension-icons/icon-32.png";
+const PANEL_ICON_64_PATH = "assets/extension-icons/icon-64.png";
 
 type PanelHeaderOptions = {
   optionsAction: string;
@@ -7,6 +8,10 @@ type PanelHeaderOptions = {
 
 export function muTravelPanelIconUrl(): string {
   return chrome.runtime.getURL(PANEL_ICON_32_PATH);
+}
+
+export function muTravelMinimizedIconUrl(): string {
+  return chrome.runtime.getURL(PANEL_ICON_64_PATH);
 }
 
 export function renderMuTravelPanelHeader({
@@ -23,6 +28,12 @@ export function renderMuTravelPanelHeader({
       <button type="button" class="icon-button" data-action="${escapeHtml(minimizeAction)}" aria-label="Minimize panel" title="Minimize">-</button>
     </div>
   </header>`;
+}
+
+export function renderMuTravelMinimizedButton(): string {
+  return `<button type="button" class="panel-icon" data-action="restore-panel" aria-label="Expand Mu Travel panel">
+    <img src="${escapeHtml(muTravelMinimizedIconUrl())}" alt="" width="64" height="64">
+  </button>`;
 }
 
 export function muTravelPanelHeaderStyles(): string {
