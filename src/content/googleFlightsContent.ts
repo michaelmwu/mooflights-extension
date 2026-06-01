@@ -7,6 +7,7 @@ import {
   googleFlightsCountryUrl,
   googleFlightsPanelPageKey,
   inferGoogleFlightsCurrency,
+  isGoogleFlightsPanelPageUrl,
   normalizeGoogleFlightsCurrency,
   parseGoogleFlightsBookingOptions,
   parseGoogleFlightsCountryInput,
@@ -60,7 +61,7 @@ const PANEL_EDGE_OFFSET_PX = 16;
 const GOOGLE_FLIGHTS_HEADER_HEIGHT_PX = 64;
 const GOOGLE_FLIGHTS_HEADER_BUFFER_PX = 12;
 const PANEL_CORNER_SNAP_PX = 96;
-const PANEL_MINIMIZED_ICON_SIZE_PX = 56;
+const PANEL_MINIMIZED_ICON_SIZE_PX = 64;
 const STORED_OPTIONS_LIMIT = 24;
 const COUNTRY_OPTIONS = googleFlightsAvailableCountryOptions();
 let regionDisplayNames: Intl.DisplayNames | null | undefined;
@@ -297,7 +298,7 @@ function currentVisibleCurrencyCode(): string {
     return inferredCurrencyCache.currency;
   }
   const currency = inferGoogleFlightsCurrency(document);
-  inferredCurrencyCache = currency ? { href: window.location.href, currency, cachedAt: now } : null;
+  inferredCurrencyCache = { href: window.location.href, currency, cachedAt: now };
   return currency;
 }
 
@@ -315,9 +316,18 @@ function installObserver(): void {
     window.clearTimeout(timer);
     timer = window.setTimeout(scheduleRender, 250);
   };
-  const observer = new MutationObserver(schedule);
+  const observer = new MutationObserver(() => {
+    invalidatePositiveInferredCurrencyCache();
+    schedule();
+  });
   observer.observe(document.documentElement, { childList: true, subtree: true });
   installNavigationObserver(schedule);
+}
+
+function invalidatePositiveInferredCurrencyCache(): void {
+  if (inferredCurrencyCache?.currency) {
+    inferredCurrencyCache = null;
+  }
 }
 
 function installNavigationObserver(schedule: () => void): void {
@@ -395,6 +405,7 @@ function currentComparisonCacheKey(): string {
 }
 
 function currentBookingPageKeyForCountry(includeCountry: boolean): string {
+  if (!isGoogleFlightsPanelPageUrl(window.location.href)) return "";
   return googleFlightsPanelPageKey(
     window.location.href,
     currentComparableCountryCode(),

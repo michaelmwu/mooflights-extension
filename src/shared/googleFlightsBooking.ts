@@ -108,6 +108,14 @@ export function googleFlightsPanelPageKey(
   return `${parsedUrl.pathname}?${params.toString()}`;
 }
 
+export function isGoogleFlightsPanelPageUrl(url: string): boolean {
+  try {
+    return isGoogleFlightsPanelPage(new URL(url));
+  } catch {
+    return false;
+  }
+}
+
 function isGoogleFlightsPanelPage(url: URL): boolean {
   if (GOOGLE_FLIGHTS_BOOKING_PATH_RE.test(url.pathname)) return true;
   return (
@@ -594,6 +602,7 @@ function currencyFromText(value: string): string {
   if (/HK\$/i.test(value) || /Hong Kong dollars?/i.test(value)) return "HKD";
   if (/CA\$/i.test(value) || /Canadian dollars?/i.test(value)) return "CAD";
   if (/AU\$/i.test(value) || /Australian dollars?/i.test(value)) return "AUD";
+  if (/NZ\$/i.test(value) || /New Zealand dollars?/i.test(value)) return "NZD";
   if (/US\$/i.test(value) || /US dollars?|USD/i.test(value)) return "USD";
   if (/(?:^|[^\p{L}\p{N}])S\$/iu.test(value) || /Singapore dollars?/i.test(value)) return "SGD";
   if (/(?:^|[^\p{L}\p{N}])C\$/iu.test(value)) return "CAD";
@@ -612,7 +621,7 @@ function currencyFromText(value: string): string {
 }
 
 function unknownDollarCurrencyPrefix(value: string): boolean {
-  return /\b(?!NT|HK|CA|AU|US)[A-Z]{2,3}\$/i.test(value);
+  return /\b(?!NT|HK|CA|AU|NZ|US)[A-Z]{2,3}\$/i.test(value);
 }
 
 function normalizedText(value: string): string {

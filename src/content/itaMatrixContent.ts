@@ -88,7 +88,7 @@ const PANEL_UI_STORAGE_KEY = "muTravelPanelUi";
 const DEFAULT_PANEL_POSITION: PanelPosition = { edge: "right", ratio: 1 };
 const PANEL_EDGE_OFFSET_PX = 16;
 const PANEL_CORNER_SNAP_PX = 96;
-const PANEL_MINIMIZED_ICON_SIZE_PX = 56;
+const PANEL_MINIMIZED_ICON_SIZE_PX = 64;
 let mileageProgramsByLengthCache: string[] | undefined;
 let autoCaptureCheckTimer: number | undefined;
 let flightResultAnnotationTimer: number | undefined;

@@ -228,6 +228,16 @@ describe("Google Flights booking option parser", () => {
     expect(inferGoogleFlightsCurrency(document)).toBe("CAD");
   });
 
+  it("infers New Zealand dollars from NZ-prefixed dollar prices", () => {
+    document.body.innerHTML = `
+      <div>
+        <span role="text">NZ$1,230</span>
+      </div>
+    `;
+
+    expect(inferGoogleFlightsCurrency(document)).toBe("NZD");
+  });
+
   it("falls back to visible ISO price text when aria currency names are unmapped", () => {
     document.body.innerHTML = `
       <div>
