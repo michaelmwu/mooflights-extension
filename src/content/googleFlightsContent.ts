@@ -1303,6 +1303,7 @@ function styles(): string {
       width: 48px;
       height: 48px;
       border-radius: 10px;
+      transform: translateY(-4px);
     }
     .icon-button {
       flex: 0 0 auto;
