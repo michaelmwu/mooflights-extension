@@ -297,7 +297,7 @@ function currentVisibleCurrencyCode(): string {
     return inferredCurrencyCache.currency;
   }
   const currency = inferGoogleFlightsCurrency(document);
-  inferredCurrencyCache = { href: window.location.href, currency, cachedAt: now };
+  inferredCurrencyCache = currency ? { href: window.location.href, currency, cachedAt: now } : null;
   return currency;
 }
 

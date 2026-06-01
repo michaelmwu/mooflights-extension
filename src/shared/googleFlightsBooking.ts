@@ -139,12 +139,12 @@ export function inferGoogleFlightsCurrency(root: ParentNode): string {
   for (const element of Array.from(root.querySelectorAll("[aria-label], [role='text']"))) {
     const ariaLabel = element.getAttribute("aria-label") || "";
     const visibleText = normalizedText(element.textContent || "");
-    const ariaPrice = ariaLabel ? parsePriceAmount(normalizedText(ariaLabel)) : null;
-    if (ariaPrice?.currency && ariaPrice.currency !== "UNKNOWN") return ariaPrice.currency;
-    if (ariaPrice?.currency === "UNKNOWN" && hasCurrencyNameHint(ariaLabel)) continue;
+    const ariaCurrency = ariaLabel ? inferCurrencyFromPriceText(ariaLabel) : "";
+    if (ariaCurrency) return ariaCurrency;
+    if (hasCurrencyNameHint(ariaLabel)) continue;
 
-    const visiblePrice = visibleText ? parsePriceAmount(visibleText) : null;
-    if (visiblePrice?.currency && visiblePrice.currency !== "UNKNOWN") return visiblePrice.currency;
+    const visibleCurrency = visibleText ? inferCurrencyFromPriceText(visibleText) : "";
+    if (visibleCurrency) return visibleCurrency;
   }
   return "";
 }
@@ -516,6 +516,22 @@ function parsePriceAmount(value: string): { price: number; currency: string; pri
 
 function currencyCodeFromText(value: string): string {
   return normalizeGoogleFlightsCurrency(value.match(/\b[A-Z]{3}\b/)?.[0]);
+}
+
+function inferCurrencyFromPriceText(value: string): string {
+  const text = normalizedText(value);
+  if (!/[0-9]/.test(text)) return "";
+  const code = currencyCodeNearAmount(text);
+  if (code) return code;
+  if (/[A-Z]{1,3}\$/i.test(text) && !/(?:NT|HK|S|C|A|US)\$/i.test(text)) return "";
+  return currencyFromText(text);
+}
+
+function currencyCodeNearAmount(value: string): string {
+  return (
+    normalizeGoogleFlightsCurrency(value.match(/\b([A-Z]{3})\s*[0-9]/)?.[1]) ||
+    normalizeGoogleFlightsCurrency(value.match(/[0-9][0-9.,\s'’]*\s*([A-Z]{3})\b/)?.[1])
+  );
 }
 
 function priceLikeTextFromValue(value: string): string {

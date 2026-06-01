@@ -186,6 +186,28 @@ describe("Google Flights booking option parser", () => {
     expect(inferGoogleFlightsCurrency(document)).toBe("HKD");
   });
 
+  it("does not infer currency from route labels with currency-code airport collisions", () => {
+    document.body.innerHTML = `
+      <div>
+        <span role="text">MAD to JFK 8 hr</span>
+        <span role="text">BOB to PPT 5 hr</span>
+        <span role="text">AED 1,230</span>
+      </div>
+    `;
+
+    expect(inferGoogleFlightsCurrency(document)).toBe("AED");
+  });
+
+  it("infers trailing currency codes from price-shaped text", () => {
+    document.body.innerHTML = `
+      <div>
+        <span role="text">1,230 VND</span>
+      </div>
+    `;
+
+    expect(inferGoogleFlightsCurrency(document)).toBe("VND");
+  });
+
   it("does not infer USD from ambiguous dollar prices with unmapped aria currency names", () => {
     document.body.innerHTML = `
       <div>
