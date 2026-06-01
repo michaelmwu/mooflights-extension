@@ -218,6 +218,26 @@ describe("Google Flights booking option parser", () => {
     expect(inferGoogleFlightsCurrency(document)).toBe("");
   });
 
+  it("infers Canadian dollars from CA-prefixed dollar prices", () => {
+    document.body.innerHTML = `
+      <div>
+        <span role="text">CA$1,230</span>
+      </div>
+    `;
+
+    expect(inferGoogleFlightsCurrency(document)).toBe("CAD");
+  });
+
+  it("falls back to visible ISO price text when aria currency names are unmapped", () => {
+    document.body.innerHTML = `
+      <div>
+        <span aria-label="155 Swiss francs" role="text">CHF 155</span>
+      </div>
+    `;
+
+    expect(inferGoogleFlightsCurrency(document)).toBe("CHF");
+  });
+
   it("normalizes Google Flights currency codes", () => {
     expect(normalizeGoogleFlightsCurrency(" hkd ")).toBe("HKD");
     expect(normalizeGoogleFlightsCurrency("AED")).toBe("AED");
@@ -309,6 +329,31 @@ describe("Google Flights booking option parser", () => {
     expect(result.options.map((option) => `${option.provider}:${option.currency}`)).toEqual([
       "Mytrip:USD",
       "Singapore OTA:SGD",
+    ]);
+  });
+
+  it("parses prefixed dollar currencies atomically", () => {
+    document.body.innerHTML = `
+      <div class="gN1nAc">
+        <div class="ogfYpf">Book with Canada OTA</div>
+        <span role="text">CA$1,230</span>
+      </div>
+      <div class="gN1nAc">
+        <div class="ogfYpf">Book with Australia OTA</div>
+        <span role="text">A$1,250</span>
+      </div>
+      <div class="gN1nAc">
+        <div class="ogfYpf">Book with Unknown OTA</div>
+        <span role="text">MX$1,200</span>
+      </div>
+    `;
+
+    const result = parseGoogleFlightsBookingOptions(document, "CA", "https://www.google.com/travel/flights/booking");
+
+    expect(result.options.map((option) => `${option.provider}:${option.currency}`)).toEqual([
+      "Unknown OTA:UNKNOWN",
+      "Canada OTA:CAD",
+      "Australia OTA:AUD",
     ]);
   });
 

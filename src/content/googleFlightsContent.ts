@@ -21,7 +21,7 @@ import {
 } from "../shared/googleFlightsCountries";
 import { mileageCarrierName } from "../shared/mileageCarriers";
 import { loadSettings } from "../shared/storage";
-import { muTravelPanelHeaderStyles, renderMuTravelPanelHeader } from "./panelChrome";
+import { muTravelPanelHeaderStyles, renderMuTravelMinimizedButton, renderMuTravelPanelHeader } from "./panelChrome";
 
 type CompareState = {
   comparing: boolean;
@@ -60,7 +60,7 @@ const PANEL_EDGE_OFFSET_PX = 16;
 const GOOGLE_FLIGHTS_HEADER_HEIGHT_PX = 64;
 const GOOGLE_FLIGHTS_HEADER_BUFFER_PX = 12;
 const PANEL_CORNER_SNAP_PX = 96;
-const PANEL_MINIMIZED_ICON_SIZE_PX = 42;
+const PANEL_MINIMIZED_ICON_SIZE_PX = 56;
 const STORED_OPTIONS_LIMIT = 24;
 const COUNTRY_OPTIONS = googleFlightsAvailableCountryOptions();
 let regionDisplayNames: Intl.DisplayNames | null | undefined;
@@ -414,7 +414,7 @@ function render(): void {
     <section class="panel ${state.panelMinimized ? "minimized" : ""}" style="${panelPositionStyle(state.panelPosition)}" aria-label="Mu Travel country price comparison">
       ${
         state.panelMinimized
-          ? `<button type="button" class="panel-icon" data-action="restore-panel" aria-label="Expand Mu Travel panel">Mu</button>`
+          ? renderMuTravelMinimizedButton()
           : `${renderMuTravelPanelHeader({ optionsAction: "open-options" })}
             ${renderMilesEstimatePrompt(matrixSearch)}
             <div class="section-heading">Compare country pricing</div>
@@ -694,12 +694,15 @@ function renderMilesEstimatePrompt(matrixSearch: GoogleFlightsMatrixSearch | nul
   const earningCarriers = matrixSearch.carriers
     .map((carrier) => ({ carrier, name: mileageCarrierName(carrier) }))
     .filter((carrier): carrier is { carrier: string; name: string } => Boolean(carrier.name));
-  if (earningCarriers.length === 0) return "";
   const carrierLabels = earningCarriers.map((carrier) => `${carrier.name} (${carrier.carrier})`).join(", ");
+  const promptText =
+    earningCarriers.length > 0
+      ? ` to see booking classes and mileage earning details for ${escapeHtml(carrierLabels)}.`
+      : " to see booking classes and mileage earning details.";
   return `
     <div class="mileage-prompt">
       <strong>Miles earning</strong>
-      <span><a href="${escapeHtml(matrixSearch.matrixUrl)}" target="_blank" rel="noopener noreferrer" data-action="open-matrix">Search ITA Matrix</a> to see booking classes and mileage earning details for ${escapeHtml(carrierLabels)}.</span>
+      <span><a href="${escapeHtml(matrixSearch.matrixUrl)}" target="_blank" rel="noopener noreferrer" data-action="open-matrix">Search ITA Matrix</a>${promptText}</span>
     </div>
   `;
 }
@@ -1283,8 +1286,8 @@ function styles(): string {
     .panel-icon {
       display: inline-grid;
       place-items: center;
-      width: 42px;
-      height: 42px;
+      width: 56px;
+      height: 56px;
       border: 1px solid #0f766e;
       border-radius: 999px;
       background: #0f766e;
@@ -1294,6 +1297,12 @@ function styles(): string {
       font-weight: 750;
       letter-spacing: 0;
       cursor: pointer;
+      overflow: hidden;
+    }
+    .panel-icon img {
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
     }
     .icon-button {
       flex: 0 0 auto;

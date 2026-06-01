@@ -141,7 +141,6 @@ export function inferGoogleFlightsCurrency(root: ParentNode): string {
     const visibleText = normalizedText(element.textContent || "");
     const ariaCurrency = ariaLabel ? inferCurrencyFromPriceText(ariaLabel) : "";
     if (ariaCurrency) return ariaCurrency;
-    if (hasCurrencyNameHint(ariaLabel)) continue;
 
     const visibleCurrency = visibleText ? inferCurrencyFromPriceText(visibleText) : "";
     if (visibleCurrency) return visibleCurrency;
@@ -523,7 +522,7 @@ function inferCurrencyFromPriceText(value: string): string {
   if (!/[0-9]/.test(text)) return "";
   const code = currencyCodeNearAmount(text);
   if (code) return code;
-  if (/[A-Z]{1,3}\$/i.test(text) && !/(?:NT|HK|S|C|A|US)\$/i.test(text)) return "";
+  if (unknownDollarCurrencyPrefix(text)) return "";
   return currencyFromText(text);
 }
 
@@ -538,6 +537,7 @@ function priceLikeTextFromValue(value: string): string {
   const trimmed = value.trim();
   if (trimmed.length > 40 || !/[0-9]/.test(trimmed)) return "";
   if (currencyCodeFromText(trimmed)) return trimmed;
+  if (unknownDollarCurrencyPrefix(trimmed)) return trimmed;
   if (hasCurrencyNameHint(trimmed)) return trimmed;
   return "";
 }
@@ -592,10 +592,14 @@ function parseSingleSeparatorNumber(value: string, separator: "," | "."): number
 function currencyFromText(value: string): string {
   if (/NT\$/i.test(value) || /Taiwan dollars?/i.test(value)) return "TWD";
   if (/HK\$/i.test(value) || /Hong Kong dollars?/i.test(value)) return "HKD";
+  if (/CA\$/i.test(value) || /Canadian dollars?/i.test(value)) return "CAD";
+  if (/AU\$/i.test(value) || /Australian dollars?/i.test(value)) return "AUD";
+  if (/US\$/i.test(value) || /US dollars?|USD/i.test(value)) return "USD";
   if (/(?:^|[^\p{L}\p{N}])S\$/iu.test(value) || /Singapore dollars?/i.test(value)) return "SGD";
-  if (/C\$/i.test(value) || /Canadian dollars?/i.test(value)) return "CAD";
-  if (/A\$/i.test(value) || /Australian dollars?/i.test(value)) return "AUD";
-  if (/\$|US dollars?|USD/i.test(value)) return "USD";
+  if (/(?:^|[^\p{L}\p{N}])C\$/iu.test(value)) return "CAD";
+  if (/(?:^|[^\p{L}\p{N}])A\$/iu.test(value)) return "AUD";
+  if (unknownDollarCurrencyPrefix(value)) return "";
+  if (/\$/i.test(value)) return "USD";
   if (/€|euros?|EUR/i.test(value)) return "EUR";
   if (/£|pounds?|GBP/i.test(value)) return "GBP";
   if (/¥|￥|Japanese yen|JPY/i.test(value)) return "JPY";
@@ -605,6 +609,10 @@ function currencyFromText(value: string): string {
   if (/yuan|CNY|RMB/i.test(value)) return "CNY";
   if (/₹|rupees?|INR/i.test(value)) return "INR";
   return "";
+}
+
+function unknownDollarCurrencyPrefix(value: string): boolean {
+  return /\b(?!NT|HK|CA|AU|US)[A-Z]{2,3}\$/i.test(value);
 }
 
 function normalizedText(value: string): string {

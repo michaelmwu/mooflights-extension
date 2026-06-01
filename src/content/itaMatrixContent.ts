@@ -22,7 +22,7 @@ import {
 import { ALWAYS_SHOWN_PROVIDER_IDS, rankProviderLinks, summarizeItinerary } from "../shared/providers";
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from "../shared/storage";
 import type { ExtensionSettings, ItinerarySegment, NormalizedItinerary, RankedProviderLink } from "../shared/types";
-import { muTravelPanelHeaderStyles, renderMuTravelPanelHeader } from "./panelChrome";
+import { muTravelPanelHeaderStyles, renderMuTravelMinimizedButton, renderMuTravelPanelHeader } from "./panelChrome";
 
 type PanelEdge = "top" | "right" | "bottom" | "left";
 
@@ -88,7 +88,7 @@ const PANEL_UI_STORAGE_KEY = "muTravelPanelUi";
 const DEFAULT_PANEL_POSITION: PanelPosition = { edge: "right", ratio: 1 };
 const PANEL_EDGE_OFFSET_PX = 16;
 const PANEL_CORNER_SNAP_PX = 96;
-const PANEL_MINIMIZED_ICON_SIZE_PX = 42;
+const PANEL_MINIMIZED_ICON_SIZE_PX = 56;
 let mileageProgramsByLengthCache: string[] | undefined;
 let autoCaptureCheckTimer: number | undefined;
 let flightResultAnnotationTimer: number | undefined;
@@ -167,12 +167,12 @@ function render(): void {
 
   shadow.innerHTML = `
     <style>${styles()}</style>
-    <section class="panel ${state.panelMinimized ? "minimized" : ""}" style="${panelPositionStyle(state.panelPosition)}" aria-label="Mu Travel Flights">
-      ${
-        state.panelMinimized
-          ? `<button type="button" class="panel-icon" data-action="restore-panel" aria-label="Expand Mu Travel panel">Mu</button>`
-          : renderMuTravelPanelHeader({ optionsAction: "options" })
-      }
+      <section class="panel ${state.panelMinimized ? "minimized" : ""}" style="${panelPositionStyle(state.panelPosition)}" aria-label="Mu Travel Flights">
+        ${
+          state.panelMinimized
+            ? renderMuTravelMinimizedButton()
+            : renderMuTravelPanelHeader({ optionsAction: "options" })
+        }
 
       ${state.panelMinimized ? "" : renderStatusMessage()}
 
@@ -2353,13 +2353,19 @@ function styles(): string {
     .panel-icon {
       display: inline-grid;
       place-items: center;
-      width: 42px;
-      height: 42px;
+      width: 56px;
+      height: 56px;
       padding: 0;
+      overflow: hidden;
       border-radius: 999px;
       box-shadow: 0 8px 28px rgba(15, 23, 42, 0.24);
       font-weight: 750;
       letter-spacing: 0;
+    }
+    .panel-icon img {
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
     }
     .icon-button {
       flex: 0 0 auto;
