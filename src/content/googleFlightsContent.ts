@@ -52,6 +52,7 @@ type PanelPosition = {
 
 const PANEL_ID = "mu-travel-google-flights-panel";
 const RESULT_CACHE_TTL_MS = 10 * 60 * 1000;
+const INFERRED_CURRENCY_CACHE_TTL_MS = 5000;
 const RESULT_CACHE_STORAGE_KEY = "muTravelGoogleFlightsCountryResults";
 const PANEL_UI_STORAGE_KEY = "muTravelGoogleFlightsPanelUi";
 const DEFAULT_PANEL_POSITION: PanelPosition = { edge: "right", ratio: 1 };
@@ -65,6 +66,7 @@ const COUNTRY_OPTIONS = googleFlightsAvailableCountryOptions();
 let regionDisplayNames: Intl.DisplayNames | null | undefined;
 let countryCodeByDisplayName: Map<string, string> | null | undefined;
 let suppressPanelRestoreClick = false;
+let inferredCurrencyCache: { href: string; currency: string; cachedAt: number } | null = null;
 const panelUi = loadPanelUiState();
 
 const state: CompareState = {
@@ -284,7 +286,19 @@ function currentComparableCurrencyCode(): string {
 }
 
 function currentVisibleCurrencyCode(): string {
-  return urlCurrencyCode() || inferGoogleFlightsCurrency(document);
+  const urlCurrency = urlCurrencyCode();
+  if (urlCurrency) return urlCurrency;
+  const now = Date.now();
+  if (
+    inferredCurrencyCache &&
+    inferredCurrencyCache.href === window.location.href &&
+    now - inferredCurrencyCache.cachedAt <= INFERRED_CURRENCY_CACHE_TTL_MS
+  ) {
+    return inferredCurrencyCache.currency;
+  }
+  const currency = inferGoogleFlightsCurrency(document);
+  inferredCurrencyCache = { href: window.location.href, currency, cachedAt: now };
+  return currency;
 }
 
 function parseCurrentBookingPage(): GoogleFlightsCountryResult {

@@ -71,8 +71,9 @@ export function googleFlightsCountryUrl(
 ): string {
   const url = new URL(baseUrl);
   url.searchParams.set("gl", country);
-  const normalizedCurrency = normalizeGoogleFlightsCurrency(currency) || DEFAULT_GOOGLE_FLIGHTS_CURRENCY;
-  if (!url.searchParams.has("curr")) url.searchParams.set("curr", normalizedCurrency);
+  const fallbackCurrency = normalizeGoogleFlightsCurrency(currency) || DEFAULT_GOOGLE_FLIGHTS_CURRENCY;
+  const urlCurrency = normalizeGoogleFlightsCurrency(url.searchParams.get("curr"));
+  url.searchParams.set("curr", urlCurrency || fallbackCurrency);
   return url.toString();
 }
 
@@ -95,8 +96,9 @@ export function googleFlightsPanelPageKey(
     const value = parsedUrl.searchParams.get(key);
     if (value) params.set(key, value);
   }
-  const normalizedCurrency = normalizeGoogleFlightsCurrency(currency) || DEFAULT_GOOGLE_FLIGHTS_CURRENCY;
-  params.set("curr", parsedUrl.searchParams.get("curr") || normalizedCurrency);
+  const fallbackCurrency = normalizeGoogleFlightsCurrency(currency) || DEFAULT_GOOGLE_FLIGHTS_CURRENCY;
+  const urlCurrency = normalizeGoogleFlightsCurrency(parsedUrl.searchParams.get("curr"));
+  params.set("curr", urlCurrency || fallbackCurrency);
   if (includeCountry) params.set("gl", country);
   return `${parsedUrl.pathname}?${params.toString()}`;
 }
@@ -104,7 +106,7 @@ export function googleFlightsPanelPageKey(
 function isGoogleFlightsPanelPage(url: URL): boolean {
   if (GOOGLE_FLIGHTS_BOOKING_PATH_RE.test(url.pathname)) return true;
   return (
-    url.pathname === GOOGLE_FLIGHTS_ITINERARY_PATH &&
+    (url.pathname === GOOGLE_FLIGHTS_ITINERARY_PATH || url.pathname.startsWith(`${GOOGLE_FLIGHTS_ITINERARY_PATH}/`)) &&
     url.searchParams.get("source") === "ita_matrix" &&
     Boolean(url.searchParams.get("tfs"))
   );
@@ -132,8 +134,12 @@ export function inferGoogleFlightsCurrency(root: ParentNode): string {
   for (const element of Array.from(root.querySelectorAll("[aria-label], [role='text']"))) {
     const ariaLabel = element.getAttribute("aria-label") || "";
     const visibleText = normalizedText(element.textContent || "");
-    const price = parsePriceText(ariaLabel, visibleText);
-    if (price?.currency && price.currency !== "UNKNOWN") return price.currency;
+    const ariaPrice = ariaLabel ? parsePriceAmount(normalizedText(ariaLabel)) : null;
+    if (ariaPrice?.currency && ariaPrice.currency !== "UNKNOWN") return ariaPrice.currency;
+    if (ariaPrice?.currency === "UNKNOWN" && hasCurrencyNameHint(ariaLabel)) continue;
+
+    const visiblePrice = visibleText ? parsePriceAmount(visibleText) : null;
+    if (visiblePrice?.currency && visiblePrice.currency !== "UNKNOWN") return visiblePrice.currency;
   }
   return "";
 }
@@ -511,10 +517,12 @@ function priceLikeTextFromValue(value: string): string {
   const trimmed = value.trim();
   if (trimmed.length > 40 || !/[0-9]/.test(trimmed)) return "";
   if (currencyCodeFromText(trimmed)) return trimmed;
-  if (/francs?|kron(?:er|a)|pesos?|dollars?|euros?|pounds?|yen|rupees?|won|baht|ringgit|yuan/i.test(trimmed)) {
-    return trimmed;
-  }
+  if (hasCurrencyNameHint(trimmed)) return trimmed;
   return "";
+}
+
+function hasCurrencyNameHint(value: string): boolean {
+  return /francs?|kron(?:er|a)|pesos?|dollars?|euros?|pounds?|yen|rupees?|won|baht|ringgit|yuan/i.test(value);
 }
 
 function priceTextFromValue(value: string): string {

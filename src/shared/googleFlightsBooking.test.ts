@@ -118,6 +118,16 @@ describe("Google Flights booking option parser", () => {
     expect(url).toBe("https://www.google.com/travel/flights/booking?tfs=abc&curr=TWD&gl=MY");
   });
 
+  it("normalizes invalid URL currency before building comparable country URLs", () => {
+    const url = googleFlightsCountryUrl(
+      "https://www.google.com/travel/flights/booking?tfs=abc&curr=&gl=TW",
+      "MY",
+      "hkd",
+    );
+
+    expect(url).toBe("https://www.google.com/travel/flights/booking?tfs=abc&curr=HKD&gl=MY");
+  });
+
   it("recognizes ITA Matrix handoff itinerary pages as Google Flights panel pages", () => {
     const url =
       "https://www.google.com/travel/flights?tfs=CDIQAho_EgoyMDI2LTA4LTI3Ih8KA0hLRxIKMjAyNi0wOC0yNxoDVFBFKgJKWDIDMjM2agcIARIDSEtHcgcIARIDVFBFQAFIAZgBAg&source=ita_matrix";
@@ -144,8 +154,23 @@ describe("Google Flights booking option parser", () => {
     });
   });
 
+  it("recognizes ITA Matrix handoff itinerary pages with trailing path segments", () => {
+    const url =
+      "https://www.google.com/travel/flights/?tfs=CDIQAho_EgoyMDI2LTA4LTI3Ih8KA0hLRxIKMjAyNi0wOC0yNxoDVFBFKgJKWDIDMjM2agcIARIDSEtHcgcIARIDVFBFQAFIAZgBAg&source=ita_matrix&curr=hkd";
+
+    expect(googleFlightsPanelPageKey(url, "HK", true)).toBe(
+      "/travel/flights/?tfs=CDIQAho_EgoyMDI2LTA4LTI3Ih8KA0hLRxIKMjAyNi0wOC0yNxoDVFBFKgJKWDIDMjM2agcIARIDSEtHcgcIARIDVFBFQAFIAZgBAg&curr=HKD&gl=HK",
+    );
+  });
+
   it("uses inferred currency in Google Flights panel page keys", () => {
     const url = "https://www.google.com/travel/flights/booking?tfs=abc&gl=TW";
+
+    expect(googleFlightsPanelPageKey(url, "TW", true, "HKD")).toBe("/travel/flights/booking?tfs=abc&curr=HKD&gl=TW");
+  });
+
+  it("normalizes invalid URL currency in Google Flights panel page keys", () => {
+    const url = "https://www.google.com/travel/flights/booking?tfs=abc&curr=&gl=TW";
 
     expect(googleFlightsPanelPageKey(url, "TW", true, "HKD")).toBe("/travel/flights/booking?tfs=abc&curr=HKD&gl=TW");
   });
@@ -158,6 +183,16 @@ describe("Google Flights booking option parser", () => {
     `;
 
     expect(inferGoogleFlightsCurrency(document)).toBe("HKD");
+  });
+
+  it("does not infer USD from ambiguous dollar prices with unmapped aria currency names", () => {
+    document.body.innerHTML = `
+      <div>
+        <span aria-label="4,000 Mexican pesos" role="text">MX$4,000</span>
+      </div>
+    `;
+
+    expect(inferGoogleFlightsCurrency(document)).toBe("");
   });
 
   it("normalizes Google Flights currency codes", () => {
