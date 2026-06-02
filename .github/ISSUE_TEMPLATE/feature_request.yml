@@ -1,0 +1,34 @@
+name: Feature Request
+description: Propose a new capability or workflow.
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user problem should this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution
+      description: What should change?
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Extension Constraints
+      description: Note any offline-first, privacy, browser permission, or backend-boundary considerations.
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Links, screenshots, examples, constraints, or non-goals.
+    validations:
+      required: false
