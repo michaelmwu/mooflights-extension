@@ -26,3 +26,5 @@ Exceptions for urgent security fixes should be documented in the PR.
 ## GitHub Actions
 
 Workflows should use least-privilege permissions, frozen installs, and pinned third-party actions where practical. Extension release workflows must not require backend secrets.
+
+Dependency Review is available only when GitHub's Dependency graph is enabled for the repository. Set the repository variable `ENABLE_DEPENDENCY_REVIEW=true` after enabling that setting.

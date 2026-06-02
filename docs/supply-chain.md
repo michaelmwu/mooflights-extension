@@ -33,6 +33,8 @@ bun run build
 
 Dependabot is configured for weekly Bun and GitHub Actions updates with a 7-day cooldown. Keep dependency PRs small enough that extension behavior and permissions can be reviewed clearly.
 
+GitHub Dependency Review is opt-in through the repository variable `ENABLE_DEPENDENCY_REVIEW=true` because the action requires GitHub's Dependency graph to be enabled in repository settings.
+
 ## Extension Boundary
 
 Dependency changes must preserve the offline-first extension boundary:
