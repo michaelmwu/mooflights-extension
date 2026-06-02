@@ -12,11 +12,18 @@ Thanks for contributing to Mu Travel Flights.
 ## Before Opening A PR
 
 ```sh
+bun install --frozen-lockfile
 bun run check
 bun run typecheck
 bun run test
 bun run build
 ```
+
+## Dependency Hygiene
+
+- Keep `bun.lock` committed and use frozen installs in CI.
+- Keep the 7-day Bun dependency cooldown in `bunfig.toml` unless an urgent security fix needs a documented exception.
+- Review extension permission, privacy, and offline-first impact when adding dependencies.
 
 ## Licensing
 

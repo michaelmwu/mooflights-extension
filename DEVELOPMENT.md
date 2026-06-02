@@ -3,7 +3,7 @@
 ## Setup
 
 ```sh
-bun install
+bun install --frozen-lockfile
 ```
 
 ## Build And Load

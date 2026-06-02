@@ -29,7 +29,7 @@ On ITA Matrix itinerary pages, the extension estimates mileage earning from the 
 For manual Chrome installation, check the [latest release](../../releases/latest) and download the packaged extension.
 
 ```sh
-bun install
+bun install --frozen-lockfile
 bun run build
 ```
 
@@ -60,7 +60,9 @@ bun run release:package:next-minor
 - [Architecture](./ARCHITECTURE.md)
 - [Contributing](./CONTRIBUTING.md)
 - [Privacy policy](./PRIVACY.md)
+- [Security policy](./SECURITY.md)
 - [Backend contract](./docs/backend-contract.md)
 - [Data imports](./docs/data-imports.md)
 - [Extension runtime](./docs/extension-runtime.md)
+- [Dependency supply chain](./docs/supply-chain.md)
 - [Deferred issues](./docs/deferred-issues.md)

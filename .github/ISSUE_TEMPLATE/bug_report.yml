@@ -1,0 +1,46 @@
+name: Bug Report
+description: Report a reproducible extension problem.
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps To Reproduce
+      description: Include the smallest reliable reproduction you have.
+      placeholder: |
+        1. Build/load the extension from ...
+        2. Open ITA Matrix or Google Flights at ...
+        3. See ...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, browser/version, extension version or commit SHA, and relevant page URL.
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs Or Screenshots
+      description: Paste short console logs or attach screenshots. Do not include secrets, account data, or full itineraries with private passenger details.
+      render: text
+    validations:
+      required: false
