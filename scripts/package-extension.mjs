@@ -1,20 +1,21 @@
 import { execFile } from "node:child_process";
-import { mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const root = process.cwd();
 const artifacts = resolve(root, "artifacts");
-const zipPath = resolve(artifacts, "mu-travel-flights.zip");
-const crxPath = resolve(artifacts, "mu-travel-flights.crx");
+const packageVersion = await extensionVersion();
+const artifactBaseName = `mu-travel-flights-${packageVersion}`;
+const zipPath = resolve(artifacts, `${artifactBaseName}.zip`);
+const crxPath = resolve(artifacts, `${artifactBaseName}.crx`);
 const generatedCrxPath = resolve(root, "dist.crx");
 const generatedPemPath = resolve(root, "dist.pem");
 const providedCrxKeyPath = process.env.MU_TRAVEL_CRX_KEY_PATH ? resolve(process.env.MU_TRAVEL_CRX_KEY_PATH) : "";
 
 await mkdir(artifacts, { recursive: true });
-await rm(zipPath, { force: true });
-await rm(crxPath, { force: true });
+await removeExistingPackageArtifacts();
 await rm(generatedCrxPath, { force: true });
 if (!isProvidedCrxKeyPath(generatedPemPath)) await rm(generatedPemPath, { force: true });
 try {
@@ -49,6 +50,22 @@ try {
   if (keyPath?.temporary) await rm(keyPath.path, { force: true });
   await rm(generatedCrxPath, { force: true });
   if (!isProvidedCrxKeyPath(generatedPemPath)) await rm(generatedPemPath, { force: true });
+}
+
+async function extensionVersion() {
+  const packageJson = JSON.parse(await readFile(resolve(root, "package.json"), "utf8"));
+  const version = String(packageJson.version || "").trim();
+  if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`Invalid package.json version "${version}".`);
+  return version;
+}
+
+async function removeExistingPackageArtifacts() {
+  const entries = await readdir(artifacts);
+  await Promise.all(
+    entries
+      .filter((entry) => /^mu-travel-flights(?:-\d+\.\d+\.\d+)?\.(zip|crx)$/.test(entry))
+      .map((entry) => rm(resolve(artifacts, entry), { force: true })),
+  );
 }
 
 function isProvidedCrxKeyPath(path) {

@@ -93,8 +93,8 @@ jobs:
         with:
           name: mu-travel-flights-extension
           path: |
-            artifacts/mu-travel-flights.zip
-            artifacts/mu-travel-flights.crx
+            artifacts/mu-travel-flights-*.zip
+            artifacts/mu-travel-flights-*.crx
           if-no-files-found: error
 
       - name: Attach package to GitHub release
@@ -126,14 +126,14 @@ jobs:
               edit_args+=(--prerelease=false)
             fi
             gh release edit "${edit_args[@]}"
-            gh release upload "${RELEASE_TAG}" artifacts/mu-travel-flights.zip artifacts/mu-travel-flights.crx \
+            gh release upload "${RELEASE_TAG}" artifacts/mu-travel-flights-*.zip artifacts/mu-travel-flights-*.crx \
               --repo "${GITHUB_REPOSITORY}" \
               --clobber
           else
             args=(
               "${RELEASE_TAG}"
-              artifacts/mu-travel-flights.zip
-              artifacts/mu-travel-flights.crx
+              artifacts/mu-travel-flights-*.zip
+              artifacts/mu-travel-flights-*.crx
               --repo "${GITHUB_REPOSITORY}"
               --title "${RELEASE_TAG}"
               --notes "${release_notes}"

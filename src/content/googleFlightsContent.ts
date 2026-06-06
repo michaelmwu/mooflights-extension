@@ -542,7 +542,13 @@ function render(): void {
     const anchor = event.currentTarget;
     if (!(anchor instanceof HTMLAnchorElement)) return;
     event.preventDefault();
-    void openMatrixWithAutoOpen(anchor.href);
+    const openedWindow = window.open(anchor.href, "_blank");
+    try {
+      if (openedWindow) openedWindow.opener = null;
+    } catch {
+      // The Matrix tab is already open; opener cleanup is a defense-in-depth enhancement.
+    }
+    void openMatrixWithAutoOpen(anchor.href, Boolean(openedWindow));
   });
   shadow.querySelector('[data-action="open-options"]')?.addEventListener("click", () => {
     sendRuntimeMessage({ command: "openOptionsPage" });
@@ -724,14 +730,14 @@ function renderMilesEstimatePrompt(matrixSearch: GoogleFlightsMatrixSearch | nul
   `;
 }
 
-async function openMatrixWithAutoOpen(matrixUrl: string): Promise<void> {
+async function openMatrixWithAutoOpen(matrixUrl: string, openedByPage = false): Promise<void> {
   const openedByBackground = await safeChromeCall(async () => {
-    const response = await chrome.runtime.sendMessage({ command: "openMatrixWithAutoOpen", matrixUrl });
+    const response = await chrome.runtime.sendMessage({ command: "openMatrixWithAutoOpen", matrixUrl, openedByPage });
     return Boolean(response?.ok);
   }, false);
-  if (openedByBackground) return;
+  if (openedByBackground || openedByPage) return;
 
-  window.open(matrixUrl, "_blank", "noopener,noreferrer");
+  window.location.assign(matrixUrl);
 }
 
 function renderResults(results: GoogleFlightsCountryResult[]): string {

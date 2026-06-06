@@ -109,6 +109,7 @@ let autoOpenClickedPrimaryResult = false;
 let autoOpenPrimaryResultRow: HTMLElement | null = null;
 let tabScopedAutoOpenUntil = 0;
 let tabScopedAutoOpenCheckStartedAt = 0;
+let tabScopedAutoOpenCheckLocationKey = "";
 let suppressPanelRestoreClick = false;
 const panelUi = loadPanelUiState();
 
@@ -851,6 +852,11 @@ function scheduleFlightResultsWork(): void {
 
 function scheduleTabScopedAutoOpenAuthorizationCheck(): void {
   if (!isFlightsPage() || tabScopedAutoOpenRequest()) return;
+  const locationKey = currentLocationKey();
+  if (tabScopedAutoOpenCheckLocationKey !== locationKey) {
+    tabScopedAutoOpenCheckLocationKey = locationKey;
+    tabScopedAutoOpenCheckStartedAt = 0;
+  }
   if (!tabScopedAutoOpenCheckStartedAt) tabScopedAutoOpenCheckStartedAt = Date.now();
   if (Date.now() - tabScopedAutoOpenCheckStartedAt > TAB_AUTO_OPEN_CHECK_TIMEOUT_MS) return;
   if (tabAutoOpenCheckTimer) window.clearTimeout(tabAutoOpenCheckTimer);
@@ -1167,6 +1173,8 @@ function forgetAutoOpenRequest(): void {
     // Session storage is optional.
   }
   tabScopedAutoOpenUntil = 0;
+  tabScopedAutoOpenCheckStartedAt = 0;
+  tabScopedAutoOpenCheckLocationKey = "";
   if (tabAutoOpenCheckTimer) {
     window.clearTimeout(tabAutoOpenCheckTimer);
     tabAutoOpenCheckTimer = undefined;
@@ -1213,10 +1221,20 @@ function normalizeAutoOpenSearchToken(value: string): string {
     delete normalizedPayload.muTravelAutoOpen;
     delete normalizedPayload.muTravelAutoSearch;
     delete normalizedPayload.solution;
-    return JSON.stringify(normalizedPayload);
+    return JSON.stringify(canonicalJsonValue(normalizedPayload));
   } catch {
     return "";
   }
+}
+
+function canonicalJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalJsonValue);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => [key, canonicalJsonValue(entry)]),
+  );
 }
 
 function matrixSearchPayloadFlag(key: "muTravelAutoOpen" | "muTravelAutoSearch"): boolean {

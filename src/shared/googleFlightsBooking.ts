@@ -295,18 +295,39 @@ function parseGoogleFlightsTfsCabin(tfs: string): GoogleFlightsMatrixCabin {
 }
 
 function cabinFromGoogleFlightsTfsField(value: string, fieldNumber: number): GoogleFlightsMatrixCabin | "" {
-  for (let index = 0; index < value.length - 1; index += 1) {
+  return cabinFromProtobufMessage(value, fieldNumber, 0, value.length, 0);
+}
+
+function cabinFromProtobufMessage(
+  value: string,
+  fieldNumber: number,
+  startIndex: number,
+  endIndex: number,
+  depth: number,
+): GoogleFlightsMatrixCabin | "" {
+  for (let index = startIndex; index < endIndex; ) {
     const tag = readProtobufTag(value, index);
-    if (!tag) continue;
-    if (tag.fieldNumber !== fieldNumber || tag.wireType !== 0) {
-      index = tag.nextIndex - 1;
+    if (!tag || tag.nextIndex > endIndex) return "";
+    if (tag.fieldNumber === fieldNumber && tag.wireType === 0) {
+      const cabin = readVarint(value, tag.nextIndex);
+      if (!cabin || cabin.nextIndex > endIndex) return "";
+      const mapped = googleFlightsCabinValue(cabin.value);
+      if (mapped) return mapped;
+      index = cabin.nextIndex;
       continue;
     }
-    const cabin = readVarint(value, tag.nextIndex);
-    if (!cabin) continue;
-    const mapped = googleFlightsCabinValue(cabin.value);
-    if (mapped) return mapped;
-    index = cabin.nextIndex - 1;
+    if (tag.wireType === 2 && depth < 6) {
+      const length = readVarint(value, tag.nextIndex);
+      const nestedStart = length?.nextIndex || 0;
+      const nestedEnd = nestedStart + (length?.value || 0);
+      if (length && nestedStart <= endIndex && nestedEnd <= endIndex) {
+        const nestedCabin = cabinFromProtobufMessage(value, fieldNumber, nestedStart, nestedEnd, depth + 1);
+        if (nestedCabin) return nestedCabin;
+      }
+    }
+    const nextIndex = skipProtobufField(value, tag, endIndex);
+    if (nextIndex <= index) return "";
+    index = nextIndex;
   }
   return "";
 }
@@ -322,6 +343,36 @@ function readProtobufTag(
     wireType: tag.value & 7,
     nextIndex: tag.nextIndex,
   };
+}
+
+function skipProtobufField(
+  value: string,
+  tag: { fieldNumber: number; wireType: number; nextIndex: number },
+  endIndex = value.length,
+): number {
+  if (tag.wireType === 0) return readVarint(value, tag.nextIndex)?.nextIndex || tag.nextIndex;
+  if (tag.wireType === 1) return Math.min(endIndex, tag.nextIndex + 8);
+  if (tag.wireType === 2) {
+    const length = readVarint(value, tag.nextIndex);
+    if (!length) return tag.nextIndex;
+    return Math.min(endIndex, length.nextIndex + length.value);
+  }
+  if (tag.wireType === 3) return skipProtobufGroup(value, tag.fieldNumber, tag.nextIndex, endIndex);
+  if (tag.wireType === 4) return tag.nextIndex;
+  if (tag.wireType === 5) return Math.min(endIndex, tag.nextIndex + 4);
+  return tag.nextIndex;
+}
+
+function skipProtobufGroup(value: string, fieldNumber: number, startIndex: number, endIndex: number): number {
+  let index = startIndex;
+  while (index < endIndex) {
+    const tag = readProtobufTag(value, index);
+    if (!tag) return index + 1;
+    if (tag.wireType === 4 && tag.fieldNumber === fieldNumber) return tag.nextIndex;
+    const nextIndex = skipProtobufField(value, tag, endIndex);
+    index = nextIndex > index ? nextIndex : index + 1;
+  }
+  return index;
 }
 
 function googleFlightsCabinValue(value: number): GoogleFlightsMatrixCabin | "" {

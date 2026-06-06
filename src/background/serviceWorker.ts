@@ -7,6 +7,7 @@ type RuntimeMessage = {
   countries?: string[];
   baselineOptionCount?: number;
   matrixUrl?: string;
+  openedByPage?: boolean;
   requestId?: string;
 };
 
@@ -34,7 +35,7 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
   }
 
   if (payload.command === "openMatrixWithAutoOpen") {
-    void openMatrixWithAutoOpen(payload.matrixUrl || "")
+    void openMatrixWithAutoOpen(payload.matrixUrl || "", payload.openedByPage === true, sender.tab?.windowId)
       .then(() => sendResponse({ ok: true }))
       .catch((error) => {
         sendResponse({ ok: false, error: error instanceof Error ? error.message : "Could not open ITA Matrix." });
@@ -93,12 +94,31 @@ async function compareGoogleFlightsCountries(payload: RuntimeMessage, progressTa
   sendGoogleFlightsCountryComplete(progressTabId, payload.requestId, { ok: true });
 }
 
-async function openMatrixWithAutoOpen(matrixUrl: string): Promise<void> {
+async function openMatrixWithAutoOpen(matrixUrl: string, openedByPage = false, sourceWindowId?: number): Promise<void> {
   const url = validatedMatrixUrl(matrixUrl);
   await chrome.storage.local.remove(LEGACY_MATRIX_AUTO_OPEN_UNTIL_STORAGE_KEY);
+  if (openedByPage) {
+    const tab = await findPageOpenedMatrixTab(url, sourceWindowId);
+    if (typeof tab?.id === "number") await rememberMatrixAutoOpenTab(tab.id);
+    return;
+  }
   const tab = await createActiveTab(url);
   if (typeof tab.id !== "number") throw new Error("Chrome did not provide a tab id.");
   await rememberMatrixAutoOpenTab(tab.id);
+}
+
+async function findPageOpenedMatrixTab(matrixUrl: string, sourceWindowId?: number): Promise<chrome.tabs.Tab | null> {
+  const deadline = Date.now() + 1500;
+  while (Date.now() < deadline) {
+    const tabs = await queryTabs({
+      active: true,
+      ...(typeof sourceWindowId === "number" ? { windowId: sourceWindowId } : { lastFocusedWindow: true }),
+    });
+    const tab = tabs.find((candidate) => tabMatchesMatrixUrl(candidate, matrixUrl));
+    if (tab) return tab;
+    await delay(100);
+  }
+  return null;
 }
 
 async function rememberMatrixAutoOpenTab(tabId: number): Promise<void> {
@@ -141,6 +161,21 @@ function autoOpenTabMap(value: unknown): Record<string, number> {
 function pruneAutoOpenTabMap(tabs: Record<string, number>, now = Date.now()): void {
   for (const [tabId, expiresAt] of Object.entries(tabs)) {
     if (!tabId || expiresAt < now) delete tabs[tabId];
+  }
+}
+
+function tabMatchesMatrixUrl(tab: chrome.tabs.Tab, matrixUrl: string): boolean {
+  const value = tab.pendingUrl || tab.url || "";
+  try {
+    const tabUrl = new URL(value);
+    const targetUrl = new URL(matrixUrl);
+    return (
+      tabUrl.protocol === targetUrl.protocol &&
+      tabUrl.hostname === targetUrl.hostname &&
+      tabUrl.pathname === targetUrl.pathname
+    );
+  } catch {
+    return false;
   }
 }
 
@@ -349,6 +384,19 @@ function createActiveTab(url: string): Promise<chrome.tabs.Tab> {
         return;
       }
       resolve(tab);
+    });
+  });
+}
+
+function queryTabs(queryInfo: chrome.tabs.QueryInfo): Promise<chrome.tabs.Tab[]> {
+  return new Promise((resolve, reject) => {
+    chrome.tabs.query(queryInfo, (tabs) => {
+      const error = chrome.runtime.lastError;
+      if (error) {
+        reject(new Error(error.message));
+        return;
+      }
+      resolve(tabs);
     });
   });
 }
