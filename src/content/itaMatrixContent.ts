@@ -1213,7 +1213,7 @@ function normalizeAutoOpenSearchToken(value: string): string {
     delete normalizedPayload.muTravelAutoOpen;
     delete normalizedPayload.muTravelAutoSearch;
     delete normalizedPayload.solution;
-    return JSON.stringify(payload);
+    return JSON.stringify(normalizedPayload);
   } catch {
     return "";
   }

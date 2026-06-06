@@ -303,7 +303,7 @@ function cabinFromGoogleFlightsTfsField(value: string, fieldNumber: number): Goo
       continue;
     }
     const cabin = readVarint(value, tag.nextIndex);
-    if (!cabin) return "";
+    if (!cabin) continue;
     const mapped = googleFlightsCabinValue(cabin.value);
     if (mapped) return mapped;
     index = cabin.nextIndex - 1;
