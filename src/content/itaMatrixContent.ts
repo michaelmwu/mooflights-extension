@@ -83,7 +83,10 @@ const AUTO_SEARCH_TIMEOUT_MS = 15_000;
 const AUTO_OPEN_DEBOUNCE_MS = 300;
 const AUTO_OPEN_TIMEOUT_MS = 15_000;
 const AUTO_OPEN_REMEMBER_MS = 5 * 60 * 1000;
+const TAB_AUTO_OPEN_CHECK_DEBOUNCE_MS = 250;
+const TAB_AUTO_OPEN_CHECK_TIMEOUT_MS = 10_000;
 const AUTO_OPEN_STORAGE_KEY = "muTravelMatrixAutoOpen";
+const FLIGHT_RESULT_ROW_SELECTOR = "tr[mat-row].mat-mdc-row:not(.detail-row), tr[mat-row]:not(.detail-row)";
 const PANEL_UI_STORAGE_KEY = "muTravelPanelUi";
 const DEFAULT_PANEL_POSITION: PanelPosition = { edge: "right", ratio: 1 };
 const PANEL_EDGE_OFFSET_PX = 16;
@@ -94,6 +97,7 @@ let autoCaptureCheckTimer: number | undefined;
 let flightResultAnnotationTimer: number | undefined;
 let autoSearchTimer: number | undefined;
 let autoOpenTimer: number | undefined;
+let tabAutoOpenCheckTimer: number | undefined;
 let locationClearButtonInstallFrame: number | undefined;
 let autoSearchStartedAt = 0;
 let autoSearchDone = false;
@@ -102,7 +106,10 @@ let autoOpenStartedAt = 0;
 let autoOpenDone = false;
 let autoOpenLocationKey = "";
 let autoOpenClickedPrimaryResult = false;
-let autoOpenPrimaryResultRow: HTMLTableRowElement | null = null;
+let autoOpenPrimaryResultRow: HTMLElement | null = null;
+let tabScopedAutoOpenUntil = 0;
+let tabScopedAutoOpenCheckStartedAt = 0;
+let tabScopedAutoOpenCheckLocationKey = "";
 let suppressPanelRestoreClick = false;
 const panelUi = loadPanelUiState();
 
@@ -151,6 +158,7 @@ async function init(): Promise<void> {
   maybeAutoCapture();
   annotateFlightResultsSoon();
   scheduleAutoSubmitMatrixSearch();
+  scheduleTabScopedAutoOpenAuthorizationCheck();
   scheduleAutoOpenMatrixResult();
 }
 
@@ -785,6 +793,7 @@ function installAutoCaptureObserver(): void {
 function installFlightResultObserver(): void {
   const observer = new MutationObserver(() => {
     if (!isFlightsPage()) return;
+    scheduleTabScopedAutoOpenAuthorizationCheck();
     annotateFlightResultsSoon();
     scheduleAutoOpenMatrixResult();
   });
@@ -836,8 +845,39 @@ function scheduleAutoOpenMatrixResult(): void {
 }
 
 function scheduleFlightResultsWork(): void {
+  scheduleTabScopedAutoOpenAuthorizationCheck();
   annotateFlightResultsSoon();
   scheduleAutoOpenMatrixResult();
+}
+
+function scheduleTabScopedAutoOpenAuthorizationCheck(): void {
+  if (!isFlightsPage() || tabScopedAutoOpenRequest()) return;
+  const locationKey = currentLocationKey();
+  if (tabScopedAutoOpenCheckLocationKey !== locationKey) {
+    tabScopedAutoOpenCheckLocationKey = locationKey;
+    tabScopedAutoOpenCheckStartedAt = 0;
+  }
+  if (!tabScopedAutoOpenCheckStartedAt) tabScopedAutoOpenCheckStartedAt = Date.now();
+  if (Date.now() - tabScopedAutoOpenCheckStartedAt > TAB_AUTO_OPEN_CHECK_TIMEOUT_MS) return;
+  if (tabAutoOpenCheckTimer) window.clearTimeout(tabAutoOpenCheckTimer);
+  tabAutoOpenCheckTimer = window.setTimeout(() => {
+    tabAutoOpenCheckTimer = undefined;
+    void refreshTabScopedAutoOpenAuthorization();
+  }, TAB_AUTO_OPEN_CHECK_DEBOUNCE_MS);
+}
+
+async function refreshTabScopedAutoOpenAuthorization(): Promise<void> {
+  if (!isFlightsPage() || tabScopedAutoOpenRequest()) return;
+  const authorized = await safeChromeCall(async () => {
+    const response = await chrome.runtime.sendMessage({ command: "consumeMatrixAutoOpenForTab" });
+    return Boolean(response?.ok);
+  }, false);
+  if (authorized) {
+    tabScopedAutoOpenUntil = Date.now() + AUTO_OPEN_REMEMBER_MS;
+    scheduleAutoOpenMatrixResult();
+    return;
+  }
+  scheduleTabScopedAutoOpenAuthorizationCheck();
 }
 
 function maybeAutoSubmitMatrixSearch(): void {
@@ -871,7 +911,10 @@ function maybeAutoSubmitMatrixSearch(): void {
 function shouldAutoSubmitMatrixSearch(): boolean {
   if (!isSearchPage()) return false;
   const url = new URL(window.location.href);
-  return url.searchParams.get("muTravelAutoSearch") === "1" && Boolean(url.searchParams.get("search"));
+  return (
+    Boolean(url.searchParams.get("search")) &&
+    (url.searchParams.get("muTravelAutoSearch") === "1" || matrixSearchPayloadFlag("muTravelAutoSearch"))
+  );
 }
 
 function maybeAutoOpenMatrixResult(): void {
@@ -939,12 +982,17 @@ function maybeAutoOpenMatrixResult(): void {
 
 function shouldAutoOpenMatrixResultAfterSearch(): boolean {
   const url = new URL(window.location.href);
-  return url.searchParams.get("muTravelAutoOpen") === "1";
+  return url.searchParams.get("muTravelAutoOpen") === "1" || matrixSearchPayloadFlag("muTravelAutoOpen");
 }
 
 function shouldAutoOpenMatrixResult(): boolean {
   const url = new URL(window.location.href);
-  return url.searchParams.get("muTravelAutoOpen") === "1" || rememberedAutoOpenRequest();
+  return (
+    url.searchParams.get("muTravelAutoOpen") === "1" ||
+    matrixSearchPayloadFlag("muTravelAutoOpen") ||
+    rememberedAutoOpenRequest() ||
+    tabScopedAutoOpenRequest()
+  );
 }
 
 function matrixResultOpenTarget(): HTMLElement | null {
@@ -952,15 +1000,18 @@ function matrixResultOpenTarget(): HTMLElement | null {
   if (expandedControl) return expandedControl;
   if (autoOpenClickedPrimaryResult) return null;
 
+  const alreadyExpandedControl = firstExpandedResultOpenControl();
+  if (alreadyExpandedControl) return alreadyExpandedControl;
+
   const row = firstVisibleFlightResultRow();
   if (!row || row.dataset.muTravelAutoOpenClicked === "true") return null;
-  const rowControl = firstResultOpenControl(row);
+  const rowControl = firstItineraryPriceLink(row) || firstResultOpenControl(row);
   return rowControl || row;
 }
 
-function firstVisibleFlightResultRow(): HTMLTableRowElement | null {
+function firstVisibleFlightResultRow(): HTMLElement | null {
   return (
-    Array.from(document.querySelectorAll<HTMLTableRowElement>("tr[mat-row].mat-mdc-row:not(.detail-row)")).find(
+    Array.from(document.querySelectorAll<HTMLElement>(FLIGHT_RESULT_ROW_SELECTOR)).find(
       (row) => isVisibleElement(row) && !row.closest(`#${PANEL_ID}`) && normalize(row.textContent || ""),
     ) || null
   );
@@ -989,6 +1040,21 @@ function firstResultOpenControl(scope: ParentNode): HTMLElement | null {
   );
 }
 
+function firstItineraryPriceLink(scope: ParentNode): HTMLAnchorElement | null {
+  return (
+    Array.from(scope.querySelectorAll<HTMLAnchorElement>("a[href]")).find((anchor) => {
+      if (!isVisibleElement(anchor) || isDisabledControl(anchor) || !/\d/.test(anchor.textContent || "")) return false;
+      try {
+        return new URL(anchor.getAttribute("href") || anchor.href, window.location.href).pathname.startsWith(
+          "/itinerary",
+        );
+      } catch {
+        return false;
+      }
+    }) || null
+  );
+}
+
 function isResultOpenControl(control: HTMLElement): boolean {
   const label = controlSearchLabel(control);
   return (
@@ -998,7 +1064,7 @@ function isResultOpenControl(control: HTMLElement): boolean {
   );
 }
 
-function shouldContinueAutoOpenAfterPrimaryClick(target: HTMLElement, primaryRow: HTMLTableRowElement): boolean {
+function shouldContinueAutoOpenAfterPrimaryClick(target: HTMLElement, primaryRow: HTMLElement): boolean {
   if (target === primaryRow) return true;
   const label = controlSearchLabel(target);
   return /\b(details|view|open|itinerary)\b/.test(label) && !/\b(select|choose|continue)\b/.test(label);
@@ -1043,27 +1109,38 @@ function isVisibleElement(element: HTMLElement): boolean {
   return rect.width > 0 && rect.height > 0 && getComputedStyle(element).visibility !== "hidden";
 }
 
-function primaryResultRowFor(element: HTMLElement): HTMLTableRowElement | null {
-  return element.closest<HTMLTableRowElement>("tr[mat-row].mat-mdc-row:not(.detail-row)");
+function primaryResultRowFor(element: HTMLElement): HTMLElement | null {
+  return element.closest<HTMLElement>(FLIGHT_RESULT_ROW_SELECTOR);
 }
 
-function expandedResultScopesFor(row: HTMLTableRowElement | null): HTMLElement[] {
-  if (!row?.isConnected) return [];
+function expandedResultScopesFor(row: HTMLElement | null): HTMLElement[] {
   const scopes: HTMLElement[] = [];
-  const nextRow = row.nextElementSibling;
-  if (nextRow instanceof HTMLElement && nextRow.matches("tr.detail-row") && isVisibleElement(nextRow)) {
-    scopes.push(nextRow);
-    scopes.push(...Array.from(nextRow.querySelectorAll<HTMLElement>("matrix-itinerary-grid")).filter(isVisibleElement));
+  if (row?.isConnected) {
+    const nextRow = row.nextElementSibling;
+    if (nextRow instanceof HTMLElement && nextRow.matches("tr.detail-row") && isVisibleElement(nextRow)) {
+      scopes.push(nextRow);
+      scopes.push(
+        ...Array.from(nextRow.querySelectorAll<HTMLElement>("matrix-itinerary-grid")).filter(isVisibleElement),
+      );
+    }
+  }
+  if (scopes.length === 0) {
+    scopes.push(
+      ...Array.from(document.querySelectorAll<HTMLElement>("tr.detail-row, matrix-itinerary-grid")).filter(
+        isVisibleElement,
+      ),
+    );
   }
   return scopes;
 }
 
 function rememberAutoOpenRequest(): void {
+  const token = autoOpenSearchToken();
   try {
     sessionStorage.setItem(
       AUTO_OPEN_STORAGE_KEY,
       JSON.stringify({
-        token: autoOpenSearchToken(),
+        token,
         expiresAt: Date.now() + AUTO_OPEN_REMEMBER_MS,
       }),
     );
@@ -1082,7 +1159,8 @@ function rememberedAutoOpenRequest(): boolean {
       return false;
     }
     const currentToken = autoOpenSearchToken();
-    return !currentToken || typeof request.token !== "string" || request.token === currentToken;
+    if (!currentToken || typeof request.token !== "string") return true;
+    return autoOpenSearchTokensMatch(request.token, currentToken);
   } catch {
     return false;
   }
@@ -1093,6 +1171,13 @@ function forgetAutoOpenRequest(): void {
     sessionStorage.removeItem(AUTO_OPEN_STORAGE_KEY);
   } catch {
     // Session storage is optional.
+  }
+  tabScopedAutoOpenUntil = 0;
+  tabScopedAutoOpenCheckStartedAt = 0;
+  tabScopedAutoOpenCheckLocationKey = "";
+  if (tabAutoOpenCheckTimer) {
+    window.clearTimeout(tabAutoOpenCheckTimer);
+    tabAutoOpenCheckTimer = undefined;
   }
 }
 
@@ -1107,6 +1192,70 @@ function resetAutoOpenState(): void {
 function autoOpenSearchToken(): string {
   const url = new URL(window.location.href);
   return url.searchParams.get("search") || "";
+}
+
+function tabScopedAutoOpenRequest(now = Date.now()): boolean {
+  if (tabScopedAutoOpenUntil < now) {
+    tabScopedAutoOpenUntil = 0;
+    return false;
+  }
+  return tabScopedAutoOpenUntil > 0;
+}
+
+function autoOpenSearchTokensMatch(left: string, right: string): boolean {
+  if (left === right) return true;
+  const normalizedLeft = normalizeAutoOpenSearchToken(left);
+  const normalizedRight = normalizeAutoOpenSearchToken(right);
+  return Boolean(normalizedLeft && normalizedRight && normalizedLeft === normalizedRight);
+}
+
+function normalizeAutoOpenSearchToken(value: string): string {
+  try {
+    const payload = JSON.parse(decodeBase64SearchParam(value));
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return "";
+    const normalizedPayload = payload as {
+      muTravelAutoOpen?: unknown;
+      muTravelAutoSearch?: unknown;
+      solution?: unknown;
+    };
+    delete normalizedPayload.muTravelAutoOpen;
+    delete normalizedPayload.muTravelAutoSearch;
+    delete normalizedPayload.solution;
+    return JSON.stringify(canonicalJsonValue(normalizedPayload));
+  } catch {
+    return "";
+  }
+}
+
+function canonicalJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalJsonValue);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => [key, canonicalJsonValue(entry)]),
+  );
+}
+
+function matrixSearchPayloadFlag(key: "muTravelAutoOpen" | "muTravelAutoSearch"): boolean {
+  const url = new URL(window.location.href);
+  const search = url.searchParams.get("search");
+  if (!search) return false;
+  try {
+    const payload = JSON.parse(decodeBase64SearchParam(search)) as Record<string, unknown>;
+    return payload?.[key] === "1";
+  } catch {
+    return false;
+  }
+}
+
+function decodeBase64SearchParam(value: string): string {
+  return atob(
+    value
+      .replace(/-/g, "+")
+      .replace(/_/g, "/")
+      .padEnd(Math.ceil(value.length / 4) * 4, "="),
+  );
 }
 
 function annotateFlightResultsSoon(): void {

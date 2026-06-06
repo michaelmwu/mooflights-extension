@@ -464,6 +464,8 @@ describe("Google Flights booking option parser", () => {
     const decoded = JSON.parse(atob(search));
     expect(decoded).toMatchObject({
       type: "one-way",
+      muTravelAutoOpen: "1",
+      muTravelAutoSearch: "1",
       slices: [
         {
           origin: ["HKG"],
@@ -476,8 +478,106 @@ describe("Google Flights booking option parser", () => {
       ],
       options: {
         cabin: "COACH",
+        currency: {
+          code: "USD",
+        },
       },
     });
+  });
+
+  it("preserves Google Flights cabin and currency in ITA Matrix handoff URLs", () => {
+    const result = parseGoogleFlightsMatrixSearch(
+      "https://www.google.com/travel/flights/booking?tfs=CBwQAhplEgoyMDI2LTA4LTI3Ih8KA0FLTBIKMjAyNi0wOC0yNxoDTkFOKgJGSjIDNDEwIh8KA05BThIKMjAyNi0wOC0yOBoDTlJUKgJGSjIDMzUxagcIARIDQUtMcgwIAxIIL20vMDdkZmsadxIKMjAyNy0wNC0xNCIfCgNOUlQSCjIwMjctMDQtMTRaA05BTioCRkoyAzM1MCIfCgNOQU4SCjIwMjctMDQtMTUaA01FTCoCRkoyAzkzNWoMCAMSCC9tLzA3ZGZrcgcIARIDTUVMcgcIARIDU1lEcgcIARIDQUtMQAFIA3ABggELCP___________wGYAQM&tfu=CnhDalJJY1hKSE5XUjRhWEE0ZEUxQlJEQjJSMEZDUnkwdExTMHRMUzB0TFMxMGJHOXlNMEZCUVVGQlIyOXBNelZaUlVsSllUQkJFZzFHU2pNMU1IeEdTamt6TlNNeEdnc0k3NndQRUFJYUExVlRSRGdjY08rc0R3PT0SBggAIAIoASIA&curr=USD",
+    );
+
+    expect(result).toMatchObject({
+      tripType: "multi-city",
+      cabin: "BUSINESS",
+      currency: "USD",
+      slices: [
+        {
+          origin: "AKL",
+          destination: "NRT",
+          departureDate: "2026-08-27",
+          segments: [
+            {
+              origin: "AKL",
+              destination: "NAN",
+              carrier: "FJ",
+              flightNumber: "410",
+            },
+            {
+              origin: "NAN",
+              destination: "NRT",
+              carrier: "FJ",
+              flightNumber: "351",
+            },
+          ],
+        },
+        {
+          origin: "NRT",
+          destination: "MEL",
+          departureDate: "2027-04-14",
+          segments: [
+            {
+              origin: "NRT",
+              destination: "NAN",
+              carrier: "FJ",
+              flightNumber: "350",
+            },
+            {
+              origin: "NAN",
+              destination: "MEL",
+              carrier: "FJ",
+              flightNumber: "935",
+            },
+          ],
+        },
+      ],
+    });
+
+    const search = new URL(result?.matrixUrl || "").searchParams.get("search") || "";
+    const decoded = JSON.parse(atob(search));
+    expect(decoded).toMatchObject({
+      type: "multi-city",
+      muTravelAutoOpen: "1",
+      muTravelAutoSearch: "1",
+      options: {
+        cabin: "BUSINESS",
+        currency: {
+          code: "USD",
+        },
+      },
+      slices: [
+        {
+          origin: ["AKL"],
+          dest: ["NRT"],
+          routing: "FJ410 FJ351",
+        },
+        {
+          origin: ["NRT"],
+          dest: ["MEL"],
+          routing: "FJ350 FJ935",
+        },
+      ],
+    });
+  });
+
+  it("uses inferred Google Flights currency in ITA Matrix handoff URLs when curr is absent", () => {
+    const result = parseGoogleFlightsMatrixSearch(
+      `https://www.google.com/travel/flights/booking?tfs=${encodeTfsText([
+        tfsSlice(tfsSegment("2026-06-03", "HKG", "TPE", "CI", "922")),
+      ])}`,
+      "HKD",
+    );
+
+    expect(result).toMatchObject({
+      currency: "HKD",
+    });
+
+    const search = new URL(result?.matrixUrl || "").searchParams.get("search") || "";
+    const decoded = JSON.parse(atob(search));
+    expect(decoded.options.currency).toEqual({ code: "HKD" });
   });
 
   it("returns null for invalid Matrix search input URLs", () => {

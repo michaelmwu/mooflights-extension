@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Mu Travel Flights",
-  "version": "0.0.5",
+  "version": "0.0.8",
   "description": "Offline-first ITA Matrix companion for miles crediting, booking links, and airport-code workflows.",
   "icons": {
     "16": "assets/extension-icons/icon-16.png",

@@ -1,4 +1,4 @@
-import { sendRuntimeMessage } from "../shared/chromeRuntime";
+import { safeChromeCall, sendRuntimeMessage } from "../shared/chromeRuntime";
 import { flagEmoji } from "../shared/flags";
 import {
   DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES,
@@ -417,7 +417,7 @@ function currentBookingPageKeyForCountry(includeCountry: boolean): string {
 function render(): void {
   const shadow = getShadowRoot();
   if (!shadow) return;
-  const matrixSearch = parseGoogleFlightsMatrixSearch(window.location.href);
+  const matrixSearch = parseGoogleFlightsMatrixSearch(window.location.href, currentComparableCurrencyCode());
   const selectedCodes = selectedGoogleFlightsCountries();
 
   shadow.innerHTML = `
@@ -537,6 +537,18 @@ function render(): void {
   });
   shadow.querySelector('[data-action="compare-countries"]')?.addEventListener("click", () => {
     void compareCountries();
+  });
+  shadow.querySelector<HTMLAnchorElement>('[data-action="open-matrix"]')?.addEventListener("click", (event) => {
+    const anchor = event.currentTarget;
+    if (!(anchor instanceof HTMLAnchorElement)) return;
+    event.preventDefault();
+    const openedWindow = window.open(anchor.href, "_blank");
+    try {
+      if (openedWindow) openedWindow.opener = null;
+    } catch {
+      // The Matrix tab is already open; opener cleanup is a defense-in-depth enhancement.
+    }
+    void openMatrixWithAutoOpen(anchor.href, Boolean(openedWindow));
   });
   shadow.querySelector('[data-action="open-options"]')?.addEventListener("click", () => {
     sendRuntimeMessage({ command: "openOptionsPage" });
@@ -716,6 +728,16 @@ function renderMilesEstimatePrompt(matrixSearch: GoogleFlightsMatrixSearch | nul
       <span><a href="${escapeHtml(matrixSearch.matrixUrl)}" target="_blank" rel="noopener noreferrer" data-action="open-matrix">Search ITA Matrix</a>${promptText}</span>
     </div>
   `;
+}
+
+async function openMatrixWithAutoOpen(matrixUrl: string, openedByPage = false): Promise<void> {
+  const openedByBackground = await safeChromeCall(async () => {
+    const response = await chrome.runtime.sendMessage({ command: "openMatrixWithAutoOpen", matrixUrl, openedByPage });
+    return Boolean(response?.ok);
+  }, false);
+  if (openedByBackground || openedByPage) return;
+
+  window.location.assign(matrixUrl);
 }
 
 function renderResults(results: GoogleFlightsCountryResult[]): string {
