@@ -1,4 +1,4 @@
-import { sendRuntimeMessage } from "../shared/chromeRuntime";
+import { safeChromeCall, sendRuntimeMessage } from "../shared/chromeRuntime";
 import { flagEmoji } from "../shared/flags";
 import {
   DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES,
@@ -417,7 +417,7 @@ function currentBookingPageKeyForCountry(includeCountry: boolean): string {
 function render(): void {
   const shadow = getShadowRoot();
   if (!shadow) return;
-  const matrixSearch = parseGoogleFlightsMatrixSearch(window.location.href);
+  const matrixSearch = parseGoogleFlightsMatrixSearch(window.location.href, currentComparableCurrencyCode());
   const selectedCodes = selectedGoogleFlightsCountries();
 
   shadow.innerHTML = `
@@ -537,6 +537,12 @@ function render(): void {
   });
   shadow.querySelector('[data-action="compare-countries"]')?.addEventListener("click", () => {
     void compareCountries();
+  });
+  shadow.querySelector<HTMLAnchorElement>('[data-action="open-matrix"]')?.addEventListener("click", (event) => {
+    const anchor = event.currentTarget;
+    if (!(anchor instanceof HTMLAnchorElement)) return;
+    event.preventDefault();
+    void openMatrixWithAutoOpen(anchor.href);
   });
   shadow.querySelector('[data-action="open-options"]')?.addEventListener("click", () => {
     sendRuntimeMessage({ command: "openOptionsPage" });
@@ -716,6 +722,16 @@ function renderMilesEstimatePrompt(matrixSearch: GoogleFlightsMatrixSearch | nul
       <span><a href="${escapeHtml(matrixSearch.matrixUrl)}" target="_blank" rel="noopener noreferrer" data-action="open-matrix">Search ITA Matrix</a>${promptText}</span>
     </div>
   `;
+}
+
+async function openMatrixWithAutoOpen(matrixUrl: string): Promise<void> {
+  const openedByBackground = await safeChromeCall(async () => {
+    const response = await chrome.runtime.sendMessage({ command: "openMatrixWithAutoOpen", matrixUrl });
+    return Boolean(response?.ok);
+  }, false);
+  if (openedByBackground) return;
+
+  window.open(matrixUrl, "_blank", "noopener,noreferrer");
 }
 
 function renderResults(results: GoogleFlightsCountryResult[]): string {

@@ -57,8 +57,12 @@ export type GoogleFlightsFlightSegment = {
   flightNumber?: string;
 };
 
+export type GoogleFlightsMatrixCabin = "COACH" | "PREMIUM-COACH" | "BUSINESS" | "FIRST";
+
 export type GoogleFlightsMatrixSearch = {
   tripType: "one-way" | "round-trip" | "multi-city";
+  cabin: GoogleFlightsMatrixCabin;
+  currency: string;
   slices: Array<{
     origin: string;
     destination: string;
@@ -166,7 +170,10 @@ export function parseGoogleFlightsCountryInput(value: string): string[] {
   return normalizeGoogleFlightsCountryCodes(value.split(/[,\s]+/), []);
 }
 
-export function parseGoogleFlightsMatrixSearch(url: string): GoogleFlightsMatrixSearch | null {
+export function parseGoogleFlightsMatrixSearch(
+  url: string,
+  fallbackCurrency = DEFAULT_GOOGLE_FLIGHTS_CURRENCY,
+): GoogleFlightsMatrixSearch | null {
   let parsedUrl: URL;
   try {
     parsedUrl = new URL(url);
@@ -175,6 +182,11 @@ export function parseGoogleFlightsMatrixSearch(url: string): GoogleFlightsMatrix
   }
   const tfs = parsedUrl.searchParams.get("tfs");
   if (!tfs) return null;
+  const cabin = parseGoogleFlightsTfsCabin(tfs);
+  const currency =
+    normalizeGoogleFlightsCurrency(parsedUrl.searchParams.get("curr")) ||
+    normalizeGoogleFlightsCurrency(fallbackCurrency) ||
+    DEFAULT_GOOGLE_FLIGHTS_CURRENCY;
   const segments = parseGoogleFlightsTfsSegments(tfs);
   if (segments.length === 0) return null;
   const slices = groupGoogleFlightsSegments(segments);
@@ -182,9 +194,11 @@ export function parseGoogleFlightsMatrixSearch(url: string): GoogleFlightsMatrix
   const tripType = googleFlightsTripType(slices);
   return {
     tripType,
+    cabin,
+    currency,
     slices,
     carriers: Array.from(new Set(segments.map((segment) => segment.carrier).filter(isString))).sort(),
-    matrixUrl: buildItaMatrixSearchUrl(tripType, slices),
+    matrixUrl: buildItaMatrixSearchUrl(tripType, slices, cabin, currency),
   };
 }
 
@@ -254,7 +268,7 @@ function parseGoogleFlightsTfsSliceSegments(value: string, group: number): Googl
   const sliceDate = value.match(/\d{4}-\d{2}-\d{2}/)?.[0];
   // biome-ignore lint/complexity/useRegexLiterals: constructor keeps protobuf control markers out of a regex literal.
   const pattern = new RegExp(
-    "\\x0a\\x03([A-Z]{3})\\x12\\x0a(\\d{4}-\\d{2}-\\d{2})\\x1a\\x03([A-Z]{3})\\x2a\\x02([A-Z][A-Z0-9]|[0-9][A-Z])\\x32[\\x01-\\x04](\\d{1,4})",
+    "\\x0a\\x03([A-Z]{3})\\x12\\x0a(\\d{4}-\\d{2}-\\d{2})[\\x1a\\x5a]\\x03([A-Z]{3})\\x2a\\x02([A-Z][A-Z0-9]|[0-9][A-Z])\\x32[\\x01-\\x04](\\d{1,4})",
     "g",
   );
   let match = pattern.exec(value);
@@ -272,6 +286,50 @@ function parseGoogleFlightsTfsSliceSegments(value: string, group: number): Googl
     match = pattern.exec(value);
   }
   return segments;
+}
+
+function parseGoogleFlightsTfsCabin(tfs: string): GoogleFlightsMatrixCabin {
+  const decoded = decodeBase64UrlText(tfs);
+  if (!decoded) return "COACH";
+  return cabinFromGoogleFlightsTfsField(decoded, 9) || cabinFromGoogleFlightsTfsField(decoded, 19) || "COACH";
+}
+
+function cabinFromGoogleFlightsTfsField(value: string, fieldNumber: number): GoogleFlightsMatrixCabin | "" {
+  for (let index = 0; index < value.length - 1; index += 1) {
+    const tag = readProtobufTag(value, index);
+    if (!tag) continue;
+    if (tag.fieldNumber !== fieldNumber || tag.wireType !== 0) {
+      index = tag.nextIndex - 1;
+      continue;
+    }
+    const cabin = readVarint(value, tag.nextIndex);
+    if (!cabin) return "";
+    const mapped = googleFlightsCabinValue(cabin.value);
+    if (mapped) return mapped;
+    index = cabin.nextIndex - 1;
+  }
+  return "";
+}
+
+function readProtobufTag(
+  value: string,
+  startIndex: number,
+): { fieldNumber: number; wireType: number; nextIndex: number } | null {
+  const tag = readVarint(value, startIndex);
+  if (!tag) return null;
+  return {
+    fieldNumber: tag.value >> 3,
+    wireType: tag.value & 7,
+    nextIndex: tag.nextIndex,
+  };
+}
+
+function googleFlightsCabinValue(value: number): GoogleFlightsMatrixCabin | "" {
+  if (value === 1) return "COACH";
+  if (value === 2) return "PREMIUM-COACH";
+  if (value === 3) return "BUSINESS";
+  if (value === 4) return "FIRST";
+  return "";
 }
 
 function dedupeGoogleFlightsSegments(segments: GoogleFlightsFlightSegment[]): GoogleFlightsFlightSegment[] {
@@ -332,6 +390,8 @@ function googleFlightsTripType(slices: GoogleFlightsMatrixSearch["slices"]): Goo
 function buildItaMatrixSearchUrl(
   tripType: GoogleFlightsMatrixSearch["tripType"],
   slices: GoogleFlightsMatrixSearch["slices"],
+  cabin: GoogleFlightsMatrixCabin,
+  currency: string,
 ): string {
   const matrixSlices =
     tripType === "round-trip" && slices[0] && slices[1]
@@ -339,13 +399,16 @@ function buildItaMatrixSearchUrl(
       : slices.map((slice) => matrixSearchSlice(slice));
   const payload = {
     type: tripType,
+    muTravelAutoOpen: "1",
+    muTravelAutoSearch: "1",
     slices: matrixSlices,
     options: {
-      cabin: "COACH",
+      cabin,
       stops: "-1",
       extraStops: "1",
       allowAirportChanges: "true",
       showOnlyAvailable: "true",
+      currency: { code: currency },
     },
     pax: {
       adults: "1",

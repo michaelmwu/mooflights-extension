@@ -6,11 +6,15 @@ type RuntimeMessage = {
   baseUrl?: string;
   countries?: string[];
   baselineOptionCount?: number;
+  matrixUrl?: string;
   requestId?: string;
 };
 
 const GOOGLE_FLIGHTS_COMPARE_CONCURRENCY = 3;
 const GOOGLE_FLIGHTS_TAB_CREATE_SPACING_MS = 750;
+const MATRIX_AUTO_OPEN_TABS_STORAGE_KEY = "muTravelMatrixAutoOpenTabs";
+const LEGACY_MATRIX_AUTO_OPEN_UNTIL_STORAGE_KEY = "muTravelMatrixAutoOpenUntil";
+const MATRIX_AUTO_OPEN_TTL_MS = 5 * 60 * 1000;
 
 let tabCreateQueue = Promise.resolve();
 let lastTabCreatedAt = 0;
@@ -27,6 +31,22 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     openOptionsPage();
     sendResponse({ ok: true });
     return false;
+  }
+
+  if (payload.command === "openMatrixWithAutoOpen") {
+    void openMatrixWithAutoOpen(payload.matrixUrl || "")
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => {
+        sendResponse({ ok: false, error: error instanceof Error ? error.message : "Could not open ITA Matrix." });
+      });
+    return true;
+  }
+
+  if (payload.command === "consumeMatrixAutoOpenForTab") {
+    void consumeMatrixAutoOpenForTab(sender.tab?.id)
+      .then((ok) => sendResponse({ ok }))
+      .catch(() => sendResponse({ ok: false }));
+    return true;
   }
 
   if (payload.command === "compareGoogleFlightsCountries") {
@@ -71,6 +91,57 @@ async function compareGoogleFlightsCountries(payload: RuntimeMessage, progressTa
     return result;
   });
   sendGoogleFlightsCountryComplete(progressTabId, payload.requestId, { ok: true });
+}
+
+async function openMatrixWithAutoOpen(matrixUrl: string): Promise<void> {
+  const url = validatedMatrixUrl(matrixUrl);
+  await chrome.storage.local.remove(LEGACY_MATRIX_AUTO_OPEN_UNTIL_STORAGE_KEY);
+  const tab = await createActiveTab(url);
+  if (typeof tab.id !== "number") throw new Error("Chrome did not provide a tab id.");
+  await rememberMatrixAutoOpenTab(tab.id);
+}
+
+async function rememberMatrixAutoOpenTab(tabId: number): Promise<void> {
+  const existing = await chrome.storage.local.get(MATRIX_AUTO_OPEN_TABS_STORAGE_KEY);
+  const tabs = autoOpenTabMap(existing[MATRIX_AUTO_OPEN_TABS_STORAGE_KEY]);
+  tabs[String(tabId)] = Date.now() + MATRIX_AUTO_OPEN_TTL_MS;
+  pruneAutoOpenTabMap(tabs);
+  await chrome.storage.local.set({ [MATRIX_AUTO_OPEN_TABS_STORAGE_KEY]: tabs });
+}
+
+async function consumeMatrixAutoOpenForTab(tabId: number | undefined): Promise<boolean> {
+  if (typeof tabId !== "number") return false;
+  const existing = await chrome.storage.local.get(MATRIX_AUTO_OPEN_TABS_STORAGE_KEY);
+  const tabs = autoOpenTabMap(existing[MATRIX_AUTO_OPEN_TABS_STORAGE_KEY]);
+  pruneAutoOpenTabMap(tabs);
+  const tabKey = String(tabId);
+  const authorized = Boolean(tabs[tabKey] && tabs[tabKey] >= Date.now());
+  if (authorized) delete tabs[tabKey];
+  await chrome.storage.local.set({ [MATRIX_AUTO_OPEN_TABS_STORAGE_KEY]: tabs });
+  return authorized;
+}
+
+function validatedMatrixUrl(value: string): string {
+  const url = new URL(value);
+  if (url.protocol !== "https:" || url.hostname !== "matrix.itasoftware.com") {
+    throw new Error("Invalid ITA Matrix URL.");
+  }
+  return url.toString();
+}
+
+function autoOpenTabMap(value: unknown): Record<string, number> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter((entry): entry is [string, number] => /^\d+$/.test(entry[0]) && typeof entry[1] === "number")
+      .slice(-50),
+  );
+}
+
+function pruneAutoOpenTabMap(tabs: Record<string, number>, now = Date.now()): void {
+  for (const [tabId, expiresAt] of Object.entries(tabs)) {
+    if (!tabId || expiresAt < now) delete tabs[tabId];
+  }
 }
 
 function sendGoogleFlightsCountryProgress(
@@ -259,6 +330,19 @@ async function mapWithConcurrency<T, R>(
 function createInactiveTab(url: string): Promise<chrome.tabs.Tab> {
   return new Promise((resolve, reject) => {
     chrome.tabs.create({ url, active: false }, (tab) => {
+      const error = chrome.runtime.lastError;
+      if (error) {
+        reject(new Error(error.message));
+        return;
+      }
+      resolve(tab);
+    });
+  });
+}
+
+function createActiveTab(url: string): Promise<chrome.tabs.Tab> {
+  return new Promise((resolve, reject) => {
+    chrome.tabs.create({ url, active: true }, (tab) => {
       const error = chrome.runtime.lastError;
       if (error) {
         reject(new Error(error.message));
