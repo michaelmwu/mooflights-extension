@@ -56,6 +56,7 @@ const RESULT_CACHE_TTL_MS = 10 * 60 * 1000;
 const INFERRED_CURRENCY_CACHE_TTL_MS = 5000;
 const RESULT_CACHE_STORAGE_KEY = "muTravelGoogleFlightsCountryResults";
 const PANEL_UI_STORAGE_KEY = "muTravelGoogleFlightsPanelUi";
+const PANEL_SESSION_HIDE_STORAGE_KEY = "muTravelGoogleFlightsPanelHiddenForSession";
 const DEFAULT_PANEL_POSITION: PanelPosition = { edge: "right", ratio: 1 };
 const PANEL_EDGE_OFFSET_PX = 16;
 const GOOGLE_FLIGHTS_HEADER_HEIGHT_PX = 64;
@@ -348,6 +349,11 @@ function installNavigationObserver(schedule: () => void): void {
 }
 
 function scheduleRender(): void {
+  if (shouldHidePanel()) {
+    removePanel();
+    return;
+  }
+
   const pageKey = currentBookingPageKey();
   const cacheKey = currentComparisonCacheKey();
   if (!pageKey) {
@@ -415,6 +421,11 @@ function currentBookingPageKeyForCountry(includeCountry: boolean): string {
 }
 
 function render(): void {
+  if (shouldHidePanel()) {
+    removePanel();
+    return;
+  }
+
   const shadow = getShadowRoot();
   if (!shadow) return;
   const matrixSearch = parseGoogleFlightsMatrixSearch(window.location.href, currentComparableCurrencyCode());
@@ -444,14 +455,9 @@ function render(): void {
   `;
 
   shadow.querySelector('[data-action="minimize-panel"]')?.addEventListener("click", () => {
-    const panel = shadow.querySelector<HTMLElement>(".panel");
-    state.panelPosition =
-      state.panelCollapsePosition || (panel ? minimizedPanelPositionFromPanel(panel) : state.panelPosition);
-    state.panelCollapsePosition = null;
-    state.panelMinimized = true;
-    savePanelUiState();
-    render();
+    minimizePanel(shadow);
   });
+  shadow.querySelector('[data-action="hide-panel-session"]')?.addEventListener("click", hidePanelForSession);
   shadow.querySelector('[data-action="restore-panel"]')?.addEventListener("click", () => {
     if (!state.panelMinimized) return;
     if (suppressPanelRestoreClick) {
@@ -553,6 +559,16 @@ function render(): void {
   shadow.querySelector('[data-action="open-options"]')?.addEventListener("click", () => {
     sendRuntimeMessage({ command: "openOptionsPage" });
   });
+}
+
+function minimizePanel(root: ShadowRoot): void {
+  const panel = root.querySelector<HTMLElement>(".panel");
+  state.panelPosition =
+    state.panelCollapsePosition || (panel ? minimizedPanelPositionFromPanel(panel) : state.panelPosition);
+  state.panelCollapsePosition = null;
+  state.panelMinimized = true;
+  savePanelUiState();
+  render();
 }
 
 function renderCountrySelect(selectedCodes: string[]): string {
@@ -1285,6 +1301,23 @@ function getShadowRoot(): ShadowRoot | null {
 
 function removePanel(): void {
   document.getElementById(PANEL_ID)?.remove();
+}
+
+function hidePanelForSession(): void {
+  try {
+    sessionStorage.setItem(PANEL_SESSION_HIDE_STORAGE_KEY, "1");
+  } catch {
+    // Session storage is an enhancement; removing the current panel still honors the click.
+  }
+  removePanel();
+}
+
+function shouldHidePanel(): boolean {
+  try {
+    return sessionStorage.getItem(PANEL_SESSION_HIDE_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 
 function styles(): string {

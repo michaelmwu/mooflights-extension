@@ -86,6 +86,7 @@ const AUTO_OPEN_REMEMBER_MS = 5 * 60 * 1000;
 const TAB_AUTO_OPEN_CHECK_DEBOUNCE_MS = 250;
 const TAB_AUTO_OPEN_CHECK_TIMEOUT_MS = 10_000;
 const AUTO_OPEN_STORAGE_KEY = "muTravelMatrixAutoOpen";
+const PANEL_SESSION_HIDE_STORAGE_KEY = "muTravelMatrixPanelHiddenForSession";
 const FLIGHT_RESULT_ROW_SELECTOR = "tr[mat-row].mat-mdc-row:not(.detail-row), tr[mat-row]:not(.detail-row)";
 const PANEL_UI_STORAGE_KEY = "muTravelPanelUi";
 const DEFAULT_PANEL_POSITION: PanelPosition = { edge: "right", ratio: 1 };
@@ -235,14 +236,9 @@ function renderLinksPanel(): string {
 
 function bind(root: ShadowRoot): void {
   root.querySelector('[data-action="minimize-panel"]')?.addEventListener("click", () => {
-    const panel = root.querySelector<HTMLElement>(".panel");
-    state.panelPosition =
-      state.panelCollapsePosition || (panel ? minimizedPanelPositionFromPanel(panel) : state.panelPosition);
-    state.panelCollapsePosition = null;
-    state.panelMinimized = true;
-    savePanelUiState();
-    render();
+    minimizePanel(root);
   });
+  root.querySelector('[data-action="hide-panel-session"]')?.addEventListener("click", hidePanelForSession);
   root.querySelector('[data-action="restore-panel"]')?.addEventListener("click", () => {
     if (!state.panelMinimized) return;
     if (suppressPanelRestoreClick) {
@@ -315,6 +311,16 @@ function bind(root: ShadowRoot): void {
       void removeAirportCode(button.dataset.code || "");
     });
   });
+}
+
+function minimizePanel(root: ShadowRoot): void {
+  const panel = root.querySelector<HTMLElement>(".panel");
+  state.panelPosition =
+    state.panelCollapsePosition || (panel ? minimizedPanelPositionFromPanel(panel) : state.panelPosition);
+  state.panelCollapsePosition = null;
+  state.panelMinimized = true;
+  savePanelUiState();
+  render();
 }
 
 function loadPanelUiState(): {
@@ -1733,7 +1739,15 @@ function isFlightsPage(): boolean {
 }
 
 function shouldHidePanel(): boolean {
-  return isFlightsPage();
+  return isFlightsPage() || isPanelHiddenForSession();
+}
+
+function isPanelHiddenForSession(): boolean {
+  try {
+    return sessionStorage.getItem(PANEL_SESSION_HIDE_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 
 function airportAreaDropdownOptions(): AirportAreaOption[] {
@@ -2038,6 +2052,15 @@ function getShadowRoot(): ShadowRoot | null {
 
 function removePanel(): void {
   document.getElementById(PANEL_ID)?.remove();
+}
+
+function hidePanelForSession(): void {
+  try {
+    sessionStorage.setItem(PANEL_SESSION_HIDE_STORAGE_KEY, "1");
+  } catch {
+    // Session storage is an enhancement; removing the current panel still honors the click.
+  }
+  removePanel();
 }
 
 function renderLinks(links: RankedProviderLink[]): string {
