@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Mu Travel Flights",
   "version": "0.0.8",
-  "description": "Offline-first ITA Matrix companion for miles crediting, booking links, and airport-code workflows.",
+  "description": "Companion for Google Flights and ITA Matrix to show comparison prices and mileage earning.",
   "icons": {
     "16": "assets/extension-icons/icon-16.png",
     "32": "assets/extension-icons/icon-32.png",
