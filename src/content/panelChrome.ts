@@ -26,16 +26,16 @@ export function renderMuTravelPanelHeader({
     <div class="header-actions">
       <details class="panel-menu">
         <summary class="icon-button" aria-label="Panel actions" title="Panel actions">⋮</summary>
-        <div class="panel-menu-popover" role="menu" aria-label="Panel actions">
-          <button type="button" class="menu-item" data-action="hide-panel-session" role="menuitem">
+        <div class="panel-menu-popover" aria-label="Panel actions">
+          <button type="button" class="menu-item" data-action="hide-panel-session">
             <span class="menu-icon" aria-hidden="true">✕</span>
             <span>Hide for this session</span>
           </button>
-          <button type="button" class="menu-item" data-action="${escapeHtml(minimizeAction)}" role="menuitem">
+          <button type="button" class="menu-item" data-action="${escapeHtml(minimizeAction)}">
             <span class="menu-icon" aria-hidden="true">−</span>
             <span>Minimize</span>
           </button>
-          <button type="button" class="menu-item" data-action="${escapeHtml(optionsAction)}" role="menuitem">
+          <button type="button" class="menu-item" data-action="${escapeHtml(optionsAction)}">
             <span class="menu-icon" aria-hidden="true">⚙</span>
             <span>Settings</span>
           </button>
@@ -92,9 +92,16 @@ export function muTravelPanelHeaderStyles(): string {
       position: relative;
       display: inline-grid;
       flex: 0 0 auto;
+      margin: 0;
+      padding: 0;
+      border: 0;
     }
     .panel-menu summary {
+      box-sizing: border-box;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
       list-style: none;
+      font: inherit;
       cursor: pointer;
     }
     .panel-menu summary::-webkit-details-marker {

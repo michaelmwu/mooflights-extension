@@ -239,6 +239,9 @@ function bind(root: ShadowRoot): void {
     minimizePanel(root);
   });
   root.querySelector('[data-action="hide-panel-session"]')?.addEventListener("click", hidePanelForSession);
+  root.querySelectorAll<HTMLElement>(".panel-menu .menu-item").forEach((item) => {
+    item.addEventListener("click", closePanelMenu);
+  });
   root.querySelector('[data-action="restore-panel"]')?.addEventListener("click", () => {
     if (!state.panelMinimized) return;
     if (suppressPanelRestoreClick) {
@@ -311,6 +314,13 @@ function bind(root: ShadowRoot): void {
       void removeAirportCode(button.dataset.code || "");
     });
   });
+}
+
+function closePanelMenu(event: Event): void {
+  const item = event.currentTarget;
+  if (!(item instanceof HTMLElement)) return;
+  const menu = item.closest<HTMLDetailsElement>(".panel-menu");
+  if (menu) menu.open = false;
 }
 
 function minimizePanel(root: ShadowRoot): void {
