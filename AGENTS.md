@@ -8,6 +8,7 @@ This repo contains the open-source Mu Travel Flights browser extension. Work in 
 
 - Use Bun: `bun install`, `bun run build`, `bun run test`, `bun run typecheck`.
 - Use Biome for formatting and linting: `bun run check`, `bun run format`, `bun run lint`.
+- For PR validation that touches extension runtime/UI behavior, include `bun run build:stable` in addition to the normal build.
 - Build output goes to `dist/`; packaged zips go to `artifacts/`.
 
 ## Security Boundary
