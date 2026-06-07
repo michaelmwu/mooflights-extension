@@ -58,7 +58,7 @@ export function muTravelPanelHeaderStyles(): string {
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      padding: 10px 12px;
+      padding: 10px 8px 10px 12px;
       border-bottom: 1px solid #e2e8f0;
       cursor: grab;
       user-select: none;
@@ -98,10 +98,19 @@ export function muTravelPanelHeaderStyles(): string {
     }
     .panel-menu summary {
       box-sizing: border-box;
+      display: inline-grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      padding: 0;
       border: 1px solid #cbd5e1;
       border-radius: 6px;
+      background: #ffffff;
+      color: #475569;
       list-style: none;
-      font: inherit;
+      font-size: 18px;
+      font-weight: 400;
+      line-height: 1;
       cursor: pointer;
     }
     .panel-menu summary::-webkit-details-marker {
@@ -118,7 +127,7 @@ export function muTravelPanelHeaderStyles(): string {
       border: 1px solid #cbd5e1;
       border-radius: 8px;
       background: #ffffff;
-      box-shadow: 0 14px 36px rgba(15, 23, 42, 0.18);
+      box-shadow: none;
     }
     .menu-item {
       display: flex;

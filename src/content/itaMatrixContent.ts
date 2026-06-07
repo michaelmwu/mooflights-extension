@@ -2687,7 +2687,7 @@ function styles(): string {
       padding: 4px;
       list-style: none;
       border: 1px solid #cbd5e1;
-      border-radius: 6px;
+      border-radius: 10px;
       background: #ffffff;
       box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
     }
@@ -2755,7 +2755,7 @@ function styles(): string {
       max-height: 112px;
       overflow: auto;
       padding: 8px;
-      border-radius: 6px;
+      border-radius: 10px;
       background: #f8fafc;
       color: #334155;
     }
