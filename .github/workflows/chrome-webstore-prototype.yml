@@ -1,0 +1,100 @@
+name: Chrome Web Store Prototype
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build/package and show intended Web Store request without uploading."
+        required: true
+        default: true
+        type: boolean
+      release_tag:
+        description: "Optional existing vX.Y.Z tag to package. Leave blank to package the selected ref."
+        required: false
+        type: string
+      publish_type:
+        description: "Publish behavior after Chrome Web Store approval."
+        required: true
+        default: STAGED_PUBLISH
+        type: choice
+        options:
+          - STAGED_PUBLISH
+          - DEFAULT_PUBLISH
+      upload_only:
+        description: "Upload the package but do not submit it for review."
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chrome-webstore-prototype-${{ inputs.release_tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  submit:
+    name: Package and submit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+
+      - name: Setup Chrome
+        id: setup-chrome
+        uses: browser-actions/setup-chrome@2e1d749697dd1612b833dba4a722266286fbefcd # v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Verify
+        run: |
+          bun run check
+          bun run typecheck
+          bun run test
+
+      - name: Verify release version
+        if: inputs.release_tag != ''
+        run: node scripts/verify-release-version.mjs "${RELEASE_TAG}"
+
+      - name: Package extension
+        env:
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+          MU_TRAVEL_CRX_KEY_B64: ${{ secrets.MU_TRAVEL_CRX_KEY_B64 }}
+          MU_TRAVEL_REQUIRE_CRX_KEY: ${{ inputs.release_tag != '' && '1' || '' }}
+        run: bun run package
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: chrome-webstore-prototype-package
+          path: |
+            artifacts/mu-travel-flights-*.zip
+            artifacts/mu-travel-flights-*.crx
+          if-no-files-found: error
+
+      - name: Submit to Chrome Web Store
+        env:
+          CHROME_WEBSTORE_DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+          CHROME_WEBSTORE_UPLOAD_ONLY: ${{ inputs.upload_only && '1' || '' }}
+          CHROME_WEBSTORE_PUBLISH_TYPE: ${{ inputs.publish_type }}
+          CHROME_WEBSTORE_CLIENT_ID: ${{ secrets.CHROME_WEBSTORE_CLIENT_ID }}
+          CHROME_WEBSTORE_CLIENT_SECRET: ${{ secrets.CHROME_WEBSTORE_CLIENT_SECRET }}
+          CHROME_WEBSTORE_REFRESH_TOKEN: ${{ secrets.CHROME_WEBSTORE_REFRESH_TOKEN }}
+          CHROME_WEBSTORE_PUBLISHER_ID: ${{ secrets.CHROME_WEBSTORE_PUBLISHER_ID }}
+          CHROME_WEBSTORE_EXTENSION_ID: ${{ secrets.CHROME_WEBSTORE_EXTENSION_ID }}
+        run: bun run webstore:submit

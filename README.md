@@ -54,6 +54,22 @@ bun run release:package:next-patch
 bun run release:package:next-minor
 ```
 
+## Chrome Web Store Prototype
+
+`.github/workflows/chrome-webstore-prototype.yml` is a manual workflow for evaluating automated Chrome Web Store submission. It builds, verifies, packages, uploads the generated package artifact, then optionally uploads the zip to an existing Chrome Web Store item and submits it for review.
+
+The workflow defaults to `dry_run: true`, which packages the extension and prints the intended store request without contacting the Chrome Web Store API. To run a live upload, configure these repository secrets and dispatch the workflow with `dry_run: false`:
+
+- `CHROME_WEBSTORE_CLIENT_ID`
+- `CHROME_WEBSTORE_CLIENT_SECRET`
+- `CHROME_WEBSTORE_REFRESH_TOKEN`
+- `CHROME_WEBSTORE_PUBLISHER_ID`
+- `CHROME_WEBSTORE_EXTENSION_ID`
+
+The refresh token must be authorized for the `https://www.googleapis.com/auth/chromewebstore` OAuth scope.
+
+By default, live submissions use `STAGED_PUBLISH`, so Chrome Web Store approval stages the update for a later manual release instead of immediately publishing it. Use `upload_only: true` to upload the package without submitting it for review.
+
 ## Docs
 
 - [Development](./DEVELOPMENT.md)

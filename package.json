@@ -26,7 +26,8 @@
     "release:package:next-minor": "bun run release:next-minor && bun run package",
     "release:verify": "node scripts/verify-release-version.mjs",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "webstore:submit": "node scripts/submit-chrome-webstore.mjs"
   },
   "dependencies": {
     "react": "^19.2.3",
