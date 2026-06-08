@@ -8,6 +8,7 @@ import {
   parseGoogleFlightsBookingOptions,
   parseGoogleFlightsCountryInput,
   parseGoogleFlightsMatrixSearch,
+  parseGoogleFlightsSearchResults,
 } from "./googleFlightsBooking";
 import { allGoogleFlightsCountryCodes, googleFlightsAvailableCountryOptions } from "./googleFlightsCountries";
 
@@ -88,6 +89,223 @@ describe("Google Flights booking option parser", () => {
       provider: "Mytrip",
     });
     expect(result.cheapest?.bookingUrl).toBeUndefined();
+  });
+
+  it("parses visible Google Flights search result rows with stable match keys", () => {
+    document.body.innerHTML = `
+      <ul>
+        <li class="pIav2d">
+          <div class="wtdjmc">7:00 AM - 10:30 AM</div>
+          <div class="sSHqwe">STARLUX</div>
+          <div class="gvkrdb">3 hr 30 min</div>
+          <div class="EfT7Ae">Nonstop</div>
+          <span aria-label="155 US dollars" role="text">$155</span>
+        </li>
+        <li class="pIav2d">
+          <div class="wtdjmc">11:00 AM - 4:10 PM</div>
+          <div class="sSHqwe">Cathay Pacific</div>
+          <div class="gvkrdb">5 hr 10 min</div>
+          <div class="EfT7Ae">1 stop</div>
+          <span role="text">$142</span>
+        </li>
+      </ul>
+    `;
+
+    const result = parseGoogleFlightsSearchResults(document, "JP", "https://www.google.com/travel/flights?tfs=abc");
+
+    expect(result.status).toBe("ready");
+    expect(result.results).toHaveLength(2);
+    expect(result.results[0]).toMatchObject({
+      price: 155,
+      priceText: "$155",
+      carrierText: "STARLUX",
+      durationText: "3 hr 30 min",
+      stopsText: "Nonstop",
+      matchConfidence: "high",
+    });
+    expect(result.results[0]?.matchKey).toContain("starlux");
+    expect(result.results[0]?.matchKey).not.toContain("155");
+  });
+
+  it("strips aria-label currency phrases from Google Flights search match keys", () => {
+    document.body.innerHTML = `
+      <ul>
+        <li class="pIav2d">
+          <div class="JMc5Xc" role="link" aria-label="From 17328 Japanese yen. 1 stop flight with Jeju Air. Leaves Jeju International Airport at 8:00 PM on Wednesday, June 24 and arrives at Narita International Airport at 9:30 AM on Thursday, June 25. Total duration 13 hr 30 min. Select flight"></div>
+          <span aria-label="17328 Japanese yen" role="text">¥17,328</span>
+        </li>
+      </ul>
+    `;
+
+    const result = parseGoogleFlightsSearchResults(document, "JP", "https://www.google.com/travel/flights?tfs=abc");
+
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0]?.matchKey).toContain("jeju air");
+    expect(result.results[0]?.matchKey).not.toContain("17328");
+    expect(result.results[0]?.matchKey).not.toContain("japanese yen");
+  });
+
+  it("uses final arrival in search result time signatures", () => {
+    document.body.innerHTML = `
+      <ul>
+        <li class="pIav2d">
+          <div class="JMc5Xc" role="link" aria-label="From 27321 Japanese yen. 1 stop flight with Asiana Airlines and Korean Air. Leaves Jeju International Airport at 10:20 AM on Wednesday, June 24 and arrives at Narita International Airport at 5:15 PM on Wednesday, June 24. Total duration 6 hr 55 min. Select flight"></div>
+          <span aria-label="27321 Japanese yen" role="text">¥27,321</span>
+        </li>
+        <li class="pIav2d">
+          <div class="JMc5Xc" role="link" aria-label="From 26266 Japanese yen. 1 stop flight with Asiana Airlines. Leaves Jeju International Airport at 10:20 AM on Wednesday, June 24 and arrives at Narita International Airport at 6:25 PM on Wednesday, June 24. Total duration 8 hr 5 min. Select flight"></div>
+          <span aria-label="26266 Japanese yen" role="text">¥26,266</span>
+        </li>
+      </ul>
+    `;
+
+    const result = parseGoogleFlightsSearchResults(document, "JP", "https://www.google.com/travel/flights?tfs=abc");
+
+    expect(result.results[0]?.timeText).toBe("10:20-17:15");
+    expect(result.results[1]?.timeText).toBe("10:20-18:25");
+  });
+
+  it("prefers English Select flight summaries over expanded flight details labels", () => {
+    document.body.innerHTML = `
+      <ul>
+        <li class="pIav2d">
+          <div class="JMc5Xc" role="link" aria-label="From 26670 Japanese yen. 1 stop flight with Asiana Airlines. Leaves Jeju International Airport at 2:30 PM on Wednesday, June 24 and arrives at Narita International Airport at 9:00 PM on Wednesday, June 24. Total duration 6 hr 30 min. Layover (1 of 1) is a 2 hr 45 min layover in Seoul. Select flight"></div>
+          <button aria-label="Flight details. Leaves Jeju International Airport at 2:30 PM on Wednesday, June 24 and arrives at Narita International Airport at 9:00 PM on Wednesday, June 24." aria-expanded="true"></button>
+          <span aria-label="26670 Japanese yen" role="text">¥26,670</span>
+        </li>
+      </ul>
+    `;
+
+    const result = parseGoogleFlightsSearchResults(document, "JP", "https://www.google.com/travel/flights?tfs=abc");
+
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0]?.matchKey).toContain("1 stop flight with asiana airlines");
+    expect(result.results[0]?.matchKey).toContain("total duration 6 hr 30 min");
+    expect(result.results[0]?.matchKey).not.toContain("flight details");
+    expect(result.results[0]?.matchKey).not.toContain("select flight");
+  });
+
+  it("parses localized Japanese Google Flights search aria labels", () => {
+    document.body.innerHTML = `
+      <ul>
+        <li class="pIav2d">
+          <div class="JMc5Xc" role="link" aria-label="28092 円～。 アシアナ航空 が運航する経由地 1 か所のフライト。 水曜日, 6月 24 10:20 済州国際空港発、水曜日, 6月 24 18:25 成田国際空港着。 合計時間 8時間 5分。 乗り継ぎ（1/1）は、ソウルでの 4時間 10分の乗り継ぎです。 フライトを選択"></div>
+          <span aria-label="28092 円" role="text">28,092 円</span>
+        </li>
+      </ul>
+    `;
+
+    const result = parseGoogleFlightsSearchResults(document, "JP", "https://www.google.com/travel/flights?tfs=abc");
+
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0]).toMatchObject({
+      price: 28092,
+      currency: "JPY",
+      timeText: "10:20-18:25",
+    });
+    expect(result.results[0]?.matchKey).not.toContain("28092");
+    expect(result.results[0]?.matchKey).not.toContain("円");
+  });
+
+  it("parses localized Chinese Google Flights search aria labels", () => {
+    document.body.innerHTML = `
+      <ul>
+        <li class="pIav2d">
+          <div class="JMc5Xc" role="link" aria-label="17552 日圓起。 搭乘濟州航空的航班，中途停留 1 次。 星期三, 6月 24 晚上8:00 於濟州國際機場出發，星期四, 6月 25 上午9:30 抵達成田國際機場。 總交通時間：13 小時 30 分鐘 預估碳排放量：158 公斤. 選擇航班"></div>
+          <div data-travelimpactmodelwebsiteurl="https://www.travelimpactmodel.org/lookup/flight?itinerary=CJU-PUS-7C-514-20260624,PUS-NRT-7C-1151-20260625"></div>
+          <span aria-label="17552 日圓" role="text">¥17,552</span>
+        </li>
+        <li class="pIav2d">
+          <div class="JMc5Xc" role="link" aria-label="40103 日圓起。 搭乘大韓航空的直達航班。 星期三, 6月 24 中午12:55 於濟州國際機場出發，星期三, 6月 24 下午3:25 抵達成田國際機場。 總交通時間：2 小時 30 分鐘 預估碳排放量：132 公斤. 選擇航班"></div>
+          <span aria-label="40103 日圓" role="text">¥40,103</span>
+        </li>
+      </ul>
+    `;
+
+    const result = parseGoogleFlightsSearchResults(document, "JP", "https://www.google.com/travel/flights?tfs=abc");
+
+    expect(result.results).toHaveLength(2);
+    expect(result.results[0]).toMatchObject({
+      price: 17552,
+      currency: "JPY",
+      timeText: "20:00-09:30",
+      itineraryKey: "CJU-PUS-7C514-20260624|PUS-NRT-7C1151-20260625",
+    });
+    expect(result.results[1]?.timeText).toBe("12:55-15:25");
+    expect(result.results[0]?.matchKey).not.toContain("17552");
+    expect(result.results[0]?.matchKey).not.toContain("日圓");
+  });
+
+  it("uses Travel Impact itinerary metadata when available", () => {
+    document.body.innerHTML = `
+      <ul>
+        <li class="pIav2d">
+          <div class="JMc5Xc" role="link" aria-label="From 27321 Japanese yen. 1 stop flight with Asiana Airlines. Leaves Jeju International Airport at 10:20 AM on Wednesday, June 24 and arrives at Narita International Airport at 6:25 PM on Wednesday, June 24. Total duration 8 hr 5 min. Select flight"></div>
+          <div data-travelimpactmodelwebsiteurl="https://www.travelimpactmodel.org/lookup/flight?itinerary=CJU-GMP-OZ-8920-20260624,ICN-NRT-OZ-106-20260624"></div>
+          <span aria-label="27321 Japanese yen" role="text">¥27,321</span>
+        </li>
+      </ul>
+    `;
+
+    const result = parseGoogleFlightsSearchResults(document, "JP", "https://www.google.com/travel/flights?tfs=abc");
+
+    expect(result.results[0]?.itineraryKey).toBe("CJU-GMP-OZ8920-20260624|ICN-NRT-OZ106-20260624");
+  });
+
+  it("ignores Mu Travel search badges when parsing Google Flights search rows", () => {
+    document.body.innerHTML = `
+      <div class="pIav2d">
+        <span data-mu-travel-search-badge>Best JP $120</span>
+        <div class="wtdjmc">7:00 AM - 10:30 AM</div>
+        <div class="sSHqwe">STARLUX</div>
+        <div>3 hr 30 min</div>
+        <div>Nonstop</div>
+        <span aria-label="155 US dollars" role="text">$155</span>
+      </div>
+    `;
+
+    const result = parseGoogleFlightsSearchResults(document, "US", "https://www.google.com/travel/flights?tfs=abc");
+
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0]?.price).toBe(155);
+    expect(result.results[0]?.matchKey).not.toContain("best jp");
+    expect(result.results[0]?.matchKey).not.toContain("120");
+  });
+
+  it("ignores Mu Travel search badges inside price containers", () => {
+    document.body.innerHTML = `
+      <div class="pIav2d">
+        <div class="JMc5Xc" role="link" aria-label="From 40369 Japanese yen. Nonstop flight with Korean Air. Leaves Jeju International Airport at 12:55 PM on Wednesday, June 24 and arrives at Narita International Airport at 3:25 PM on Wednesday, June 24. Total duration 2 hr 30 min. Select flight"></div>
+        <div class="YMlIz FpEdX" data-mu-travel-search-badge-target="1">
+          <span aria-label="40369 Japanese yen" role="text">¥40,369</span>
+          <span data-mu-travel-search-badge="1">Cheapest</span>
+        </div>
+      </div>
+    `;
+
+    const result = parseGoogleFlightsSearchResults(document, "JP", "https://www.google.com/travel/flights?tfs=abc");
+
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0]?.price).toBe(40369);
+    expect(result.results[0]?.priceText).toBe("¥40,369");
+  });
+
+  it("does not parse departure times as search result prices from mixed containers", () => {
+    document.body.innerHTML = `
+      <div class="pIav2d">
+        <div>7:00 AM - 10:30 AM STARLUX 3 hr 30 min Nonstop $155</div>
+        <div class="wtdjmc">7:00 AM - 10:30 AM</div>
+        <div class="sSHqwe">STARLUX</div>
+        <div>3 hr 30 min</div>
+        <div>Nonstop</div>
+        <span aria-label="155 US dollars" role="text">$155</span>
+      </div>
+    `;
+
+    const result = parseGoogleFlightsSearchResults(document, "US", "https://www.google.com/travel/flights?tfs=abc");
+
+    expect(result.results[0]?.price).toBe(155);
+    expect(result.results[0]?.priceText).toBe("$155");
   });
 
   it("changes only the Google Flights country parameter", () => {

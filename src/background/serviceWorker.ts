@@ -1,4 +1,8 @@
-import { type GoogleFlightsCountryResult, googleFlightsCountryUrl } from "../shared/googleFlightsBooking";
+import {
+  type GoogleFlightsCountryResult,
+  type GoogleFlightsSearchCountryResult,
+  googleFlightsCountryUrl,
+} from "../shared/googleFlightsBooking";
 import type { RemoteProviderMetadata } from "../shared/types";
 
 type RuntimeMessage = {
@@ -6,9 +10,11 @@ type RuntimeMessage = {
   baseUrl?: string;
   countries?: string[];
   baselineOptionCount?: number;
+  baselineSearchResultCount?: number;
   matrixUrl?: string;
   openedByPage?: boolean;
   requestId?: string;
+  waitForExpansion?: boolean;
 };
 
 const GOOGLE_FLIGHTS_COMPARE_CONCURRENCY = 3;
@@ -73,6 +79,29 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     return true;
   }
 
+  if (payload.command === "compareGoogleFlightsSearchCountries") {
+    const progressTabId = sender.tab?.id;
+    if (typeof progressTabId !== "number") {
+      sendResponse({ ok: false, error: "Missing Google Flights tab." });
+      return false;
+    }
+    if (typeof payload.requestId !== "string" || !payload.requestId) {
+      sendResponse({ ok: false, error: "Missing Google Flights comparison request." });
+      return false;
+    }
+    void compareGoogleFlightsSearchCountries(payload, progressTabId)
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : "Search comparison failed.";
+        sendGoogleFlightsSearchComplete(progressTabId, payload.requestId, {
+          ok: false,
+          error: message,
+        });
+        sendResponse({ ok: false, error: message });
+      });
+    return true;
+  }
+
   if (payload.command !== "fetchProviderMetadata") return false;
 
   void fetchProviderMetadata(payload.baseUrl || "")
@@ -92,6 +121,19 @@ async function compareGoogleFlightsCountries(payload: RuntimeMessage, progressTa
     return result;
   });
   sendGoogleFlightsCountryComplete(progressTabId, payload.requestId, { ok: true });
+}
+
+async function compareGoogleFlightsSearchCountries(payload: RuntimeMessage, progressTabId?: number): Promise<void> {
+  const baseUrl = payload.baseUrl || "";
+  if (!baseUrl) throw new Error("Missing Google Flights URL.");
+  const countries = Array.from(new Set((payload.countries || []).filter((country) => /^[A-Z]{2}$/.test(country))));
+  const baselineResultCount = payload.baselineSearchResultCount || 0;
+  await mapWithConcurrency(countries, GOOGLE_FLIGHTS_COMPARE_CONCURRENCY, async (country) => {
+    return compareGoogleFlightsSearchCountry(baseUrl, country, baselineResultCount, (result) => {
+      sendGoogleFlightsSearchProgress(progressTabId, payload.requestId, result);
+    });
+  });
+  sendGoogleFlightsSearchComplete(progressTabId, payload.requestId, { ok: true });
 }
 
 async function openMatrixWithAutoOpen(matrixUrl: string, openedByPage = false, sourceWindowId?: number): Promise<void> {
@@ -218,6 +260,44 @@ function sendGoogleFlightsCountryComplete(
   );
 }
 
+function sendGoogleFlightsSearchProgress(
+  tabId: number | undefined,
+  requestId: string | undefined,
+  result: GoogleFlightsSearchCountryResult,
+): void {
+  if (typeof tabId !== "number" || !requestId) return;
+  chrome.tabs.sendMessage(
+    tabId,
+    {
+      command: "googleFlightsSearchComparisonResult",
+      requestId,
+      result,
+    },
+    () => {
+      void chrome.runtime.lastError;
+    },
+  );
+}
+
+function sendGoogleFlightsSearchComplete(
+  tabId: number | undefined,
+  requestId: string | undefined,
+  result: { ok: boolean; error?: string },
+): void {
+  if (typeof tabId !== "number" || !requestId) return;
+  chrome.tabs.sendMessage(
+    tabId,
+    {
+      command: "googleFlightsSearchComparisonComplete",
+      requestId,
+      ...result,
+    },
+    () => {
+      void chrome.runtime.lastError;
+    },
+  );
+}
+
 async function compareGoogleFlightsCountry(
   baseUrl: string,
   country: string,
@@ -247,6 +327,49 @@ async function compareGoogleFlightsCountry(
       status: "error",
       error: error instanceof Error ? error.message : "Country check failed.",
     };
+  } finally {
+    if (typeof tabId === "number") await removeTab(tabId);
+  }
+}
+
+async function compareGoogleFlightsSearchCountry(
+  baseUrl: string,
+  country: string,
+  baselineResultCount: number,
+  onProgress?: (result: GoogleFlightsSearchCountryResult) => void,
+): Promise<GoogleFlightsSearchCountryResult> {
+  const url = googleFlightsCountryUrl(baseUrl, country);
+  let tabId: number | undefined;
+  let sentProgress = false;
+  try {
+    const tab = await createInactiveTabPaced(url);
+    tabId = tab.id;
+    if (typeof tabId !== "number") throw new Error("Chrome did not provide a tab id.");
+    await waitForTabComplete(tabId);
+    let result = await parseGoogleFlightsSearchTab(tabId, country, url);
+    if (baselineResultCount > 0 && result.status !== "error" && result.results.length === 0) {
+      await reloadTab(tabId);
+      await waitForTabComplete(tabId);
+      result = await parseGoogleFlightsSearchTab(tabId, country, url);
+    }
+    onProgress?.(result);
+    sentProgress = true;
+    const expandedResult = await waitForExpandedGoogleFlightsSearchTab(tabId, country, url, result.results.length);
+    if (expandedResult && expandedResult.results.length > result.results.length) {
+      result = expandedResult;
+      onProgress?.(result);
+    }
+    return result;
+  } catch (error) {
+    const result = {
+      country,
+      url,
+      results: [],
+      status: "error",
+      error: error instanceof Error ? error.message : "Search country check failed.",
+    } satisfies GoogleFlightsSearchCountryResult;
+    if (!sentProgress) onProgress?.(result);
+    return result;
   } finally {
     if (typeof tabId === "number") await removeTab(tabId);
   }
@@ -294,6 +417,56 @@ async function parseGoogleFlightsTab(tabId: number, country: string, url: string
   }
   if (latest) return { ...latest, country, url };
   return { country, url, options: [], status: "empty" };
+}
+
+async function parseGoogleFlightsSearchTab(
+  tabId: number,
+  country: string,
+  url: string,
+): Promise<GoogleFlightsSearchCountryResult> {
+  let latest: GoogleFlightsSearchCountryResult | null = null;
+  const deadline = Date.now() + 18000;
+  let expanded = false;
+  while (Date.now() < deadline) {
+    try {
+      if (!expanded) {
+        await sendTabMessage(tabId, { command: "expandGoogleFlightsSearchResults", waitForExpansion: false });
+        expanded = true;
+      }
+      latest = await sendTabMessage<GoogleFlightsSearchCountryResult>(tabId, {
+        command: "parseGoogleFlightsSearchResults",
+      });
+      if (latest.results.length > 0) return { ...latest, country, url };
+    } catch {
+      // The content script may not be ready immediately after the tab completes.
+    }
+    await delay(600);
+  }
+  if (latest) return { ...latest, country, url };
+  return { country, url, results: [], status: "empty" };
+}
+
+async function waitForExpandedGoogleFlightsSearchTab(
+  tabId: number,
+  country: string,
+  url: string,
+  previousResultCount: number,
+): Promise<GoogleFlightsSearchCountryResult | null> {
+  if (previousResultCount <= 0) return null;
+  const deadline = Date.now() + 6500;
+  let latest: GoogleFlightsSearchCountryResult | null = null;
+  while (Date.now() < deadline) {
+    await delay(600);
+    try {
+      latest = await sendTabMessage<GoogleFlightsSearchCountryResult>(tabId, {
+        command: "parseGoogleFlightsSearchResults",
+      });
+      if (latest.results.length > previousResultCount) return { ...latest, country, url };
+    } catch {
+      // Google may still be mutating the result list after View more is clicked.
+    }
+  }
+  return latest && latest.results.length > previousResultCount ? { ...latest, country, url } : null;
 }
 
 async function fetchProviderMetadata(baseUrl: string): Promise<RemoteProviderMetadata[]> {
