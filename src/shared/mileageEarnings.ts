@@ -690,22 +690,18 @@ function uniqueAliases(values: string[]): string[] {
 const MILEAGE_PROGRAM_NAME_TRANSLATIONS: Partial<Record<AppLanguage, Record<string, string>>> = {
   es: {
     "Air Canada Aeroplan": "Programa Aeroplan de Air Canada",
-    "American Airlines AAdvantage": "Programa AAdvantage de American Airlines",
-    "British Airways Club": "The British Airways Club",
+    "American Airlines AAdvantage": "Programa AAdvantage",
     "Delta SkyMiles": "Programa de lealtad SkyMiles de Delta",
-    "United MileagePlus": "MileagePlus de United",
   },
   "zh-Hans": {
     "Air China PhoenixMiles": "凤凰知音",
     "China Airlines Dynasty Flyer": "华夏会员",
     "Eva Air Infinity MileageLands": "无限万哩游",
-    "Xiamen Airlines Egret Club": "白鹭俱乐部",
   },
   "zh-Hant": {
     "Air China PhoenixMiles": "鳳凰知音",
     "China Airlines Dynasty Flyer": "華夏會員",
     "Eva Air Infinity MileageLands": "無限萬哩遊",
-    "Xiamen Airlines Egret Club": "白鷺俱樂部",
   },
   ja: {
     "Air China PhoenixMiles": "エアチャイナ フェニックスマイル",
@@ -713,7 +709,6 @@ const MILEAGE_PROGRAM_NAME_TRANSLATIONS: Partial<Record<AppLanguage, Record<stri
     "Japan Airlines Mileage Bank": "JALマイレージバンク",
   },
   ko: {
-    "Asiana Club": "아시아나클럽",
     "Korean Air Skypass": "스카이패스",
   },
 };
