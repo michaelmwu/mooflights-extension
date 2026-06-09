@@ -457,6 +457,31 @@ describe("Google Flights booking option parser", () => {
     expect(countOccurrences(decodeTfsText(preservedTfs), "\x28\x00\x32\x02KE")).toBe(2);
   });
 
+  it("preserves later multicity slice filters instead of overwriting them", () => {
+    const url = `https://www.google.com/travel/flights/search?tfs=${encodeTfsText([
+      tfsSlice(tfsSegment("2026-06-03", "HKG", "TPE", "CI", "922"), "\x28\x00", "\x32\x02CI"),
+      tfsSlice(tfsSegment("2026-06-05", "TPE", "HKG", "BR", "891"), "\x32\x02BR"),
+    ])}`;
+
+    const preservedUrl = googleFlightsPreserveMulticityFiltersUrl(url);
+    const preservedTfs = decodeTfsText(new URL(preservedUrl).searchParams.get("tfs") || "");
+
+    expect(preservedUrl).not.toBe(url);
+    expect(countOccurrences(preservedTfs, "\x32\x02CI")).toBe(1);
+    expect(countOccurrences(preservedTfs, "\x32\x02BR")).toBe(1);
+    expect(countOccurrences(preservedTfs, "\x28\x00")).toBe(2);
+    expect(preservedTfs).toContain("\x32\x02BR\x28\x00");
+  });
+
+  it("leaves later multicity slices unchanged when they already have stop and airline filters", () => {
+    const url = `https://www.google.com/travel/flights/search?tfs=${encodeTfsText([
+      tfsSlice(tfsSegment("2026-06-03", "HKG", "TPE", "CI", "922"), "\x28\x00", "\x32\x02CI"),
+      tfsSlice(tfsSegment("2026-06-05", "TPE", "HKG", "BR", "891"), "\x28\x01", "\x32\x02BR"),
+    ])}`;
+
+    expect(googleFlightsPreserveMulticityFiltersUrl(url)).toBe(url);
+  });
+
   it("does not rewrite single-leg Google Flights searches when preserving filters", () => {
     const url = `https://www.google.com/travel/flights/search?tfs=${encodeTfsText([
       `${tfsSlice(tfsSegment("2026-06-03", "HKG", "TPE", "CI", "922"))}\x28\x00\x32\x02CI`,

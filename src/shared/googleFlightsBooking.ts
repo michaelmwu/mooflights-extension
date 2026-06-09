@@ -388,41 +388,35 @@ function googleFlightsTfsTopLevelSliceBlocks(
 }
 
 function googleFlightsSliceFilterFields(value: string): string[] {
-  const fields: string[] = [];
+  return googleFlightsSliceFilterFieldEntries(value).map((field) => field.value);
+}
+
+function googleFlightsSliceFilterFieldEntries(value: string): Array<{ fieldNumber: number; value: string }> {
+  const entries: Array<{ fieldNumber: number; value: string }> = [];
   for (let index = 0; index < value.length; ) {
     const tag = readProtobufTag(value, index);
     if (!tag) break;
     const nextIndex = skipProtobufField(value, tag, value.length);
     if (nextIndex <= index) break;
     if ((tag.fieldNumber === 5 && tag.wireType === 0) || (tag.fieldNumber === 6 && tag.wireType === 2)) {
-      fields.push(value.slice(index, nextIndex));
+      entries.push({ fieldNumber: tag.fieldNumber, value: value.slice(index, nextIndex) });
     }
     index = nextIndex;
   }
-  return fields;
+  return entries;
 }
 
 function googleFlightsSliceWithFilters(value: string, filterFields: string[]): string {
   if (filterFields.length === 0) return value;
-  if (googleFlightsSliceFilterFields(value).join("") === filterFields.join("")) return value;
-  let result = "";
-  for (let index = 0; index < value.length; ) {
-    const tag = readProtobufTag(value, index);
-    if (!tag) {
-      result += value.slice(index);
-      break;
-    }
-    const nextIndex = skipProtobufField(value, tag, value.length);
-    if (nextIndex <= index) {
-      result += value.slice(index);
-      break;
-    }
-    if (!((tag.fieldNumber === 5 && tag.wireType === 0) || (tag.fieldNumber === 6 && tag.wireType === 2))) {
-      result += value.slice(index, nextIndex);
-    }
-    index = nextIndex;
-  }
-  return result + filterFields.join("");
+  const existingFilterFieldNumbers = new Set(
+    googleFlightsSliceFilterFieldEntries(value).map((field) => field.fieldNumber),
+  );
+  const sourceFilterFields = filterFields
+    .map((field) => googleFlightsSliceFilterFieldEntries(field)[0])
+    .filter((field): field is { fieldNumber: number; value: string } => Boolean(field))
+    .filter((field) => !existingFilterFieldNumbers.has(field.fieldNumber))
+    .map((field) => field.value);
+  return sourceFilterFields.length > 0 ? value + sourceFilterFields.join("") : value;
 }
 
 function encodeVarint(value: number): string {
