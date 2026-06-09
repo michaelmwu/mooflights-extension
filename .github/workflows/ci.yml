@@ -47,7 +47,7 @@ jobs:
         run: bun run build
 
   extension-e2e:
-    name: Extension E2E
+    name: Extension E2E tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: verify
