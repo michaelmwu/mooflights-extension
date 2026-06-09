@@ -16,6 +16,7 @@ permissions:
 
 jobs:
   secrets:
+    name: Secrets
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -45,6 +46,7 @@ jobs:
           ./gitleaks detect --source . --redact --no-banner --verbose
 
   dependency-review:
+    name: Dependency Review
     if: github.event_name == 'pull_request' && vars.ENABLE_DEPENDENCY_REVIEW == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
