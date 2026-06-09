@@ -56,11 +56,11 @@ To smoke-test real sites locally, run:
 
 ```sh
 bun run test:e2e:real
-MU_TRAVEL_REAL_GOOGLE_FLIGHTS_BOOKING_URL="https://www.google.com/travel/flights/booking/..." bun run test:e2e:real
-MU_TRAVEL_REAL_COMPARE_E2E=1 bun run test:e2e:real
+MOOFLIGHTS_REAL_GOOGLE_FLIGHTS_BOOKING_URL="https://www.google.com/travel/flights/booking/..." bun run test:e2e:real
+MOOFLIGHTS_REAL_COMPARE_E2E=1 bun run test:e2e:real
 ```
 
-The Google Flights smoke test defaults to a generated future-dated one-way TPE-NRT booking URL. Set `MU_TRAVEL_REAL_GOOGLE_FLIGHTS_BOOKING_URL` to override it with a copied booking URL. The real compare-flow smoke starts from US and opens CA and ZA comparison tabs only when `MU_TRAVEL_REAL_COMPARE_E2E=1` is set. Real-site tests are opt-in because Google/ITA can change markup, rate-limit, or show bot-detection interstitials.
+The Google Flights smoke test defaults to a generated future-dated one-way TPE-NRT booking URL. Set `MOOFLIGHTS_REAL_GOOGLE_FLIGHTS_BOOKING_URL` to override it with a copied booking URL. The real compare-flow smoke starts from US and opens CA and ZA comparison tabs only when `MOOFLIGHTS_REAL_COMPARE_E2E=1` is set. Real-site tests are opt-in because Google/ITA can change markup, rate-limit, or show bot-detection interstitials.
 
 ## Common Commands
 

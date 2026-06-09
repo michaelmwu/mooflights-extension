@@ -7,7 +7,7 @@ export default async function globalSetup(): Promise<void> {
   await execFileAsync("bun", ["run", "build:dev"], {
     env: {
       ...process.env,
-      MU_TRAVEL_DIST_DIR: "dist",
+      MOOFLIGHTS_DIST_DIR: "dist",
     },
   });
 }

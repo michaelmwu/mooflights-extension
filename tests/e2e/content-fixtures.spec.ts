@@ -14,16 +14,16 @@ test("injects the ITA Matrix airport helper on routed search pages", async ({ pa
 
   await page.goto("https://matrix.itasoftware.com/search");
 
-  const panel = page.locator("#mu-travel-flights-panel");
+  const panel = page.locator("#mooflights-panel");
   await expect(panel).toBeAttached();
   await expect(panel.getByText("Airport helper")).toBeVisible();
   await expect(panel.getByLabel("Area")).toBeVisible();
 
   await panel.locator("summary[aria-label='Panel actions']").click();
   await panel.getByRole("button", { name: "Minimize" }).click();
-  await expect(panel.getByLabel("Expand Mu Travel panel")).toBeVisible();
+  await expect(panel.getByLabel("Expand MooFlights panel")).toBeVisible();
 
-  await panel.getByLabel("Expand Mu Travel panel").click();
+  await panel.getByLabel("Expand MooFlights panel").click();
   await expect(panel.getByText("Airport helper")).toBeVisible();
 });
 
@@ -32,7 +32,7 @@ test("parses pasted ITA itinerary JSON on routed itinerary pages", async ({ page
 
   await page.goto("https://matrix.itasoftware.com/itinerary");
 
-  const panel = page.locator("#mu-travel-flights-panel");
+  const panel = page.locator("#mooflights-panel");
   await expect(panel.getByText("Itinerary", { exact: true })).toBeVisible();
 
   await panel.getByText("Itinerary", { exact: true }).click();
@@ -58,7 +58,7 @@ test("opens Google Flights country comparison tabs from a routed US booking page
 
   await page.goto(pageUrl);
 
-  const panel = page.locator("#mu-travel-google-flights-panel");
+  const panel = page.locator("#mooflights-google-flights-panel");
   await expect(panel).toBeAttached();
   await expect(panel.getByText("Compare country pricing")).toBeVisible();
   await expect(panel.getByRole("button", { name: "Compare (3)" })).toBeEnabled();
@@ -84,7 +84,7 @@ test("renders Google Flights cached country comparison prices on routed booking 
 
   await page.goto(pageUrl);
 
-  const panel = page.locator("#mu-travel-google-flights-panel");
+  const panel = page.locator("#mooflights-google-flights-panel");
   await expect(panel).toBeAttached();
   await expect(panel.getByText("Compare country pricing")).toBeVisible();
 
@@ -98,16 +98,17 @@ test("renders Google Flights cached country comparison prices on routed booking 
 });
 
 async function routeOptionalExtensionNetwork(context: BrowserContext): Promise<void> {
+  const fixtureDate = new Date().toISOString().slice(0, 10);
   await context.route("https://cdn.jsdelivr.net/**", async (route) => {
     await route.fulfill({
       contentType: "application/json",
-      body: JSON.stringify({ date: "2026-06-09", usd: { eur: 0.92, gbp: 0.78, jpy: 156, usd: 1 } }),
+      body: JSON.stringify({ date: fixtureDate, usd: { eur: 0.92, gbp: 0.78, jpy: 156, usd: 1 } }),
     });
   });
   await context.route("https://api.fxratesapi.com/**", async (route) => {
     await route.fulfill({
       contentType: "application/json",
-      body: JSON.stringify({ date: "2026-06-09", rates: { EUR: 0.92, GBP: 0.78, JPY: 156, USD: 1 } }),
+      body: JSON.stringify({ date: fixtureDate, rates: { EUR: 0.92, GBP: 0.78, JPY: 156, USD: 1 } }),
     });
   });
 }
@@ -247,7 +248,7 @@ function htmlFixture(body: string): string {
     <html lang="en">
       <head>
         <meta charset="utf-8">
-        <title>Mu Travel E2E fixture</title>
+        <title>MooFlights E2E fixture</title>
       </head>
       <body>${body}</body>
     </html>`;

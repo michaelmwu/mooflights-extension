@@ -5,41 +5,43 @@ const DEFAULT_GOOGLE_FLIGHTS_BOOKING_URL =
   "https://www.google.com/travel/flights/booking?tfs=CBwQAho_EgoyMDI2LTA2LTI0Ih8KA1RQRRIKMjAyNi0wNi0yNBoDTlJUKgJCUjIDMTk2agcIARIDVFBFcgcIARIDTlJUQAFIAXABggELCP___________wGYAQI&tfu=CmxDalJJY0ZsYVRVRkdVRFJsUld0QlJFUktZVUZDUnkwdExTMHRMUzB0TFhSc2FuY3hOVUZCUVVGQlIyOXVNbFZqUWtNMGQzZEJFZ1ZDVWpFNU5ob0tDSkZMRUFBYUExUlhSRGdjY09ydEFRPT0SAggAIgMKATA&curr=USD";
 
 test.describe("local real-site smoke tests", () => {
-  test.skip(process.env.MU_TRAVEL_REAL_E2E !== "1", "Set MU_TRAVEL_REAL_E2E=1 to hit real travel sites locally.");
+  test.describe.configure({ timeout: 90_000 });
+
+  test.skip(process.env.MOOFLIGHTS_REAL_E2E !== "1", "Set MOOFLIGHTS_REAL_E2E=1 to hit real travel sites locally.");
 
   test("injects the ITA Matrix panel on the real search page", async ({ page }) => {
     await page.goto("https://matrix.itasoftware.com/search", { waitUntil: "domcontentloaded" });
 
-    const panel = page.locator("#mu-travel-flights-panel");
+    const panel = page.locator("#mooflights-panel");
     await expect(panel).toBeAttached({ timeout: 20_000 });
     await expect(panel.getByText("Airport helper")).toBeVisible();
   });
 
   test("injects the Google Flights panel on a real booking URL", async ({ page }) => {
     const bookingUrl =
-      process.env.MU_TRAVEL_REAL_GOOGLE_FLIGHTS_BOOKING_URL ||
+      process.env.MOOFLIGHTS_REAL_GOOGLE_FLIGHTS_BOOKING_URL ||
       futureDatedGoogleFlightsUrl(DEFAULT_GOOGLE_FLIGHTS_BOOKING_URL);
 
     await page.goto(bookingUrl, { waitUntil: "domcontentloaded" });
 
-    const panel = page.locator("#mu-travel-google-flights-panel");
+    const panel = page.locator("#mooflights-google-flights-panel");
     await expect(panel).toBeAttached({ timeout: 30_000 });
     await expect(panel.getByText("Compare country pricing")).toBeVisible();
   });
 
   test("runs the Google Flights country compare tab flow", async ({ context, extensionServiceWorker, page }) => {
     test.skip(
-      process.env.MU_TRAVEL_REAL_COMPARE_E2E !== "1",
-      "Set MU_TRAVEL_REAL_COMPARE_E2E=1 to open real Google Flights comparison tabs.",
+      process.env.MOOFLIGHTS_REAL_COMPARE_E2E !== "1",
+      "Set MOOFLIGHTS_REAL_COMPARE_E2E=1 to open real Google Flights comparison tabs.",
     );
     const bookingUrl =
-      process.env.MU_TRAVEL_REAL_GOOGLE_FLIGHTS_BOOKING_URL ||
+      process.env.MOOFLIGHTS_REAL_GOOGLE_FLIGHTS_BOOKING_URL ||
       futureDatedGoogleFlightsUrl(DEFAULT_GOOGLE_FLIGHTS_BOOKING_URL);
     await setGoogleFlightsCountries(extensionServiceWorker, ["US", "CA", "ZA"]);
 
     await page.goto(bookingUrl, { waitUntil: "domcontentloaded" });
 
-    const panel = page.locator("#mu-travel-google-flights-panel");
+    const panel = page.locator("#mooflights-google-flights-panel");
     await expect(panel).toBeAttached({ timeout: 30_000 });
     await expect(panel.getByRole("button", { name: "Compare (3)" })).toBeEnabled();
 

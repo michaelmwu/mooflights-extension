@@ -13,7 +13,7 @@ export async function setGoogleFlightsCountries(extensionServiceWorker: Worker, 
 }
 
 export async function waitForComparisonTab(context: BrowserContext, country: string, timeout = 15_000): Promise<Page> {
-  return await context.waitForEvent("page", {
+  return context.waitForEvent("page", {
     predicate: (comparisonPage) => new URL(comparisonPage.url()).searchParams.get("gl") === country,
     timeout,
   });
