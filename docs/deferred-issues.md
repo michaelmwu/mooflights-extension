@@ -15,7 +15,7 @@ richer mileage snapshot so preferred programs can be evaluated across more booki
 
 ## Account Sync
 
-Add Google sign-in through the private Mu Travel backend and sync preferences across browsers.
+Add Google sign-in through the private MooTravel backend and sync preferences across browsers.
 
 ## Provider Feedback
 
@@ -76,4 +76,4 @@ Replace the small seed dataset with a documented source/update pipeline and gene
 ## Mileage Earning Snapshot Pipeline
 
 Document and automate refreshing the extension-safe mileage earning snapshot from airline/program public earning charts,
-licensed datasets, or curated Mu Travel reference data. Do not copy Where to Credit page contents into the extension.
+licensed datasets, or curated MooTravel reference data. Do not copy Where to Credit page contents into the extension.

@@ -51,7 +51,7 @@ The extension should continue working if preference sync fails.
 GET /api/extension/v1/providers
 ```
 
-Purpose: allow the closed Mu Travel backend to override public provider metadata without shipping a new extension version.
+Purpose: allow the closed MooTravel backend to override public provider metadata without shipping a new extension version.
 
 Response:
 

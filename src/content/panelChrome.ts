@@ -6,22 +6,22 @@ type PanelHeaderOptions = {
   minimizeAction?: string;
 };
 
-export function muTravelPanelIconUrl(): string {
+export function mooFlightsPanelIconUrl(): string {
   return chrome.runtime.getURL(PANEL_ICON_32_PATH);
 }
 
-export function muTravelMinimizedIconUrl(): string {
+export function mooFlightsMinimizedIconUrl(): string {
   return chrome.runtime.getURL(PANEL_ICON_64_PATH);
 }
 
-export function renderMuTravelPanelHeader({
+export function renderMooFlightsPanelHeader({
   optionsAction,
   minimizeAction = "minimize-panel",
 }: PanelHeaderOptions): string {
   return `<header data-role="panel-header">
     <div class="brand">
-      <img src="${escapeHtml(muTravelPanelIconUrl())}" alt="" width="32" height="32">
-      <strong>Mu Travel Flights</strong>
+      <img src="${escapeHtml(mooFlightsPanelIconUrl())}" alt="" width="32" height="32">
+      <strong>MooFlights</strong>
     </div>
     <div class="header-actions">
       <details class="panel-menu">
@@ -45,13 +45,13 @@ export function renderMuTravelPanelHeader({
   </header>`;
 }
 
-export function renderMuTravelMinimizedButton(): string {
-  return `<button type="button" class="panel-icon" data-action="restore-panel" aria-label="Expand Mu Travel panel">
-    <img src="${escapeHtml(muTravelMinimizedIconUrl())}" alt="" width="64" height="64">
+export function renderMooFlightsMinimizedButton(): string {
+  return `<button type="button" class="panel-icon" data-action="restore-panel" aria-label="Expand MooFlights panel">
+    <img src="${escapeHtml(mooFlightsMinimizedIconUrl())}" alt="" width="64" height="64">
   </button>`;
 }
 
-export function muTravelPanelHeaderStyles(): string {
+export function mooFlightsPanelHeaderStyles(): string {
   return `
     header {
       display: flex;

@@ -18,7 +18,7 @@ function Popup(): React.ReactElement {
   return (
     <main>
       <header>
-        <h1>Mu Travel Flights</h1>
+        <h1>MooFlights</h1>
         <p>Offline-first ITA Matrix tools.</p>
       </header>
 

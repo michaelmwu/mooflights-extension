@@ -1,7 +1,7 @@
 import type { ExtensionSettings, RemoteProviderMetadata } from "./types";
 
 export async function fetchRemoteProviderMetadata(settings: ExtensionSettings): Promise<RemoteProviderMetadata[]> {
-  if (typeof __MU_TRAVEL_DEV_BUILD__ !== "undefined" && !__MU_TRAVEL_DEV_BUILD__) return [];
+  if (typeof __MOOFLIGHTS_DEV_BUILD__ !== "undefined" && !__MOOFLIGHTS_DEV_BUILD__) return [];
   if (!settings.backend.enabled || !settings.backend.baseUrl) return [];
 
   try {

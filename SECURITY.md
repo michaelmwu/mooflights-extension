@@ -4,7 +4,7 @@
 
 Do not open public issues for vulnerabilities, leaked secrets, or exploitable extension behavior.
 
-Use GitHub private vulnerability reporting if it is available for this repository. If it is not available, contact the repository owner privately through the maintained Mu Travel or GitHub owner channels.
+Use GitHub private vulnerability reporting if it is available for this repository. If it is not available, contact the repository owner privately through the maintained MooTravel or GitHub owner channels.
 
 ## Secret Handling
 

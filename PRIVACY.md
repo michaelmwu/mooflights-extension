@@ -2,11 +2,11 @@
 
 Last updated: May 31, 2026
 
-This policy applies to the current Mu Travel Flights browser extension.
+This policy applies to the current MooFlights browser extension.
 
 ## Data The Extension Handles
 
-Mu Travel Flights processes flight-search and itinerary information in the browser so it can show mileage estimates,
+MooFlights processes flight-search and itinerary information in the browser so it can show mileage estimates,
 booking links, airport-code helpers, and Google Flights country price comparisons.
 
 Depending on the page and features you use, this can include:
@@ -30,10 +30,10 @@ The extension uses this data to:
 - Compare selected Google Flights country pages.
 - Save your extension preferences locally.
 
-Mu Travel Flights does not use the current production extension build for analytics, advertising profiles, or user
+MooFlights does not use the current production extension build for analytics, advertising profiles, or user
 tracking.
 
-Mu Travel Flights' use of user data complies with the Chrome Web Store User Data Policy, including the Limited Use
+MooFlights' use of user data complies with the Chrome Web Store User Data Policy, including the Limited Use
 requirements.
 
 ## Storage And Retention
@@ -73,5 +73,5 @@ The extension requests only the permissions needed for the current feature set:
 
 ## Contact
 
-For privacy questions about Mu Travel Flights, use the support or contact channel listed for the extension in the Chrome
+For privacy questions about MooFlights, use the support or contact channel listed for the extension in the Chrome
 Web Store, or open an issue in this repository.

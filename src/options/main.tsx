@@ -139,7 +139,7 @@ function Options(): React.ReactElement {
         <div className="title">
           <img src={chrome.runtime.getURL("assets/extension-icons/icon-48.png")} alt="" width="48" height="48" />
           <div>
-            <h1>Mu Travel Flights</h1>
+            <h1>MooFlights</h1>
             <p>Companion tools for Google Flights and ITA Matrix.</p>
           </div>
         </div>
@@ -439,9 +439,11 @@ function Options(): React.ReactElement {
         </div>
       </section>
 
-      {__MU_TRAVEL_DEV_BUILD__ ? (
+      {__MOOFLIGHTS_DEV_BUILD__ ? (
         <DeveloperBackend settings={settings} setSettings={setSettings} persist={persist} />
       ) : null}
+
+      <footer className="legal-footer">Copyright (c) 2026 Mu Travel LLC.</footer>
     </main>
   );
 }
@@ -470,7 +472,7 @@ function DeveloperBackend(props: {
     <section className="dev-panel">
       <h2>Developer Backend</h2>
       <p className="note">
-        Dev-build-only controls for pointing the extension at a locally running Mu Travel API. This is an HTTPS/API
+        Dev-build-only controls for pointing the extension at a locally running MooTravel API. This is an HTTPS/API
         boundary, not direct database access.
       </p>
       <label className="check">

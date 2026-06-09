@@ -459,13 +459,13 @@ describe("Google Flights booking option parser", () => {
 
     const search = new URL(result?.matrixUrl || "").searchParams.get("search") || "";
     expect(new URL(result?.matrixUrl || "").pathname).toBe("/search");
-    expect(new URL(result?.matrixUrl || "").searchParams.get("muTravelAutoOpen")).toBe("1");
-    expect(new URL(result?.matrixUrl || "").searchParams.get("muTravelAutoSearch")).toBe("1");
+    expect(new URL(result?.matrixUrl || "").searchParams.get("mooFlightsAutoOpen")).toBe("1");
+    expect(new URL(result?.matrixUrl || "").searchParams.get("mooFlightsAutoSearch")).toBe("1");
     const decoded = JSON.parse(atob(search));
     expect(decoded).toMatchObject({
       type: "one-way",
-      muTravelAutoOpen: "1",
-      muTravelAutoSearch: "1",
+      mooFlightsAutoOpen: "1",
+      mooFlightsAutoSearch: "1",
       slices: [
         {
           origin: ["HKG"],
@@ -540,8 +540,8 @@ describe("Google Flights booking option parser", () => {
     const decoded = JSON.parse(atob(search));
     expect(decoded).toMatchObject({
       type: "multi-city",
-      muTravelAutoOpen: "1",
-      muTravelAutoSearch: "1",
+      mooFlightsAutoOpen: "1",
+      mooFlightsAutoSearch: "1",
       options: {
         cabin: "BUSINESS",
         currency: {
