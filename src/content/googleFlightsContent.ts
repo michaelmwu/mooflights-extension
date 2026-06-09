@@ -2052,6 +2052,8 @@ function applyGoogleFlightsSearchComplete(payload: { requestId?: unknown; ok?: u
   state.comparingCountryCodes = [];
   state.searchBestByRowKey = bestPricesBySearchRow(state.searchBaseline, state.searchResults);
   render();
+  applySearchBadges();
+  applyRequestedSearchHighlight(state.searchBaseline);
 }
 
 function applySearchBadges(): void {
