@@ -411,6 +411,12 @@ button.secondary {
   background: #fffbeb;
 }
 
+.legal-footer {
+  color: #64748b;
+  font-size: 12px;
+  text-align: center;
+}
+
 .target-row {
   display: flex;
   flex-wrap: wrap;

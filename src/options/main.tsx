@@ -442,6 +442,8 @@ function Options(): React.ReactElement {
       {__MOOFLIGHTS_DEV_BUILD__ ? (
         <DeveloperBackend settings={settings} setSettings={setSettings} persist={persist} />
       ) : null}
+
+      <footer className="legal-footer">Copyright (c) 2026 Mu Travel LLC. Licensed AGPL-3.0-only.</footer>
     </main>
   );
 }
