@@ -21,6 +21,7 @@ describe("settings", () => {
     expect(
       mergeSettings({
         hiddenProviderIds: null,
+        language: "fr",
         preferredProviderIds: "kayak",
         preferredFrequentFlyerPrograms: ["Air Canada Aeroplan", 123, "British Airways Club"],
         frequentFlyerProgramTiers: {
@@ -119,6 +120,14 @@ describe("settings", () => {
         },
       }).googleFlights.countryCodes,
     ).toEqual(["US", "CA", "BR"]);
+  });
+
+  it("preserves a supported language preference", () => {
+    expect(
+      mergeSettings({
+        language: "zh-Hant",
+      }).language,
+    ).toBe("zh-Hant");
   });
 
   it("removes always-shown providers from stored provider preferences", () => {

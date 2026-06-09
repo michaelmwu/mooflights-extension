@@ -1,0 +1,8 @@
+{
+  "extensionName": {
+    "message": "MooFlights"
+  },
+  "extensionDescription": {
+    "message": "Google Flights と ITA Matrix で価格比較とマイル加算を表示する補助ツールです。"
+  }
+}

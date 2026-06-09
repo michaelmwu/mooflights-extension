@@ -16,6 +16,7 @@ import {
   googleFlightsCountryCodeFromSearchValue,
   isAllGoogleFlightsCountryCodes,
 } from "../shared/googleFlightsCountries";
+import { createTranslator, htmlLang, LANGUAGE_OPTIONS } from "../shared/i18n";
 import {
   type MileageProgramOption,
   mileageProgramTierOptions,
@@ -31,6 +32,7 @@ function Options(): React.ReactElement {
   const [programSearch, setProgramSearch] = useState("");
   const [googleFlightsCountrySearch, setGoogleFlightsCountrySearch] = useState("");
   const [saved, setSaved] = useState(false);
+  const t = useMemo(() => createTranslator(settings.language), [settings.language]);
   const airportAreas = useMemo(() => airportAreaOptions(), []);
   const googleFlightsCountries = useMemo(() => googleFlightsAvailableCountryOptions(), []);
   const allGoogleFlightsCountries = useMemo(() => allGoogleFlightsCountryCodes(), []);
@@ -44,6 +46,10 @@ function Options(): React.ReactElement {
   useEffect(() => {
     void loadSettings().then(setSettings);
   }, []);
+
+  useEffect(() => {
+    document.documentElement.lang = htmlLang(settings.language);
+  }, [settings.language]);
 
   async function persist(next: ExtensionSettings): Promise<void> {
     setSettings(next);
@@ -139,24 +145,46 @@ function Options(): React.ReactElement {
         <div className="title">
           <img src={chrome.runtime.getURL("assets/extension-icons/icon-48.png")} alt="" width="48" height="48" />
           <div>
-            <h1>MooFlights</h1>
-            <p>Companion tools for Google Flights and ITA Matrix.</p>
+            <h1>{t("appName")}</h1>
+            <p>{t("appTagline")}</p>
           </div>
         </div>
-        <span>{saved ? "Saved" : " "}</span>
+        <span>{saved ? t("saved") : " "}</span>
       </header>
 
       <section>
-        <h2>Google Flights</h2>
-        <p className="note">Default countries for booking-page price comparisons.</p>
+        <h2>{t("general")}</h2>
+        <p className="note">{t("languageNote")}</p>
+        <label className="language-select">
+          {t("language")}
+          <select
+            value={settings.language}
+            onChange={(event) => {
+              const language = LANGUAGE_OPTIONS.find((option) => option.code === event.currentTarget.value)?.code;
+              if (!language) return;
+              void persist({ ...settings, language });
+            }}
+          >
+            {LANGUAGE_OPTIONS.map((language) => (
+              <option key={language.code} value={language.code}>
+                {language.nativeLabel} ({language.label})
+              </option>
+            ))}
+          </select>
+        </label>
+      </section>
+
+      <section>
+        <h2>{t("googleFlights")}</h2>
+        <p className="note">{t("googleFlightsNote")}</p>
         <div className="country-picker">
           <label>
-            Add country
+            {t("addCountry")}
             <input
               type="search"
               list="google-country-options"
               value={googleFlightsCountrySearch}
-              placeholder="Search country or enter code"
+              placeholder={t("countrySearchPlaceholder")}
               onChange={(event) => setGoogleFlightsCountrySearch(event.currentTarget.value)}
               onKeyDown={(event) => {
                 if (event.key !== "Enter") return;
@@ -171,7 +199,7 @@ function Options(): React.ReactElement {
             </datalist>
           </label>
           <button type="button" className="secondary" onClick={addGoogleFlightsCountry}>
-            Add
+            {t("add")}
           </button>
           <button
             type="button"
@@ -186,7 +214,7 @@ function Options(): React.ReactElement {
               })
             }
           >
-            Recommended
+            {t("recommended")}
           </button>
           <button
             type="button"
@@ -201,50 +229,49 @@ function Options(): React.ReactElement {
               })
             }
           >
-            All useful countries
+            {t("allUsefulCountries")}
           </button>
         </div>
-        {usesAllGoogleFlightsCountries ? (
-          <p className="note country-warning">
-            All useful countries excludes unsupported and not-useful markets. Results appear as each country finishes.
-          </p>
-        ) : null}
+        {usesAllGoogleFlightsCountries ? <p className="note country-warning">{t("allCountriesWarning")}</p> : null}
         <div className="country-list">
-          {settings.googleFlights.countryCodes.map((country) => (
-            <span className="country-chip" key={country}>
-              <span className="flag" aria-hidden="true">
-                {flagEmoji(country)}
+          {settings.googleFlights.countryCodes.map((country) => {
+            const displayName = countryDisplayName(country);
+            return (
+              <span className="country-chip" key={country}>
+                <span className="flag" aria-hidden="true">
+                  {flagEmoji(country)}
+                </span>
+                {displayName}
+                <button
+                  type="button"
+                  aria-label={t("removeCountry", { country: displayName })}
+                  onClick={() => removeGoogleFlightsCountry(country)}
+                >
+                  x
+                </button>
               </span>
-              {countryDisplayName(country)}
-              <button
-                type="button"
-                aria-label={`Remove ${country}`}
-                onClick={() => removeGoogleFlightsCountry(country)}
-              >
-                x
-              </button>
-            </span>
-          ))}
+            );
+          })}
         </div>
       </section>
 
       <section>
-        <h2>ITA Matrix</h2>
+        <h2>{t("itaMatrix")}</h2>
 
         <div className="settings-group">
-          <h3>Frequent Flyer Programs</h3>
-          <p className="note">Preferred programs are highlighted first.</p>
+          <h3>{t("frequentFlyerPrograms")}</h3>
+          <p className="note">{t("frequentFlyerProgramsNote")}</p>
           <label>
-            Search
+            {t("search")}
             <input
               type="search"
               value={programSearch}
-              placeholder="Search programs"
+              placeholder={t("programSearchPlaceholder")}
               onChange={(event) => setProgramSearch(event.currentTarget.value)}
             />
           </label>
           <fieldset className="program-list">
-            <legend>Preferred frequent flyer programs</legend>
+            <legend>{t("preferredFrequentFlyerPrograms")}</legend>
             <div className="program-list-scroll">
               {visibleMileagePrograms.map((program) => {
                 const tierOptions = mileageProgramTierOptions(program.program);
@@ -271,11 +298,11 @@ function Options(): React.ReactElement {
                     </label>
                     {tierOptions.length > 0 ? (
                       <select
-                        aria-label={`${program.program} status level`}
+                        aria-label={t("statusLevel", { program: program.program })}
                         value={settings.frequentFlyerProgramTiers[program.program] || ""}
                         onChange={(event) => setProgramTier(program.program, event.currentTarget.value)}
                       >
-                        <option value="">All levels</option>
+                        <option value="">{t("allLevels")}</option>
                         {tierOptions.map((tier) => (
                           <option key={tier.program} value={tier.program}>
                             {tier.label}
@@ -289,33 +316,33 @@ function Options(): React.ReactElement {
             </div>
           </fieldset>
           {visibleMileagePrograms.length === 0 ? (
-            <p className="note">No matching programs.</p>
+            <p className="note">{t("noMatchingPrograms")}</p>
           ) : settings.preferredFrequentFlyerPrograms.length > 0 ? (
             <div className="selected-summary">
-              {settings.preferredFrequentFlyerPrograms.length} selected
+              {t("selectedCount", { count: settings.preferredFrequentFlyerPrograms.length })}
               <button
                 type="button"
                 onClick={() =>
                   void persist({ ...settings, preferredFrequentFlyerPrograms: [], frequentFlyerProgramTiers: {} })
                 }
               >
-                Clear
+                {t("clear")}
               </button>
             </div>
           ) : null}
         </div>
 
         <div className="settings-group">
-          <h3>Airport Helper Defaults</h3>
+          <h3>{t("airportHelperDefaults")}</h3>
           <div className="grid">
             <label>
-              Area
+              {t("area")}
               <input
                 key={airportAreaSearchValue(settings.airportHelper) || "any-area"}
                 type="search"
                 list="airport-area-options"
                 defaultValue={airportAreaSearchValue(settings.airportHelper)}
-                placeholder="Search region, continent, or country"
+                placeholder={t("airportAreaPlaceholder")}
                 onBlur={(event) => {
                   const nextAirportHelper = airportHelperWithArea(settings.airportHelper, event.currentTarget.value);
                   if (nextAirportHelper === settings.airportHelper) {
@@ -354,20 +381,17 @@ function Options(): React.ReactElement {
                 })
               }
             >
-              Clear area
+              {t("clearArea")}
             </button>
           </div>
         </div>
 
         <div className="settings-group">
-          <h3>Provider Links</h3>
-          <p className="note">
-            Where to Credit and Google Flights are always shown. Choose which additional booking and search links appear
-            after ITA Matrix captures an itinerary.
-          </p>
+          <h3>{t("providerLinks")}</h3>
+          <p className="note">{t("providerLinksNote")}</p>
           <div className="provider-summary">
             <div>
-              <strong>Preferred</strong>
+              <strong>{t("preferred")}</strong>
               <div className="provider-chips">
                 {preferredProviders.map((provider) => (
                   <button
@@ -382,7 +406,7 @@ function Options(): React.ReactElement {
               </div>
             </div>
             <div>
-              <strong>Hidden</strong>
+              <strong>{t("hidden")}</strong>
               <div className="provider-chips">
                 {hiddenProviders.length > 0
                   ? hiddenProviders.map((provider) => (
@@ -395,22 +419,22 @@ function Options(): React.ReactElement {
                         {provider.label} x
                       </button>
                     ))
-                  : "None"}
+                  : t("none")}
               </div>
             </div>
           </div>
           <details className="provider-menu">
-            <summary>Manage providers</summary>
+            <summary>{t("manageProviders")}</summary>
             <div className="provider-menu-list">
               {configurableProviders.map((provider) => {
-                const reliability = providerReliabilityCopy(provider.reliabilityScore);
+                const reliability = providerReliabilityCopy(provider.reliabilityScore, t);
                 return (
                   <div className={`provider-option ${reliability.tone}`} key={provider.id}>
                     <div>
                       <strong>{provider.label}</strong>
                       <small>
                         <span className="status-dot" aria-hidden="true" />
-                        {reliability.label} · {categoryLabel(provider.category)}
+                        {reliability.label} · {categoryLabel(provider.category, t)}
                       </small>
                     </div>
                     <label className="check compact">
@@ -421,7 +445,7 @@ function Options(): React.ReactElement {
                           setProviderPreference(provider.id, "preferred", event.currentTarget.checked)
                         }
                       />
-                      Prefer
+                      {t("prefer")}
                     </label>
                     <label className="check compact">
                       <input
@@ -429,7 +453,7 @@ function Options(): React.ReactElement {
                         checked={settings.hiddenProviderIds.includes(provider.id)}
                         onChange={(event) => setProviderPreference(provider.id, "hidden", event.currentTarget.checked)}
                       />
-                      Hide
+                      {t("hide")}
                     </label>
                   </div>
                 );
@@ -453,6 +477,7 @@ function DeveloperBackend(props: {
   setSettings: (settings: ExtensionSettings) => void;
   persist: (settings: ExtensionSettings) => Promise<void>;
 }): React.ReactElement {
+  const t = useMemo(() => createTranslator(props.settings.language), [props.settings.language]);
   const localTargets = [
     "http://localhost:48731",
     "http://127.0.0.1:48731",
@@ -470,21 +495,18 @@ function DeveloperBackend(props: {
 
   return (
     <section className="dev-panel">
-      <h2>Developer Backend</h2>
-      <p className="note">
-        Dev-build-only controls for pointing the extension at a locally running MooTravel API. This is an HTTPS/API
-        boundary, not direct database access.
-      </p>
+      <h2>{t("developerBackend")}</h2>
+      <p className="note">{t("developerBackendNote")}</p>
       <label className="check">
         <input
           type="checkbox"
           checked={props.settings.backend.enabled}
           onChange={(event) => void persistBackend(event.currentTarget.checked)}
         />
-        Fetch optional provider metadata from backend.
+        {t("fetchProviderMetadata")}
       </label>
       <label>
-        API base URL
+        {t("apiBaseUrl")}
         <input
           value={props.settings.backend.baseUrl}
           onChange={(event) =>
@@ -523,33 +545,34 @@ function hostPermissionOrigin(baseUrl: string): string {
   }
 }
 
-function providerReliabilityCopy(score: number): { tone: "high" | "medium" | "low"; label: string; help?: string } {
+function providerReliabilityCopy(
+  score: number,
+  t: ReturnType<typeof createTranslator>,
+): { tone: "high" | "medium" | "low"; label: string } {
   const confidence = providerConfidence(score);
   if (confidence === "high") {
     return {
       tone: "high",
-      label: "Reliable",
+      label: t("reliable"),
     };
   }
   if (confidence === "medium") {
     return {
       tone: "medium",
-      label: "Check details",
-      help: "May need manual adjustment.",
+      label: t("checkDetails"),
     };
   }
   return {
     tone: "low",
-    label: "Unreliable",
-    help: "Use as a fallback.",
+    label: t("unreliable"),
   };
 }
 
-function categoryLabel(category: string): string {
-  if (category === "miles") return "miles credit";
-  if (category === "meta") return "flight search";
-  if (category === "ota") return "booking site";
-  if (category === "airline") return "airline";
+function categoryLabel(category: string, t: ReturnType<typeof createTranslator>): string {
+  if (category === "miles") return t("milesCredit");
+  if (category === "meta") return t("flightSearch");
+  if (category === "ota") return t("bookingSite");
+  if (category === "airline") return t("airline");
   return category;
 }
 

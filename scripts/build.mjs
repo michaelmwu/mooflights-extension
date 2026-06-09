@@ -113,6 +113,7 @@ async function copyStaticFiles() {
   }
 
   await cp(resolve(root, "src/assets"), resolve(dist, "assets"), { recursive: true, force: true });
+  await cp(resolve(root, "src/_locales"), resolve(dist, "_locales"), { recursive: true, force: true });
 
   await writeFile(
     resolve(dist, "OPEN_SOURCE_NOTICE.txt"),

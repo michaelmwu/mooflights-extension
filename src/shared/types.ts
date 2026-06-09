@@ -43,6 +43,8 @@ export type NormalizedItinerary = {
 
 export type LinkCategory = "miles" | "airline" | "ota" | "meta" | "utility";
 
+export type AppLanguage = "en" | "es" | "zh-Hans" | "zh-Hant" | "ja" | "ko";
+
 export type LinkProvider = {
   id: string;
   label: string;
@@ -61,6 +63,7 @@ export type RankedProviderLink = {
 };
 
 export type ExtensionSettings = {
+  language: AppLanguage;
   hiddenProviderIds: string[];
   preferredProviderIds: string[];
   preferredFrequentFlyerPrograms: string[];
