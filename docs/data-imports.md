@@ -6,7 +6,7 @@ review the diff before committing.
 ## Ownership Split
 
 - Extension repo: reproducible import scripts, compact public fallback snapshots, fixture checks, and generated reports.
-- Mu Travel backend: canonical refresh jobs, richer private metadata, reliability scoring, affiliate/direct-link rules, and
+- MooTravel backend: canonical refresh jobs, richer private metadata, reliability scoring, affiliate/direct-link rules, and
   account-specific preference data.
 
 The extension must keep working without the backend, but it should not bundle every private or brittle commercial rule.
@@ -24,7 +24,7 @@ regularly refreshed.
 
 Do not copy Where to Credit page contents into the extension. Where to Credit can remain an outbound lookup target, but
 bundled earning-rate snapshots should be generated from airline/program public earning charts, licensed datasets, or
-curated Mu Travel reference data.
+curated MooTravel reference data.
 
 ## Airline Code Sources
 
@@ -63,7 +63,7 @@ medium and large airports with valid three-character IATA codes, and stores comp
 
 OurAirports publishes this data into the public domain. Keep attribution to `https://ourairports.com/data/` in docs and
 release notices when bundling this snapshot. The extension uses it for offline great-circle distance estimates and
-search-page airport helper filtering; backend services may use a different source if Mu Travel needs closed-source or
+search-page airport helper filtering; backend services may use a different source if MooTravel needs closed-source or
 proprietary enrichment.
 
 `src/shared/data/airport-region-presets.json` is a curated local helper for inserting useful groups of airports into ITA

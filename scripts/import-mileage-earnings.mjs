@@ -9,7 +9,7 @@ const outPath = resolve(root, "src/shared/data/mileage-earning.json");
 const source = JSON.parse(await readFile(sourcePath, "utf8"));
 const compact = {
   f: source.fetched_at || new Date().toISOString(),
-  n: "Compact local copy of all redeemable mileage rows from the Mu Travel reference snapshot.",
+  n: "Compact local copy of all redeemable mileage rows from the MooTravel reference snapshot.",
   p: [],
   a: {},
 };

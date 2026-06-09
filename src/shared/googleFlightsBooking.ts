@@ -450,8 +450,8 @@ function buildItaMatrixSearchUrl(
       : slices.map((slice) => matrixSearchSlice(slice));
   const payload = {
     type: tripType,
-    muTravelAutoOpen: "1",
-    muTravelAutoSearch: "1",
+    mooFlightsAutoOpen: "1",
+    mooFlightsAutoSearch: "1",
     slices: matrixSlices,
     options: {
       cabin,
@@ -467,8 +467,8 @@ function buildItaMatrixSearchUrl(
   };
   const params = new URLSearchParams({
     search: encodeBase64(JSON.stringify(payload)),
-    muTravelAutoOpen: "1",
-    muTravelAutoSearch: "1",
+    mooFlightsAutoOpen: "1",
+    mooFlightsAutoSearch: "1",
   });
   return `https://matrix.itasoftware.com/search?${params.toString()}`;
 }

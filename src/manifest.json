@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Mu Travel Flights",
+  "name": "MooFlights",
   "version": "0.0.8",
   "description": "Companion for Google Flights and ITA Matrix to show comparison prices and mileage earning.",
   "icons": {
@@ -11,7 +11,7 @@
   },
   "action": {
     "default_popup": "popup/index.html",
-    "default_title": "Mu Travel Flights",
+    "default_title": "MooFlights",
     "default_icon": {
       "16": "assets/extension-icons/icon-16.png",
       "32": "assets/extension-icons/icon-32.png",
