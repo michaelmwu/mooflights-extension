@@ -443,7 +443,7 @@ function Options(): React.ReactElement {
         <DeveloperBackend settings={settings} setSettings={setSettings} persist={persist} />
       ) : null}
 
-      <footer className="legal-footer">Copyright (c) 2026 Mu Travel LLC. Licensed AGPL-3.0-only.</footer>
+      <footer className="legal-footer">Copyright (c) 2026 Mu Travel LLC.</footer>
     </main>
   );
 }
