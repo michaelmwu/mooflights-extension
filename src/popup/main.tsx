@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { createTranslator, htmlLang } from "../shared/i18n";
 import { LOCAL_PROVIDERS } from "../shared/providers";
-import { DEFAULT_SETTINGS, loadSettings } from "../shared/storage";
+import { DEFAULT_SETTINGS, loadSettings, mergeSettings, SETTINGS_KEY } from "../shared/storage";
 import type { ExtensionSettings } from "../shared/types";
 import "./popup.css";
 
@@ -14,7 +14,22 @@ function Popup(): React.ReactElement {
   const t = useMemo(() => createTranslator(settings.language), [settings.language]);
 
   useEffect(() => {
-    void loadSettings().then(setSettings);
+    let active = true;
+    void loadSettings().then((nextSettings) => {
+      if (active) setSettings(nextSettings);
+    });
+
+    function handleStorageChange(changes: Record<string, chrome.storage.StorageChange>, areaName: string): void {
+      const settingsChange = changes[SETTINGS_KEY];
+      if (areaName !== "local" || !settingsChange) return;
+      setSettings(mergeSettings(settingsChange.newValue));
+    }
+
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    return () => {
+      active = false;
+      chrome.storage.onChanged.removeListener(handleStorageChange);
+    };
   }, []);
 
   useEffect(() => {

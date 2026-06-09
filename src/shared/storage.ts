@@ -28,7 +28,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   },
 };
 
-const SETTINGS_KEY = "muTravelSettings";
+export const SETTINGS_KEY = "muTravelSettings";
 
 export async function loadSettings(): Promise<ExtensionSettings> {
   const stored = await chrome.storage.local.get(SETTINGS_KEY);
