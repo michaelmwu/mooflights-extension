@@ -153,10 +153,25 @@ async function postJson(url, token, payload, label) {
 }
 
 async function fetchJson(url, init, label) {
-  const timeoutSignal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
-  const signal = init?.signal ? AbortSignal.any([init.signal, timeoutSignal]) : timeoutSignal;
-  const response = await fetch(url, { ...init, signal });
-  const text = await response.text();
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  const timeout = setTimeout(abort, REQUEST_TIMEOUT_MS);
+
+  if (init?.signal?.aborted) {
+    controller.abort();
+  } else {
+    init?.signal?.addEventListener("abort", abort, { once: true });
+  }
+
+  let text = "";
+  let response;
+  try {
+    response = await fetch(url, { ...init, signal: controller.signal });
+    text = await response.text();
+  } finally {
+    clearTimeout(timeout);
+    init?.signal?.removeEventListener("abort", abort);
+  }
   let body = {};
   if (text) {
     try {
@@ -174,7 +189,7 @@ async function fetchJson(url, init, label) {
 async function detectZipArtifact() {
   const artifactsDir = resolve(root, "artifacts");
   const entries = await readdir(artifactsDir).catch(() => []);
-  const candidates = entries.filter((entry) => /^mooflights-\d+\.\d+\.\d+\.zip$/.test(entry));
+  const candidates = entries.filter((entry) => /^mooflights-[^/]+\.zip$/.test(entry));
   if (candidates.length !== 1) {
     throw new Error(
       `Expected exactly one artifacts/mooflights-*.zip file; found ${candidates.length}. Pass --artifact=path.`,
