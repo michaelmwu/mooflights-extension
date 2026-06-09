@@ -333,9 +333,10 @@ function preserveGoogleFlightsTfsSliceFilters(tfs: string): string {
   const slices = googleFlightsTfsTopLevelSliceBlocks(decoded);
   if (slices.length < 2) return tfs;
 
-  const filterFields = slices.map((slice) => googleFlightsSliceFilterFields(slice.value));
-  const sourceFilters = filterFields.find((fields) => fields.length > 0);
-  if (!sourceFilters) return tfs;
+  const sourceFilterIndex = slices.findIndex((slice) => googleFlightsSliceFilterFields(slice.value).length > 0);
+  const sourceFilters =
+    sourceFilterIndex >= 0 ? googleFlightsSliceFilterFields(slices[sourceFilterIndex]?.value || "") : [];
+  if (sourceFilters.length === 0) return tfs;
 
   let result = "";
   let cursor = 0;
@@ -344,7 +345,8 @@ function preserveGoogleFlightsTfsSliceFilters(tfs: string): string {
     const slice = slices[index];
     if (!slice) continue;
     result += decoded.slice(cursor, slice.fieldStart);
-    const nextValue = googleFlightsSliceWithFilters(slice.value, sourceFilters);
+    const nextValue =
+      index > sourceFilterIndex ? googleFlightsSliceWithFilters(slice.value, sourceFilters) : slice.value;
     result += decoded.slice(slice.fieldStart, slice.lengthStart);
     result += encodeVarint(nextValue.length);
     result += nextValue;
