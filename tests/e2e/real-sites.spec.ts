@@ -1,5 +1,5 @@
-import type { BrowserContext, Page, Worker } from "@playwright/test";
 import { expect, test } from "./fixtures";
+import { setGoogleFlightsCountries, waitForComparisonTab } from "./helpers";
 
 const DEFAULT_GOOGLE_FLIGHTS_BOOKING_URL =
   "https://www.google.com/travel/flights/booking?tfs=CBwQAho_EgoyMDI2LTA2LTI0Ih8KA1RQRRIKMjAyNi0wNi0yNBoDTlJUKgJCUjIDMTk2agcIARIDVFBFcgcIARIDTlJUQAFIAXABggELCP___________wGYAQI&tfu=CmxDalJJY0ZsYVRVRkdVRFJsUld0QlJFUktZVUZDUnkwdExTMHRMUzB0TFhSc2FuY3hOVUZCUVVGQlIyOXVNbFZqUWtNMGQzZEJFZ1ZDVWpFNU5ob0tDSkZMRUFBYUExUlhSRGdjY09ydEFRPT0SAggAIgMKATA&curr=USD";
@@ -56,30 +56,13 @@ test.describe("local real-site smoke tests", () => {
   });
 });
 
-async function setGoogleFlightsCountries(extensionServiceWorker: Worker, countryCodes: string[]): Promise<void> {
-  await extensionServiceWorker.evaluate(async (codes) => {
-    await chrome.storage.local.set({
-      muTravelSettings: {
-        googleFlights: {
-          countryCodes: codes,
-        },
-      },
-    });
-  }, countryCodes);
-}
-
-async function waitForComparisonTab(context: BrowserContext, country: string): Promise<Page> {
-  return await context.waitForEvent("page", {
-    predicate: (comparisonPage) => new URL(comparisonPage.url()).searchParams.get("gl") === country,
-    timeout: 20_000,
-  });
-}
-
 function futureDatedGoogleFlightsUrl(value: string, daysAhead = 45): string {
   const url = new URL(value);
   const date = futureIsoDate(daysAhead);
-  const tfs = url.searchParams.get("tfs");
-  if (tfs) url.searchParams.set("tfs", replaceDatesInBase64Url(tfs, date));
+  for (const parameter of ["tfs", "tfu"]) {
+    const encoded = url.searchParams.get(parameter);
+    if (encoded) url.searchParams.set(parameter, replaceDatesInBase64Url(encoded, date));
+  }
   return url.toString();
 }
 

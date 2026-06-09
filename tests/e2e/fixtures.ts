@@ -4,7 +4,7 @@ import { type BrowserContext, test as base, chromium, expect, type Page, type Wo
 type ExtensionFixtures = {
   extensionId: string;
   extensionServiceWorker: Worker;
-  openExtensionPage: (extensionPath: string) => Promise<Page>;
+  openExtensionPage: (extensionPagePath: string) => Promise<Page>;
 };
 
 const extensionPath = path.resolve("dist");

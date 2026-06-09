@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import type { BrowserContext, Page, Worker } from "@playwright/test";
 import { expect, test } from "./fixtures";
+import { setGoogleFlightsCountries, waitForComparisonTab } from "./helpers";
 
 const itaFixtureJson = readFileSync("src/shared/fixtures/itaRoundTrip.json", "utf8");
 
@@ -129,18 +130,6 @@ async function routeGoogleFlightsBookingFixtures(context: BrowserContext): Promi
   });
 }
 
-async function setGoogleFlightsCountries(extensionServiceWorker: Worker, countryCodes: string[]): Promise<void> {
-  await extensionServiceWorker.evaluate(async (codes) => {
-    await chrome.storage.local.set({
-      muTravelSettings: {
-        googleFlights: {
-          countryCodes: codes,
-        },
-      },
-    });
-  }, countryCodes);
-}
-
 async function setGoogleFlightsCachedResults(extensionServiceWorker: Worker, pageUrl: string): Promise<void> {
   const cacheKey = "/travel/flights/booking?tfs=e2e-fixture&curr=USD";
   await extensionServiceWorker.evaluate(
@@ -204,13 +193,6 @@ function countryUrl(pageUrl: string, country: string): string {
   const url = new URL(pageUrl);
   url.searchParams.set("gl", country);
   return url.toString();
-}
-
-async function waitForComparisonTab(context: BrowserContext, country: string): Promise<Page> {
-  return await context.waitForEvent("page", {
-    predicate: (comparisonPage) => new URL(comparisonPage.url()).searchParams.get("gl") === country,
-    timeout: 15_000,
-  });
 }
 
 function matrixSearchFixture(): string {
