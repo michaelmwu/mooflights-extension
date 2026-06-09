@@ -142,6 +142,33 @@ export function googleFlightsPanelPageKey(
   return `${parsedUrl.pathname}?${params.toString()}`;
 }
 
+export function googleFlightsPreserveMulticityFiltersUrl(url: string): string {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return url;
+  }
+  const tfs = parsedUrl.searchParams.get("tfs");
+  if (!tfs) return url;
+  const preservedTfs = preserveGoogleFlightsTfsSliceFilters(tfs);
+  if (!preservedTfs || preservedTfs === tfs) return url;
+  parsedUrl.searchParams.set("tfs", preservedTfs);
+  return parsedUrl.toString();
+}
+
+export function googleFlightsSearchSliceCount(url: string): number {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return 0;
+  }
+  const tfs = parsedUrl.searchParams.get("tfs");
+  const decoded = tfs ? decodeBase64UrlText(tfs) : "";
+  return decoded ? googleFlightsTfsTopLevelSliceBlocks(decoded).length : 0;
+}
+
 export function isGoogleFlightsPanelPageUrl(url: string): boolean {
   try {
     return isGoogleFlightsPanelPage(new URL(url));
@@ -297,6 +324,114 @@ function parseGoogleFlightsTfsSegments(tfs: string): GoogleFlightsFlightSegment[
   const parsedSlices = slices.length > 0 ? slices : [{ value: decoded, group: 0 }];
   const segments = parsedSlices.flatMap((slice) => parseGoogleFlightsTfsSliceSegments(slice.value, slice.group));
   return dedupeGoogleFlightsSegments(segments);
+}
+
+function preserveGoogleFlightsTfsSliceFilters(tfs: string): string {
+  const decoded = decodeBase64UrlText(tfs);
+  if (!decoded) return tfs;
+  const slices = googleFlightsTfsTopLevelSliceBlocks(decoded);
+  if (slices.length < 2) return tfs;
+
+  const filterFields = slices.map((slice) => googleFlightsSliceFilterFields(slice.value));
+  const sourceFilters = filterFields.find((fields) => fields.length > 0);
+  if (!sourceFilters) return tfs;
+
+  let result = "";
+  let cursor = 0;
+  let changed = false;
+  for (let index = 0; index < slices.length; index += 1) {
+    const slice = slices[index];
+    if (!slice) continue;
+    result += decoded.slice(cursor, slice.fieldStart);
+    const nextValue = googleFlightsSliceWithFilters(slice.value, sourceFilters);
+    result += decoded.slice(slice.fieldStart, slice.lengthStart);
+    result += encodeVarint(nextValue.length);
+    result += nextValue;
+    cursor = slice.valueEnd;
+    if (nextValue !== slice.value) changed = true;
+  }
+  result += decoded.slice(cursor);
+  return changed ? encodeBase64(result) : tfs;
+}
+
+function googleFlightsTfsTopLevelSliceBlocks(
+  value: string,
+): Array<{ value: string; fieldStart: number; lengthStart: number; valueStart: number; valueEnd: number }> {
+  const blocks: Array<{
+    value: string;
+    fieldStart: number;
+    lengthStart: number;
+    valueStart: number;
+    valueEnd: number;
+  }> = [];
+  for (let index = 0; index < value.length; ) {
+    const tag = readProtobufTag(value, index);
+    if (!tag) break;
+    if (tag.fieldNumber === 3 && tag.wireType === 2) {
+      const length = readVarint(value, tag.nextIndex);
+      if (!length) break;
+      const valueStart = length.nextIndex;
+      const valueEnd = valueStart + length.value;
+      if (valueEnd > value.length) break;
+      const block = value.slice(valueStart, valueEnd);
+      if (/\d{4}-\d{2}-\d{2}/.test(block) && /[A-Z]{3}/.test(block)) {
+        blocks.push({ value: block, fieldStart: index, lengthStart: tag.nextIndex, valueStart, valueEnd });
+      }
+      index = valueEnd;
+      continue;
+    }
+    const nextIndex = skipProtobufField(value, tag, value.length);
+    index = nextIndex > index ? nextIndex : index + 1;
+  }
+  return blocks;
+}
+
+function googleFlightsSliceFilterFields(value: string): string[] {
+  const fields: string[] = [];
+  for (let index = 0; index < value.length; ) {
+    const tag = readProtobufTag(value, index);
+    if (!tag) break;
+    const nextIndex = skipProtobufField(value, tag, value.length);
+    if (nextIndex <= index) break;
+    if ((tag.fieldNumber === 5 && tag.wireType === 0) || (tag.fieldNumber === 6 && tag.wireType === 2)) {
+      fields.push(value.slice(index, nextIndex));
+    }
+    index = nextIndex;
+  }
+  return fields;
+}
+
+function googleFlightsSliceWithFilters(value: string, filterFields: string[]): string {
+  if (filterFields.length === 0) return value;
+  if (googleFlightsSliceFilterFields(value).join("") === filterFields.join("")) return value;
+  let result = "";
+  for (let index = 0; index < value.length; ) {
+    const tag = readProtobufTag(value, index);
+    if (!tag) {
+      result += value.slice(index);
+      break;
+    }
+    const nextIndex = skipProtobufField(value, tag, value.length);
+    if (nextIndex <= index) {
+      result += value.slice(index);
+      break;
+    }
+    if (!((tag.fieldNumber === 5 && tag.wireType === 0) || (tag.fieldNumber === 6 && tag.wireType === 2))) {
+      result += value.slice(index, nextIndex);
+    }
+    index = nextIndex;
+  }
+  return result + filterFields.join("");
+}
+
+function encodeVarint(value: number): string {
+  let remaining = value >>> 0;
+  let result = "";
+  while (remaining >= 0x80) {
+    result += String.fromCharCode((remaining & 0x7f) | 0x80);
+    remaining >>>= 7;
+  }
+  return result + String.fromCharCode(remaining);
 }
 
 function googleFlightsTfsSliceBlocks(value: string): Array<{ value: string; group: number }> {

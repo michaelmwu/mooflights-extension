@@ -8,6 +8,8 @@ import {
   type GoogleFlightsSearchResult,
   googleFlightsCountryUrl,
   googleFlightsPanelPageKey,
+  googleFlightsPreserveMulticityFiltersUrl,
+  googleFlightsSearchSliceCount,
   inferGoogleFlightsCurrency,
   isGoogleFlightsPanelPageUrl,
   normalizeGoogleFlightsCurrency,
@@ -47,6 +49,7 @@ type CompareState = {
   progressCompleted: number;
   progressTotal: number;
   countrySearch: string;
+  preserveMulticityFilters: boolean;
   searchBaseline: GoogleFlightsSearchCountryResult | null;
   searchResults: GoogleFlightsSearchCountryResult[];
   searchBestByRowKey: Record<string, SearchBestPrice>;
@@ -91,6 +94,7 @@ const SEARCH_COMPARISON_HANDOFF_STORAGE_KEY = "muTravelGoogleFlightsSearchCompar
 const SEARCH_COMPARISON_CACHE_STORAGE_KEY = "muTravelGoogleFlightsSearchComparisonCache";
 const SEARCH_COUNTRY_SELECTION_SESSION_KEY = "muTravelGoogleFlightsCountrySelection";
 const SEARCH_DEBUG_LOG_SESSION_KEY = "muTravelGoogleFlightsDebugLog";
+const MULTICITY_FILTER_PRESERVATION_SESSION_KEY = "mooFlightsGoogleFlightsPreserveMulticityFilters";
 const OWN_SEARCH_ANNOTATION_SELECTOR =
   "[data-mu-travel-search-badge], #mu-travel-google-flights-panel, #mu-travel-search-badge-styles";
 const DEFAULT_PANEL_POSITION: PanelPosition = { edge: "right", ratio: 1 };
@@ -136,6 +140,7 @@ const state: CompareState = {
   progressCompleted: 0,
   progressTotal: 0,
   countrySearch: "",
+  preserveMulticityFilters: true,
   searchBaseline: null,
   searchResults: [],
   searchBestByRowKey: {},
@@ -614,6 +619,7 @@ chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) =
 void init();
 
 async function init(): Promise<void> {
+  state.preserveMulticityFilters = readSessionMulticityFilterPreservation();
   try {
     const settings = await loadSettings();
     state.countryInput = (
@@ -801,6 +807,7 @@ function scheduleRender(): void {
     return;
   }
 
+  preserveCurrentMulticityFilters();
   const mode = currentGoogleFlightsPanelMode();
   const pageKey = currentPanelPageKey(mode);
   const cacheKey = currentPanelComparisonCacheKey(mode);
@@ -1010,6 +1017,7 @@ function render(): void {
               mode === "search"
                 ? renderSearchComparisonPanel(selectedCodes)
                 : `${renderMilesEstimatePrompt(matrixSearch)}
+                  ${renderMulticityFilterPreservation(matrixSearch)}
                   <div class="section-heading">Compare country pricing</div>
                   ${renderCountrySelect(selectedCodes)}
                   <div class="actions">
@@ -1116,6 +1124,16 @@ function render(): void {
     updateGoogleFlightsCountrySelection([]);
     render();
   });
+  shadow
+    .querySelector<HTMLInputElement>('[data-action="toggle-preserve-multicity-filters"]')
+    ?.addEventListener("change", (event) => {
+      const input = event.currentTarget;
+      if (!(input instanceof HTMLInputElement)) return;
+      state.preserveMulticityFilters = input.checked && hasMultipleGoogleFlightsLegs();
+      writeSessionMulticityFilterPreservation(state.preserveMulticityFilters);
+      preserveCurrentMulticityFilters();
+      render();
+    });
   shadow.querySelector('[data-action="compare-countries"]')?.addEventListener("click", () => {
     void compareCountries();
   });
@@ -1196,6 +1214,7 @@ function renderSearchComparisonPanel(selectedCodes: string[]): string {
   const visibleRows = state.searchBaseline?.results.length || parseCurrentSearchPage().results.length;
   return `
     <div class="section-heading">Compare visible flight rows</div>
+    ${renderMulticityFilterPreservation()}
     ${renderCountrySelect(selectedCodes)}
     <div class="actions">
       <button type="button" class="wide" ${state.comparing || selectedCodes.length === 0 || visibleRows === 0 ? "disabled" : ""} data-action="compare-search-rows">
@@ -1206,6 +1225,51 @@ function renderSearchComparisonPanel(selectedCodes: string[]): string {
     ${state.comparing ? `<p class="cache-note">${state.progressCompleted} of ${state.progressTotal} countries checked.</p>` : ""}
     ${visibleRows === 0 ? `<p class="cache-note">No visible Google Flights result rows found yet.</p>` : ""}
   `;
+}
+
+function renderMulticityFilterPreservation(
+  matrixSearch = parseGoogleFlightsMatrixSearch(window.location.href),
+): string {
+  if (!hasMultipleGoogleFlightsLegs(matrixSearch)) return "";
+  const checked = state.preserveMulticityFilters ? "checked" : "";
+  return `
+    <label class="option-row">
+      <input type="checkbox" data-action="toggle-preserve-multicity-filters" ${checked}>
+      <span>Preserve stops and airline filters</span>
+    </label>
+  `;
+}
+
+function hasMultipleGoogleFlightsLegs(
+  matrixSearch = parseGoogleFlightsMatrixSearch(window.location.href, currentComparableCurrencyCode()),
+): boolean {
+  return Boolean(
+    (matrixSearch && matrixSearch.slices.length > 1) || googleFlightsSearchSliceCount(window.location.href) > 1,
+  );
+}
+
+function preserveCurrentMulticityFilters(): void {
+  if (!state.preserveMulticityFilters || !hasMultipleGoogleFlightsLegs()) return;
+  const nextUrl = googleFlightsPreserveMulticityFiltersUrl(window.location.href);
+  if (!nextUrl || nextUrl === window.location.href) return;
+  history.replaceState(history.state, "", nextUrl);
+}
+
+function readSessionMulticityFilterPreservation(): boolean {
+  try {
+    const raw = sessionStorage.getItem(MULTICITY_FILTER_PRESERVATION_SESSION_KEY);
+    return raw !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function writeSessionMulticityFilterPreservation(enabled: boolean): void {
+  try {
+    sessionStorage.setItem(MULTICITY_FILTER_PRESERVATION_SESSION_KEY, enabled ? "1" : "0");
+  } catch {
+    // Session storage is an enhancement; the current page state still tracks the checkbox.
+  }
 }
 
 function countryDropdownOptions(): Array<{ code: string; label: string; searchValue: string }> {
@@ -2882,6 +2946,24 @@ function styles(): string {
       color: #0f766e;
       padding: 0;
       font-weight: 650;
+    }
+    .option-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 7px;
+      margin: 8px 12px 0;
+      color: #334155;
+      font-weight: 650;
+    }
+    .option-row input {
+      flex: 0 0 auto;
+      width: 14px;
+      height: 14px;
+      margin: 1px 0 0;
+      accent-color: #0f766e;
+    }
+    .option-row span {
+      min-width: 0;
     }
     .actions {
       display: grid;

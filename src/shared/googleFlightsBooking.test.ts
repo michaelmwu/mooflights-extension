@@ -2,6 +2,8 @@ import {
   DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES,
   googleFlightsCountryUrl,
   googleFlightsPanelPageKey,
+  googleFlightsPreserveMulticityFiltersUrl,
+  googleFlightsSearchSliceCount,
   inferGoogleFlightsCurrency,
   normalizeGoogleFlightsCountryCodes,
   normalizeGoogleFlightsCurrency,
@@ -429,6 +431,38 @@ describe("Google Flights booking option parser", () => {
     const url = "https://www.google.com/travel/flights/booking?tfs=abc&curr=&gl=TW";
 
     expect(googleFlightsPanelPageKey(url, "TW", true, "HKD")).toBe("/travel/flights/booking?tfs=abc&curr=HKD&gl=TW");
+  });
+
+  it("copies Google Flights stop and airline filters to later multicity slices", () => {
+    const url =
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhpGEgoyMDI2LTA2LTI0IiAKA0NKVRIKMjAyNi0wNi0yNBoDTlJUKgJLRTIEMjEyNSgAMgJLRWoHCAESA0NKVXIHCAESA05SVBoeEgoyMDI2LTA3LTAxagcIARIDTlJUcgcIARIDQ0pVQAFIAXABggELCP___________wGYAQM&tfu=CmxDalJJZVRCNFFXZEdTRUZCVGtWQlEzUlZlbEZDUnkwdExTMHRMUzB0TFMxMFltc3lOVUZCUVVGQlIyOXVkelJ2UTFjd1YwRkJFZ1pMUlRJeE1qVWFDZ2ltWkJBQUdnTlVWMFE0SEhDSXZnST0SAggAIgA";
+
+    const preservedUrl = googleFlightsPreserveMulticityFiltersUrl(url);
+
+    expect(preservedUrl).not.toBe(url);
+    expect(googleFlightsSearchSliceCount(preservedUrl)).toBe(2);
+    const preserved = parseGoogleFlightsMatrixSearch(preservedUrl);
+    expect(preserved).toMatchObject({
+      tripType: "one-way",
+      carriers: ["KE"],
+      slices: [
+        {
+          origin: "CJU",
+          destination: "NRT",
+          departureDate: "2026-06-24",
+        },
+      ],
+    });
+    const preservedTfs = new URL(preservedUrl).searchParams.get("tfs") || "";
+    expect(countOccurrences(decodeTfsText(preservedTfs), "\x28\x00\x32\x02KE")).toBe(2);
+  });
+
+  it("does not rewrite single-leg Google Flights searches when preserving filters", () => {
+    const url = `https://www.google.com/travel/flights/search?tfs=${encodeTfsText([
+      `${tfsSlice(tfsSegment("2026-06-03", "HKG", "TPE", "CI", "922"))}\x28\x00\x32\x02CI`,
+    ])}`;
+
+    expect(googleFlightsPreserveMulticityFiltersUrl(url)).toBe(url);
   });
 
   it("infers the visible Google Flights currency from price text", () => {
@@ -1000,4 +1034,19 @@ function tfsSlice(...segments: string[]): string {
 
 function encodeTfsText(parts: string[]): string {
   return btoa(parts.join("")).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function decodeTfsText(value: string): string {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  return atob(`${normalized}${"=".repeat((4 - (normalized.length % 4)) % 4)}`);
+}
+
+function countOccurrences(value: string, pattern: string): number {
+  let count = 0;
+  let index = value.indexOf(pattern);
+  while (index >= 0) {
+    count += 1;
+    index = value.indexOf(pattern, index + pattern.length);
+  }
+  return count;
 }
