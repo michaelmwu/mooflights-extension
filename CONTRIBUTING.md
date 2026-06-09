@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for contributing to Mu Travel Flights.
+Thanks for contributing to MooFlights.
 
 ## Expectations
 
@@ -29,4 +29,4 @@ bun run build
 
 This extension is AGPL-3.0-only. By contributing, you agree that your contribution is licensed under AGPL-3.0-only.
 
-The hosted Mu Travel backend is separate infrastructure and may be closed source.
+The hosted MooTravel backend is separate infrastructure and may be closed source.

@@ -18,7 +18,7 @@ The product can have two preference surfaces:
 - Local extension preferences: the Chrome options page. This is the MVP source of truth for offline behavior, provider
   hiding/preference, airport helper defaults, affiliate opt-out, and dev-only backend API targets. It stores data in
   `chrome.storage.local`.
-- Hosted account preferences: a future Mu Travel web page backed by the private API. This should handle Google sign-in,
+- Hosted account preferences: a future MooTravel web page backed by the private API. This should handle Google sign-in,
   cross-browser sync, account-level frequent-flyer preferences, premium entitlements, and backend-owned provider config.
 
 When both exist, the extension should boot from local preferences first, then merge authenticated hosted preferences as an
@@ -37,7 +37,7 @@ If the backend is disabled or unavailable, steps 1-6 still work.
 
 ## Backend Boundary
 
-The private Mu Travel backend may provide:
+The private MooTravel backend may provide:
 
 - Google sign-in via Better Auth.
 - Neon Postgres-backed accounts and synced preferences.

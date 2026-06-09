@@ -13,7 +13,7 @@ type CaptureResponse = {
   error?: string;
 };
 
-const SOURCE = "mu-travel-flights";
+const SOURCE = "mooflights";
 const REQUEST_TYPE = "capture-ita-json";
 const RESPONSE_TYPE = "capture-ita-json-result";
 const XHR_REQUEST_URLS = new WeakMap<XMLHttpRequest, string>();

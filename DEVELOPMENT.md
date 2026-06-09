@@ -59,7 +59,7 @@ bun run test
 bun run package
 ```
 
-This writes `artifacts/mu-travel-flights.zip` and `artifacts/mu-travel-flights.crx`. The CRX step requires Google Chrome or Chromium; set `CHROME_BIN` if it is not in a standard location. Set `MU_TRAVEL_CRX_KEY_PATH` or `MU_TRAVEL_CRX_KEY_B64` when a stable CRX key is needed; otherwise Chrome generates a throwaway package key during packaging.
+This writes versioned packages such as `artifacts/mooflights-0.0.8.zip` and `artifacts/mooflights-0.0.8.crx`. The CRX step requires Google Chrome or Chromium; set `CHROME_BIN` if it is not in a standard location. Set `MOOFLIGHTS_CRX_KEY_PATH` or `MOOFLIGHTS_CRX_KEY_B64` when a stable CRX key is needed; otherwise Chrome generates a throwaway package key during packaging. Legacy `MU_TRAVEL_*` packaging variables are still accepted for existing local setups.
 
 To prepare the next unused patch release version from the latest local `vX.Y.Z` tag or checked-in version:
 
@@ -94,9 +94,9 @@ bun run release:verify
 ## GitHub Workflows
 
 - `CI`: runs on pull requests and pushes to `main`; installs with Bun, runs Biome, typecheck, tests, and production build.
-- `Release Extension Package`: runs manually or on `v*` tags; verifies the repo, checks the release tag matches the extension version when provided, builds `artifacts/mu-travel-flights.zip` and `artifacts/mu-travel-flights.crx`, uploads both package artifacts, generates GitHub release notes from the tag history, and attaches the packages to a GitHub release. Manual runs can omit `release_tag` to build only, use the default `next_patch` strategy to package the next unused patch version as a build artifact, choose `next_minor` for a `0.1.0`-style bump, or provide an existing `vX.Y.Z` tag to create/update a draft release.
+- `Release Extension Package`: runs manually or on `v*` tags; verifies the repo, checks the release tag matches the extension version when provided, builds versioned `artifacts/mooflights-*.zip` and `artifacts/mooflights-*.crx` packages, uploads both package artifacts, generates GitHub release notes from the tag history, and attaches the packages to a GitHub release. Manual runs can omit `release_tag` to build only, use the default `next_patch` strategy to package the next unused patch version as a build artifact, choose `next_minor` for a `0.1.0`-style bump, or provide an existing `vX.Y.Z` tag to create/update a draft release.
 
-The release workflow intentionally does not publish to the Chrome Web Store yet. Until Mu Travel has an approved
+The release workflow intentionally does not publish to the Chrome Web Store yet. Until Mu Travel LLC has an approved
 developer account and store automation credentials, store submission remains manual and outside GitHub Actions.
 
 Neither workflow needs backend secrets. The extension build must not read `.env`.

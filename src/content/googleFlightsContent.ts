@@ -22,7 +22,11 @@ import {
 } from "../shared/googleFlightsCountries";
 import { mileageCarrierName } from "../shared/mileageCarriers";
 import { loadSettings } from "../shared/storage";
-import { muTravelPanelHeaderStyles, renderMuTravelMinimizedButton, renderMuTravelPanelHeader } from "./panelChrome";
+import {
+  mooFlightsPanelHeaderStyles,
+  renderMooFlightsMinimizedButton,
+  renderMooFlightsPanelHeader,
+} from "./panelChrome";
 
 type CompareState = {
   comparing: boolean;
@@ -51,7 +55,7 @@ type PanelPosition = {
   ratio: number;
 };
 
-const PANEL_ID = "mu-travel-google-flights-panel";
+const PANEL_ID = "mooflights-google-flights-panel";
 const RESULT_CACHE_TTL_MS = 10 * 60 * 1000;
 const INFERRED_CURRENCY_CACHE_TTL_MS = 5000;
 const RESULT_CACHE_STORAGE_KEY = "muTravelGoogleFlightsCountryResults";
@@ -433,11 +437,11 @@ function render(): void {
 
   shadow.innerHTML = `
     <style>${styles()}</style>
-    <section class="panel ${state.panelMinimized ? "minimized" : ""}" style="${panelPositionStyle(state.panelPosition)}" aria-label="Mu Travel country price comparison">
+    <section class="panel ${state.panelMinimized ? "minimized" : ""}" style="${panelPositionStyle(state.panelPosition)}" aria-label="MooFlights country price comparison">
       ${
         state.panelMinimized
-          ? renderMuTravelMinimizedButton()
-          : `${renderMuTravelPanelHeader({ optionsAction: "open-options" })}
+          ? renderMooFlightsMinimizedButton()
+          : `${renderMooFlightsPanelHeader({ optionsAction: "open-options" })}
             ${renderMilesEstimatePrompt(matrixSearch)}
             <div class="section-heading">Compare country pricing</div>
             ${renderCountrySelect(selectedCodes)}
@@ -1359,7 +1363,7 @@ function styles(): string {
       background: transparent;
       box-shadow: none;
     }
-    ${muTravelPanelHeaderStyles()}
+    ${mooFlightsPanelHeaderStyles()}
     .panel-icon {
       display: inline-grid;
       place-items: center;
