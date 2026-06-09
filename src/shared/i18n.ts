@@ -74,6 +74,7 @@ const TRANSLATIONS = {
     preferredProviderSummaryMore: "{providers} + {count} more",
     openItaMatrix: "Open ITA Matrix",
     options: "Options",
+    optionsPageTitle: "MooFlights Options",
     developerBackend: "Developer Backend",
     developerBackendNote:
       "Dev-build-only controls for pointing the extension at a locally running MooTravel API. This is an HTTPS/API boundary, not direct database access.",
@@ -138,6 +139,7 @@ const TRANSLATIONS = {
     preferredProviderSummaryMore: "{providers} + {count} más",
     openItaMatrix: "Abrir ITA Matrix",
     options: "Opciones",
+    optionsPageTitle: "Opciones de MooFlights",
     developerBackend: "Backend de desarrollo",
     developerBackendNote:
       "Controles solo para builds de desarrollo que apuntan la extensión a una API local de MooTravel. Es un límite HTTPS/API, no acceso directo a la base de datos.",
@@ -201,6 +203,7 @@ const TRANSLATIONS = {
     preferredProviderSummaryMore: "{providers}，另有 {count} 个",
     openItaMatrix: "打开 ITA Matrix",
     options: "选项",
+    optionsPageTitle: "MooFlights 选项",
     developerBackend: "开发后端",
     developerBackendNote:
       "仅开发构建使用的控件，用于将扩展指向本地运行的 MooTravel API。这是 HTTPS/API 边界，不是直接数据库访问。",
@@ -264,6 +267,7 @@ const TRANSLATIONS = {
     preferredProviderSummaryMore: "{providers}，另有 {count} 個",
     openItaMatrix: "開啟 ITA Matrix",
     options: "選項",
+    optionsPageTitle: "MooFlights 選項",
     developerBackend: "開發後端",
     developerBackendNote:
       "僅開發建置使用的控制項，用於將擴充功能指向本機執行的 MooTravel API。這是 HTTPS/API 邊界，不是直接資料庫存取。",
@@ -328,6 +332,7 @@ const TRANSLATIONS = {
     preferredProviderSummaryMore: "{providers}、ほか {count} 件",
     openItaMatrix: "ITA Matrix を開く",
     options: "オプション",
+    optionsPageTitle: "MooFlights オプション",
     developerBackend: "開発用バックエンド",
     developerBackendNote:
       "ローカルで実行中の MooTravel API に拡張機能を向ける、開発ビルド専用の設定です。これは HTTPS/API の境界であり、データベースへの直接アクセスではありません。",
@@ -392,6 +397,7 @@ const TRANSLATIONS = {
     preferredProviderSummaryMore: "{providers} 외 {count}개",
     openItaMatrix: "ITA Matrix 열기",
     options: "옵션",
+    optionsPageTitle: "MooFlights 옵션",
     developerBackend: "개발 백엔드",
     developerBackendNote:
       "로컬에서 실행 중인 MooTravel API를 확장 프로그램에 연결하기 위한 개발 빌드 전용 설정입니다. 이는 HTTPS/API 경계이며 직접 데이터베이스 액세스가 아닙니다.",

@@ -52,7 +52,8 @@ function Options(): React.ReactElement {
 
   useEffect(() => {
     document.documentElement.lang = htmlLang(settings.language);
-  }, [settings.language]);
+    document.title = t("optionsPageTitle");
+  }, [settings.language, t]);
 
   async function persist(next: ExtensionSettings): Promise<void> {
     setSettings(next);
