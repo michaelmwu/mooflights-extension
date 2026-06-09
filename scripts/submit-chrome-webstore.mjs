@@ -168,6 +168,9 @@ async function fetchJson(url, init, label) {
   try {
     response = await fetch(url, { ...init, signal: controller.signal });
     text = await response.text();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Chrome Web Store ${label} request failed: ${message}`);
   } finally {
     clearTimeout(timeout);
     init?.signal?.removeEventListener("abort", abort);
