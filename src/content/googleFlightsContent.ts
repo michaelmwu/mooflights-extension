@@ -828,6 +828,7 @@ function scheduleRender(): void {
   installPanel();
   if (state.comparing && state.pageKey === pageKey) {
     if (mode === "search") {
+      updateSearchBaselineDuringComparison();
       applySearchBadges();
       applyRequestedSearchHighlight(state.searchBaseline);
     }
@@ -2478,6 +2479,22 @@ function bestPricesBySearchRow(
     if (matchedComparedRows > 0) output[row.rowKey] = best;
   }
   return output;
+}
+
+function updateSearchBaselineDuringComparison(): void {
+  if (!state.searchBaseline) return;
+  const currentBaseline = parseCurrentSearchPage();
+  if (currentBaseline.results.length <= state.searchBaseline.results.length) return;
+  if (!searchBaselineIncludesPreviousRows(state.searchBaseline, currentBaseline)) return;
+  debugSearch("comparison-baseline-expanded", {
+    previousRows: state.searchBaseline.results.length,
+    nextRows: currentBaseline.results.length,
+    comparedCountries: state.searchResults.map((result) => result.country),
+  });
+  state.searchBaseline = currentBaseline;
+  state.baselineSignature = googleFlightsSearchResultSignature(currentBaseline);
+  state.searchBestByRowKey = bestPricesBySearchRow(state.searchBaseline, state.searchResults);
+  render();
 }
 
 function searchBaselineIncludesPreviousRows(

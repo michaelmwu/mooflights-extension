@@ -255,11 +255,13 @@ describe("Google Flights booking option parser", () => {
     document.body.innerHTML = `
       <ul>
         ${Array.from({ length: 13 }, (_, index) => {
-          const hour = 6 + index;
+          const baseHour = 6 + index;
+          const hour = ((baseHour + 11) % 12) + 1;
+          const period = baseHour >= 12 ? "PM" : "AM";
           const price = 10000 + index;
           return `
             <li class="pIav2d">
-              <div class="JMc5Xc" role="link" aria-label="From ${price} Japanese yen. Nonstop flight with Test Air ${index}. Leaves Jeju International Airport at ${hour}:00 AM on Wednesday, June 24 and arrives at Narita International Airport at ${hour}:30 AM on Wednesday, June 24. Total duration 30 min. Select flight"></div>
+              <div class="JMc5Xc" role="link" aria-label="From ${price} Japanese yen. Nonstop flight with Test Air ${index}. Leaves Jeju International Airport at ${hour}:00 ${period} on Wednesday, June 24 and arrives at Narita International Airport at ${hour}:30 ${period} on Wednesday, June 24. Total duration 30 min. Select flight"></div>
               <span aria-label="${price} Japanese yen" role="text">¥${price}</span>
             </li>
           `;
