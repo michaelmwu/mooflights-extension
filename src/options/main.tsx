@@ -40,7 +40,7 @@ function Options(): React.ReactElement {
   );
   const allGoogleFlightsCountries = useMemo(() => allGoogleFlightsCountryCodes(), []);
   const usesAllGoogleFlightsCountries = isAllGoogleFlightsCountryCodes(settings.googleFlights.countryCodes);
-  const mileagePrograms = useMemo(() => uniqueMileageProgramOptions(), []);
+  const mileagePrograms = useMemo(() => uniqueMileageProgramOptions(settings.language), [settings.language]);
   const visibleMileagePrograms = useMemo(
     () => filteredMileagePrograms(mileagePrograms, settings.preferredFrequentFlyerPrograms, programSearch),
     [mileagePrograms, settings.preferredFrequentFlyerPrograms, programSearch],
@@ -628,6 +628,8 @@ function filteredMileagePrograms(
       (program) =>
         !query ||
         program.label.toLowerCase().includes(query) ||
+        program.searchValue.toLowerCase().includes(query) ||
+        program.aliases.some((alias) => alias.toLowerCase().includes(query)) ||
         program.carrierCodes.some((carrierCode) => carrierCode.toLowerCase().includes(query)),
     )
     .sort((left, right) => {

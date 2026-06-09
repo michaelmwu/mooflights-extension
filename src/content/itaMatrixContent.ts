@@ -8,6 +8,7 @@ import {
 } from "../shared/airports";
 import { fetchRemoteProviderMetadata } from "../shared/backendClient";
 import { runtimeUrl, safeChromeCall, sendRuntimeMessage } from "../shared/chromeRuntime";
+import { createContentTranslator } from "../shared/contentI18n";
 import { loadUsdCurrencyRates, type UsdCurrencyRates } from "../shared/currencyRates";
 import { flagEmoji } from "../shared/flags";
 import { flattenSegments, parseItaBookingDetails, parseItineraryJson } from "../shared/itinerary";
@@ -16,11 +17,12 @@ import {
   estimateEarnings,
   estimateSegmentEarnings,
   inspectWhereToCreditSegments,
+  localizedMileageProgramDisplay,
   mileageProgramTierOptions,
   uniqueMileagePrograms,
 } from "../shared/mileageEarnings";
 import { ALWAYS_SHOWN_PROVIDER_IDS, rankProviderLinks, summarizeItinerary } from "../shared/providers";
-import { DEFAULT_SETTINGS, loadSettings, saveSettings } from "../shared/storage";
+import { DEFAULT_SETTINGS, loadSettings, mergeSettings, SETTINGS_KEY, saveSettings } from "../shared/storage";
 import type { ExtensionSettings, ItinerarySegment, NormalizedItinerary, RankedProviderLink } from "../shared/types";
 import {
   mooFlightsPanelHeaderStyles,
@@ -144,17 +146,16 @@ const state: PanelState = {
   airportAreaSearch: "",
 };
 
-const AIRPORT_AREA_OPTIONS = airportAreaOptions();
-
 void init();
 
 async function init(): Promise<void> {
   injectPageBridge();
   installChipClearShortcut();
-  installLocationClearButtons();
   window.addEventListener("message", onBridgeMessage);
   state.settings = await safeChromeCall(loadSettings, DEFAULT_SETTINGS);
   state.airportPreview = airportCodes(state.settings.airportHelper).slice(0, 120);
+  installLocationClearButtons();
+  chrome.storage?.onChanged?.addListener(onSettingsChanged);
   void loadUsdCurrencyRates().then((rates) => {
     state.currencyRates = rates;
     if (state.itinerary) render();
@@ -169,6 +170,37 @@ async function init(): Promise<void> {
   scheduleAutoSubmitMatrixSearch();
   scheduleTabScopedAutoOpenAuthorizationCheck();
   scheduleAutoOpenMatrixResult();
+}
+
+function onSettingsChanged(changes: Record<string, chrome.storage.StorageChange>, areaName: string): void {
+  if (areaName !== "local" || !changes[SETTINGS_KEY]) return;
+  state.settings = mergeSettings(changes[SETTINGS_KEY].newValue);
+  state.airportPreview = airportCodes(state.settings.airportHelper).slice(0, 120);
+  state.airportAreaSearch = "";
+  installLocationClearButtons();
+  render();
+  annotateFlightResultsSoon();
+}
+
+function t(): ReturnType<typeof createContentTranslator> {
+  return createContentTranslator(state.settings?.language || DEFAULT_SETTINGS.language);
+}
+
+function panelChromeLabels(): {
+  panelActions: string;
+  hideForSession: string;
+  minimize: string;
+  settings: string;
+  expandPanel: string;
+} {
+  const translate = t();
+  return {
+    panelActions: translate("panelActions"),
+    hideForSession: translate("hideForSession"),
+    minimize: translate("minimize"),
+    settings: translate("settings"),
+    expandPanel: translate("expandPanel"),
+  };
 }
 
 function render(): void {
@@ -187,8 +219,8 @@ function render(): void {
       <section class="panel ${state.panelMinimized ? "minimized" : ""}" style="${panelPositionStyle(state.panelPosition)}" aria-label="MooFlights">
         ${
           state.panelMinimized
-            ? renderMooFlightsMinimizedButton()
-            : renderMooFlightsPanelHeader({ optionsAction: "options" })
+            ? renderMooFlightsMinimizedButton(panelChromeLabels())
+            : renderMooFlightsPanelHeader({ optionsAction: "options", labels: panelChromeLabels() })
         }
 
       ${state.panelMinimized ? "" : renderStatusMessage()}
@@ -206,27 +238,33 @@ function render(): void {
 function renderStatusMessage(): string {
   if (state.error) return `<p class="message error">${escapeHtml(state.error)}</p>`;
   if (isSearchPage() && state.status === "Ready") return "";
-  if (isItineraryPage() && state.itinerary && state.status === "Itinerary captured.") return "";
+  if (
+    isItineraryPage() &&
+    state.itinerary &&
+    (state.status === "Itinerary captured." || state.status === t()("itineraryCaptured"))
+  )
+    return "";
   return `<p class="message">${escapeHtml(state.status)}</p>`;
 }
 
 function renderItineraryPanel(): string {
+  const translate = t();
   return `
     <details ${state.itinerary ? "open" : ""}>
-      <summary>Itinerary</summary>
+      <summary>${escapeHtml(translate("itinerary"))}</summary>
       ${
         state.itinerary
           ? `<p class="summary">${escapeHtml(summarizeItinerary(state.itinerary))}</p>
-             <p class="muted">${escapeHtml(state.itinerary.tripType)} · ${state.itinerary.passengerCount || 1} passenger(s) · ${escapeHtml(state.itinerary.currency || "")} ${state.itinerary.totalPrice ?? ""}</p>
+             <p class="muted">${escapeHtml(state.itinerary.tripType)} · ${escapeHtml(translate("passengerCount", { count: state.itinerary.passengerCount || 1 }))} · ${escapeHtml(state.itinerary.currency || "")} ${state.itinerary.totalPrice ?? ""}</p>
              ${renderMileageCredit(state.itinerary)}`
-          : `<p class="muted">Open an ITA result. The extension will auto-load ITA JSON when Share & Export is visible.</p>`
+          : `<p class="muted">${escapeHtml(translate("openItaResult"))}</p>`
       }
       <details class="advanced" ${state.error ? "open" : ""}>
-        <summary>Advanced fallback</summary>
-        <textarea placeholder="Paste ITA Matrix Copy as JSON output here" data-role="json-input"></textarea>
+        <summary>${escapeHtml(translate("advancedFallback"))}</summary>
+        <textarea placeholder="${escapeHtml(translate("pasteItaJson"))}" data-role="json-input"></textarea>
         <div class="actions">
-          <button type="button" class="secondary" data-action="capture">Retry capture</button>
-          <button type="button" class="secondary" data-action="parse-paste">Parse pasted JSON</button>
+          <button type="button" class="secondary" data-action="capture">${escapeHtml(translate("retryCapture"))}</button>
+          <button type="button" class="secondary" data-action="parse-paste">${escapeHtml(translate("parsePastedJson"))}</button>
         </div>
       </details>
     </details>
@@ -236,7 +274,7 @@ function renderItineraryPanel(): string {
 function renderLinksPanel(): string {
   return `
     <details ${state.itinerary ? "open" : ""}>
-      <summary>Links</summary>
+      <summary>${escapeHtml(t()("links"))}</summary>
       <div class="links">${renderLinks(state.links)}</div>
     </details>
   `;
@@ -272,7 +310,7 @@ function bind(root: ShadowRoot): void {
     if (input?.value) void parseAndSetItinerary(input.value);
   });
   root.querySelector('[data-action="copy-airports"]')?.addEventListener("click", () => {
-    void copyAirportPreview("Copied airport codes.");
+    void copyAirportPreview(t()("copiedAirportCodes"));
   });
   root.querySelector('[data-action="options"]')?.addEventListener("click", () => {
     sendRuntimeMessage({ command: "openOptionsPage" });
@@ -573,7 +611,7 @@ async function captureItinerary(isAutomatic: boolean): Promise<void> {
   state.activeCaptureId = captureId;
   state.error = "";
   const captureLocationKey = state.locationKey;
-  setStatus(isAutomatic ? "Loading ITA itinerary..." : "Looking for ITA Matrix Copy as JSON...");
+  setStatus(isAutomatic ? t()("loadingItaItinerary") : t()("lookingForItaJson"));
 
   try {
     const text = await captureViaPageBridge();
@@ -582,11 +620,11 @@ async function captureItinerary(isAutomatic: boolean): Promise<void> {
   } catch (error) {
     if (!isActiveCapture(captureId, captureLocationKey)) return;
     if (isAutomatic) {
-      state.status = "Auto-load did not find ITA JSON yet.";
+      state.status = t()("autoLoadDidNotFindJson");
       render();
       return;
     }
-    setError(`Capture failed. Paste JSON manually. ${error instanceof Error ? error.message : ""}`.trim());
+    setError(t()("captureFailed", { message: error instanceof Error ? error.message : "" }).trim());
   } finally {
     if (isActiveCapture(captureId, captureLocationKey)) {
       state.captureInFlight = false;
@@ -607,7 +645,7 @@ async function parseAndSetItinerary(text: string, expectedLocationKey = state.lo
     if (expectedLocationKey !== state.locationKey) return;
     state.itinerary = null;
     state.links = [];
-    setError(`Could not parse ITA JSON: ${error instanceof Error ? error.message : String(error)}`);
+    setError(t()("parseJsonFailed", { message: error instanceof Error ? error.message : String(error) }));
   }
 }
 
@@ -637,7 +675,7 @@ async function setCapturedItinerary(
   state.error = "";
   state.autoCaptureAttempted = true;
   if (bookingSignature) state.bookingDetailsSignature = bookingSignature;
-  setStatus("Itinerary captured.");
+  setStatus(t()("itineraryCaptured"));
 }
 
 function bookingDetailsSignature(value: unknown): string {
@@ -697,7 +735,7 @@ function isAllowedGoogleFlightsUrl(value: string): boolean {
 
 async function updateAirportSetting(key: string, value: string): Promise<void> {
   if (!state.settings) return;
-  const area = key === "area" ? airportAreaFromSearchValue(value) : null;
+  const area = key === "area" ? airportAreaFromSearchValue(value, state.settings.language) : null;
   if (key === "area" && value.trim() && area && !hasAirportArea(area)) {
     state.airportAreaSearch = "";
     render();
@@ -726,7 +764,8 @@ function airportAreaChanged(
   current: ExtensionSettings["airportHelper"],
   nextArea: Pick<ExtensionSettings["airportHelper"], "region" | "continent" | "countries">,
 ): boolean {
-  return airportAreaSearchValue(current) !== airportAreaSearchValue({ ...current, ...nextArea });
+  const language = state.settings?.language || DEFAULT_SETTINGS.language;
+  return airportAreaSearchValue(current, language) !== airportAreaSearchValue({ ...current, ...nextArea }, language);
 }
 
 async function removeAirportCode(code: string): Promise<void> {
@@ -924,7 +963,7 @@ function maybeAutoSubmitMatrixSearch(): void {
   if (button && !isDisabledButton(button)) {
     autoSearchDone = true;
     if (shouldAutoOpenMatrixResultAfterSearch()) rememberAutoOpenRequest();
-    setStatus("Searching prefilled Matrix form...");
+    setStatus(t()("searchingPrefilledMatrixForm"));
     button.click();
     return;
   }
@@ -979,7 +1018,7 @@ function maybeAutoOpenMatrixResult(): void {
       autoOpenClickedPrimaryResult = true;
       autoOpenPrimaryResultRow = primaryRow;
     }
-    setStatus("Opening first Matrix result...");
+    setStatus(t()("openingFirstMatrixResult"));
     if (clickedExpandedControl) {
       autoOpenDone = true;
       forgetAutoOpenRequest();
@@ -1343,7 +1382,7 @@ function installResultTableColumns(): void {
       const header = document.createElement("th");
       header.className = "mat-mdc-header-cell mdc-data-table__header-cell mu-mileage-column";
       header.setAttribute("role", "columnheader");
-      header.textContent = "Miles Earning";
+      header.textContent = t()("milesEarning");
       row.appendChild(header);
     }
 
@@ -1355,7 +1394,7 @@ function installResultTableColumns(): void {
         const cell = document.createElement("td");
         cell.className = "mat-mdc-cell mdc-data-table__cell mu-mileage-column";
         cell.setAttribute("role", "cell");
-        cell.innerHTML = `<span class="mu-mileage-placeholder">Expand fare</span>`;
+        cell.innerHTML = `<span class="mu-mileage-placeholder">${escapeHtml(t()("expandFare"))}</span>`;
         row.appendChild(cell);
       }
     }
@@ -1473,6 +1512,8 @@ function resultRowForGrid(grid: HTMLElement): HTMLTableRowElement | null {
 }
 
 function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSummary {
+  const translate = t();
+  const language = state.settings?.language || DEFAULT_SETTINGS.language;
   const preferredPrograms = state.settings?.preferredFrequentFlyerPrograms || [];
   const estimates = estimateEarnings(
     itinerary,
@@ -1484,7 +1525,7 @@ function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSumm
   const byProgram = new Map<string, { miles: number; formulas: MileageFormula[] }>();
   for (const estimate of estimates) {
     if (typeof estimate.estimatedMiles !== "number" || estimate.estimatedMiles < 0) continue;
-    const program = estimate.program || "Best available program";
+    const program = estimate.program || translate("bestAvailableProgram");
     const current = byProgram.get(program) || { miles: 0, formulas: [] };
     current.miles += estimate.estimatedMiles;
     current.formulas.push({
@@ -1516,12 +1557,13 @@ function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSumm
     return {
       entries: [
         {
-          value: "No preferred match",
-          program: best ? `best local row: ${best.program}` : "local earning data",
+          value: translate("noPreferredMatch"),
+          program: best
+            ? translate("bestLocalRow", { program: localizedMileageProgramDisplay(best.program, language) })
+            : translate("localEarningData"),
         },
       ],
-      title:
-        "No preferred program matched the local earning rows. The extension is hiding non-preferred programs to avoid orphan-mile suggestions.",
+      title: translate("noPreferredRowsTooltip"),
       status: "fallback",
     };
   }
@@ -1531,14 +1573,14 @@ function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSumm
     const remaining = hasPreferredPrograms ? 0 : visiblePrograms.length - visible.length;
     const entries: ResultMileageEntry[] = visible.map((program) => ({
       value: `~${program.miles.toLocaleString()}`,
-      program: program.program,
+      program: localizedMileageProgramDisplay(program.program, language),
       calculation: compactMileageCalculation(program.formulas),
       preferred: program.preferred,
     }));
     if (remaining > 0) {
       entries.push({
         value: `+${remaining}`,
-        program: "more programs",
+        program: translate("morePrograms"),
       });
     }
     return {
@@ -1546,7 +1588,7 @@ function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSumm
       title: visiblePrograms
         .map(
           (program) =>
-            `${program.program}: ~${program.miles.toLocaleString()} miles (${program.formulas
+            `${localizedMileageProgramDisplay(program.program, language)}: ~${program.miles.toLocaleString()} ${translate("milesUnit")} (${program.formulas
               .map(
                 (formula) =>
                   `${formula.direction ? `${formula.direction} ` : ""}${formula.segment}: ${formula.formula}`,
@@ -1567,10 +1609,10 @@ function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSumm
       entries: [
         {
           value: `${Math.round(flownMiles).toLocaleString()}`,
-          program: "flown miles",
+          program: translate("flownMiles"),
         },
       ],
-      title: "No earning data matched; showing approximate flown miles.",
+      title: translate("noEarningDataMatched"),
       status: "fallback",
     };
   }
@@ -1578,11 +1620,11 @@ function resultMileageSummary(itinerary: NormalizedItinerary): ResultMileageSumm
   return {
     entries: [
       {
-        value: "No data",
-        program: "expand fare",
+        value: translate("noData"),
+        program: translate("expandFare"),
       },
     ],
-    title: "No mileage estimate available for this result.",
+    title: translate("noMileageEstimate"),
     status: "missing",
   };
 }
@@ -1604,7 +1646,7 @@ function updateResultRowMileage(row: HTMLTableRowElement, summary: ResultMileage
       (entry) => `
         <span class="mu-mileage-program ${entry.preferred ? "preferred" : ""}">
           <strong>${escapeHtml(entry.value)}</strong>
-          <span>${escapeHtml(entry.program)}${entry.preferred ? `<em>Preferred</em>` : ""}</span>
+          <span>${escapeHtml(entry.program)}${entry.preferred ? `<em>${escapeHtml(t()("preferred"))}</em>` : ""}</span>
           ${entry.calculation ? `<small>${escapeHtml(entry.calculation)}</small>` : ""}
         </span>
       `,
@@ -1620,16 +1662,21 @@ function renderResultMileageLine(segment: ItinerarySegment, estimate: EarningsEs
   if (estimate) {
     const miles =
       typeof estimate.estimatedMiles === "number"
-        ? `~${estimate.estimatedMiles.toLocaleString()} miles`
+        ? `~${estimate.estimatedMiles.toLocaleString()} ${t()("milesUnit")}`
         : estimate.formula;
-    line.textContent = `Miles credit: ${miles} · ${estimate.program}`;
+    line.textContent = `${t()("milesCredit")}: ${miles} · ${localizedMileageProgramDisplay(estimate.program, state.settings?.language || DEFAULT_SETTINGS.language)}`;
     line.title = estimate.formula;
     return line;
   }
 
   const distance = airportDistanceMiles(segment.origin, segment.destination);
-  const distanceText = distance ? `~${Math.round(distance).toLocaleString()} flown miles` : "No distance estimate";
-  line.textContent = `Miles credit: ${distanceText} · no earning data for ${segment.carrier} ${segment.bookingClass}`;
+  const distanceText = distance
+    ? `~${Math.round(distance).toLocaleString()} ${t()("flownMiles")}`
+    : t()("noDistanceEstimate");
+  line.textContent = `${t()("milesCredit")}: ${distanceText} · ${t()("noEarningDataFor", {
+    carrier: segment.carrier,
+    bookingClass: segment.bookingClass || "",
+  })}`;
   return line;
 }
 
@@ -1733,7 +1780,7 @@ function maybeAutoCapture(shouldResetLocation = true): void {
   if (state.itinerary || state.captureInFlight || state.autoCaptureAttempted) return;
   if (!isItineraryPage()) return;
   state.autoCaptureAttempted = true;
-  setStatus("Waiting for ITA itinerary data...");
+  setStatus(t()("waitingForItaData"));
 }
 
 function resetForLocationChange(): void {
@@ -1783,10 +1830,11 @@ function isPanelHiddenForSession(): boolean {
 function airportAreaDropdownOptions(): AirportAreaOption[] {
   const query = normalizeAirportAreaSearch(state.airportAreaSearch);
   if (!query) return [];
-  return AIRPORT_AREA_OPTIONS.map((option) => ({
-    option,
-    score: airportAreaOptionScore(option, query),
-  }))
+  return currentAirportAreaOptions()
+    .map((option) => ({
+      option,
+      score: airportAreaOptionScore(option, query),
+    }))
     .filter((match) => match.score >= 0)
     .sort((left, right) => left.score - right.score || left.option.label.localeCompare(right.option.label))
     .map((match) => match.option)
@@ -1797,20 +1845,30 @@ function airportAreaOptionScore(option: AirportAreaOption, query: string): numbe
   const label = normalizeAirportAreaSearch(option.label);
   const value = normalizeAirportAreaSearch(option.value);
   const searchValue = normalizeAirportAreaSearch(option.searchValue);
+  const aliases = option.aliases.map(normalizeAirportAreaSearch);
   if (option.type === "country" && value === query) return 0;
   if (label === query) return 1;
   if (label.startsWith(query)) return 2;
   if (searchValue.startsWith(query)) return 3;
-  if (label.includes(query)) return 4;
-  if (searchValue.includes(query)) return 5;
+  if (aliases.some((alias) => alias === query)) return 4;
+  if (aliases.some((alias) => alias.startsWith(query))) return 5;
+  if (label.includes(query)) return 6;
+  if (searchValue.includes(query)) return 7;
+  if (aliases.some((alias) => alias.includes(query))) return 8;
   if (value.includes(query)) return 6;
   return -1;
 }
 
 function renderAirportAreaDropdownRows(options: AirportAreaOption[]): string {
+  const translate = t();
   return options
     .map((option, index) => {
-      const typeLabel = option.type === "country" ? "" : option.type === "continent" ? "Continent" : "Region";
+      const typeLabel =
+        option.type === "country"
+          ? ""
+          : option.type === "continent"
+            ? translate("airportAreaTypeContinent")
+            : translate("airportAreaTypeRegion");
       return `
         <li role="presentation">
           <button type="button" class="${index === 0 ? "active" : ""}" data-action="select-airport-area" data-value="${escapeHtml(option.searchValue)}" role="option">
@@ -1853,26 +1911,29 @@ function normalizeAirportAreaSearch(value: string): string {
 }
 
 function activeAirportAreaOption(filters: ExtensionSettings["airportHelper"]): AirportAreaOption | null {
+  const options = currentAirportAreaOptions();
   if (filters.region)
-    return AIRPORT_AREA_OPTIONS.find((option) => option.type === "region" && option.value === filters.region) || null;
+    return options.find((option) => option.type === "region" && option.value === filters.region) || null;
   if (filters.continent)
-    return (
-      AIRPORT_AREA_OPTIONS.find((option) => option.type === "continent" && option.value === filters.continent) || null
-    );
+    return options.find((option) => option.type === "continent" && option.value === filters.continent) || null;
   if (filters.countries[0])
-    return (
-      AIRPORT_AREA_OPTIONS.find((option) => option.type === "country" && option.value === filters.countries[0]) || null
-    );
+    return options.find((option) => option.type === "country" && option.value === filters.countries[0]) || null;
   return null;
 }
 
 function renderAirportAreaSelection(settings: ExtensionSettings): string {
   const option = activeAirportAreaOption(settings.airportHelper);
-  if (!option) return '<p class="airport-note">Choose an area to build an airport code list.</p>';
-  const typeLabel = option.type === "country" ? "Country" : option.type === "continent" ? "Continent" : "Region";
+  const translate = t();
+  if (!option) return `<p class="airport-note">${escapeHtml(translate("chooseAreaToBuildAirports"))}</p>`;
+  const typeLabel =
+    option.type === "country"
+      ? translate("airportAreaTypeCountry")
+      : option.type === "continent"
+        ? translate("airportAreaTypeContinent")
+        : translate("airportAreaTypeRegion");
   return `
     <p class="airport-area-selection">
-      <span>Selected</span>
+      <span>${escapeHtml(translate("selected"))}</span>
       <strong>
         ${option.type === "country" ? `<span class="flag" aria-hidden="true">${escapeHtml(flagEmoji(option.value))}</span>` : ""}
         ${escapeHtml(option.label)}
@@ -1883,17 +1944,18 @@ function renderAirportAreaSelection(settings: ExtensionSettings): string {
 }
 
 function renderAirportHelper(settings: ExtensionSettings): string {
+  const translate = t();
   const areaInputId = "mooflights-airport-area";
   const areaDropdownId = "mooflights-airport-area-dropdown";
   const areaInputValue = state.airportAreaSearch;
   const areaDropdownOptions = airportAreaDropdownOptions();
   return `
     <details open>
-      <summary>Airport helper</summary>
+      <summary>${escapeHtml(translate("airportHelper"))}</summary>
       <div class="airport-area-field">
-        <label for="${areaInputId}">Area</label>
+        <label for="${areaInputId}">${escapeHtml(translate("area"))}</label>
         <div class="airport-area-combo">
-          <input id="${areaInputId}" type="search" data-setting="area" value="${escapeHtml(areaInputValue)}" placeholder="Search region, continent, or country" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="${areaDropdownOptions.length > 0 ? "true" : "false"}" aria-controls="${areaDropdownId}">
+          <input id="${areaInputId}" type="search" data-setting="area" value="${escapeHtml(areaInputValue)}" placeholder="${escapeHtml(translate("airportAreaPlaceholder"))}" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="${areaDropdownOptions.length > 0 ? "true" : "false"}" aria-controls="${areaDropdownId}">
           <ul id="${areaDropdownId}" class="airport-area-dropdown" data-role="airport-area-dropdown" role="listbox" ${areaDropdownOptions.length === 0 ? "hidden" : ""}>
             ${renderAirportAreaDropdownRows(areaDropdownOptions)}
           </ul>
@@ -1907,16 +1969,16 @@ function renderAirportHelper(settings: ExtensionSettings): string {
               ? state.airportPreview
                   .map(
                     (code) => `
-                      <button type="button" class="airport-chip" data-action="remove-airport-code" data-code="${escapeHtml(code)}" aria-label="Remove ${escapeHtml(code)}">
+                      <button type="button" class="airport-chip" data-action="remove-airport-code" data-code="${escapeHtml(code)}" aria-label="${escapeHtml(translate("removeAirportCode", { code }))}">
                         ${escapeHtml(code)}<span aria-hidden="true">x</span>
                       </button>
                     `,
                   )
                   .join("")
-              : '<span class="muted">No airports selected.</span>'
+              : `<span class="muted">${escapeHtml(translate("noAirportsSelected"))}</span>`
           }
         </div>
-        <button type="button" class="copy-button" data-action="copy-airports" aria-label="Copy airport codes" title="Copy airport codes" ${state.airportPreview.length === 0 ? "disabled" : ""}>
+        <button type="button" class="copy-button" data-action="copy-airports" aria-label="${escapeHtml(translate("copyAirportCodes"))}" title="${escapeHtml(translate("copyAirportCodes"))}" ${state.airportPreview.length === 0 ? "disabled" : ""}>
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <rect x="8" y="8" width="10" height="12" rx="2"></rect>
             <path d="M6 16H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -1925,6 +1987,10 @@ function renderAirportHelper(settings: ExtensionSettings): string {
       </div>
     </details>
   `;
+}
+
+function currentAirportAreaOptions(): AirportAreaOption[] {
+  return airportAreaOptions(state.settings?.language || DEFAULT_SETTINGS.language);
 }
 
 function installChipClearShortcut(): void {
@@ -1957,6 +2023,7 @@ function addLocationClearButtons(): void {
       const suffix = nearbyAirportButton.closest(".mat-mdc-form-field-icon-suffix");
       const existingClearButton = suffix?.querySelector<HTMLButtonElement>(".mooflights-location-clear");
       if (existingClearButton) {
+        localizeLocationClearButton(existingClearButton);
         syncLocationClearButton(existingClearButton, nearbyAirportButton);
         return;
       }
@@ -1964,8 +2031,7 @@ function addLocationClearButtons(): void {
       const clearButton = document.createElement("button");
       clearButton.type = "button";
       clearButton.className = "mooflights-location-clear";
-      clearButton.setAttribute("aria-label", "Clear selected airports");
-      clearButton.setAttribute("title", "Clear selected airports");
+      localizeLocationClearButton(clearButton);
       clearButton.tabIndex = -1;
       clearButton.innerHTML = '<span class="material-icons" aria-hidden="true">close</span>';
       clearButton.addEventListener("mousedown", (event) => event.preventDefault());
@@ -1979,6 +2045,11 @@ function addLocationClearButtons(): void {
       formField?.addEventListener("input", () => syncLocationClearButton(clearButton, nearbyAirportButton));
       formField?.addEventListener("change", () => syncLocationClearButton(clearButton, nearbyAirportButton));
     });
+}
+
+function localizeLocationClearButton(clearButton: HTMLButtonElement): void {
+  clearButton.setAttribute("aria-label", t()("clearSelectedAirports"));
+  clearButton.setAttribute("title", t()("clearSelectedAirports"));
 }
 
 function syncLocationClearButton(clearButton: HTMLButtonElement, anchor: HTMLElement): void {
@@ -2094,7 +2165,7 @@ function hidePanelForSession(): void {
 }
 
 function renderLinks(links: RankedProviderLink[]): string {
-  if (!state.itinerary) return `<p class="muted">Capture an itinerary to rank links.</p>`;
+  if (!state.itinerary) return `<p class="muted">${escapeHtml(t()("captureItineraryToRankLinks"))}</p>`;
   return links
     .map((link) => {
       const confidence = providerConfidenceCopy(link);
@@ -2115,22 +2186,24 @@ function renderLinks(links: RankedProviderLink[]): string {
 
 function providerConfidenceCopy(link: RankedProviderLink): { label: string } | null {
   if (ALWAYS_SHOWN_PROVIDER_IDS.includes(link.provider.id as (typeof ALWAYS_SHOWN_PROVIDER_IDS)[number])) return null;
+  const translate = t();
   if (link.confidence === "high") {
     return {
-      label: "Reliable",
+      label: translate("reliable"),
     };
   }
   if (link.confidence === "medium") {
     return {
-      label: "Check details",
+      label: translate("checkDetails"),
     };
   }
   return {
-    label: "Unreliable",
+    label: translate("unreliable"),
   };
 }
 
 function renderMileageCredit(itinerary: NormalizedItinerary): string {
+  const translate = t();
   const preferredProgramList = state.settings?.preferredFrequentFlyerPrograms || [];
   const estimates = estimateEarnings(
     itinerary,
@@ -2153,23 +2226,23 @@ function renderMileageCredit(itinerary: NormalizedItinerary): string {
   if (insights.length === 0 && estimates.length === 0) return "";
   return `
     <div class="segment-links">
-      <strong>Miles credit</strong>
+      <strong>${escapeHtml(translate("milesCredit"))}</strong>
       ${visibleEstimates.length > 1 ? renderMileageSortControls(preferredPrograms.size > 0) : ""}
       ${sortedVisibleEstimates.length ? renderMileageEstimateEntries(sortedVisibleEstimates, preferredProgramList) : ""}
       ${
         hiddenEstimateCount > 0 && visibleEstimates.length === 0
           ? `<div class="earning notice">
-              <span>No preferred program match</span>
-              <small>Local earning rows exist, but they are not in your preferred programs.</small>
-              <button type="button" class="inline-button" data-action="show-all-mileage">Show all</button>
+              <span>${escapeHtml(translate("noPreferredProgramMatch"))}</span>
+              <small>${escapeHtml(translate("noPreferredProgramMatchDetail"))}</small>
+              <button type="button" class="inline-button" data-action="show-all-mileage">${escapeHtml(translate("showAll"))}</button>
             </div>`
           : ""
       }
       ${
         hiddenEstimateCount > 0 && visibleEstimates.length > 0
           ? `<div class="earning more-earnings">
-              <small>${hiddenEstimateCount.toLocaleString()} more earning row(s) hidden by preferred programs.</small>
-              <button type="button" class="inline-button" data-action="show-all-mileage">Show all</button>
+              <small>${escapeHtml(translate("moreRowsHidden", { count: hiddenEstimateCount.toLocaleString() }))}</small>
+              <button type="button" class="inline-button" data-action="show-all-mileage">${escapeHtml(translate("showAll"))}</button>
             </div>`
           : ""
       }
@@ -2178,7 +2251,7 @@ function renderMileageCredit(itinerary: NormalizedItinerary): string {
           (insight) => `
             <div class="earning notice">
               <span>${escapeHtml(insight.label)}</span>
-              ${insight.url ? `<a href="${escapeHtml(insight.url)}" target="_blank" rel="noopener noreferrer">Open airline page</a>` : ""}
+              ${insight.url ? `<a href="${escapeHtml(insight.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(translate("openAirlinePage"))}</a>` : ""}
               <small>${escapeHtml(insight.message)}</small>
             </div>
           `,
@@ -2189,17 +2262,18 @@ function renderMileageCredit(itinerary: NormalizedItinerary): string {
 }
 
 function renderMileageSortControls(hasPreferredPrograms: boolean): string {
+  const translate = t();
   const milesSelected = state.mileageSortMode === "miles";
   const nameSelected = state.mileageSortMode === "name";
   return `
     <div class="mileage-sort-controls">
-      <div class="segmented-control" role="group" aria-label="Sort mileage rows">
-        <button type="button" data-action="mileage-sort" data-sort="miles" aria-pressed="${milesSelected}" aria-label="Sort by miles descending">Miles <span aria-hidden="true">↓</span></button>
-        <button type="button" data-action="mileage-sort" data-sort="name" aria-pressed="${nameSelected}" aria-label="Sort by program name ascending">Name <span aria-hidden="true">↑</span></button>
+      <div class="segmented-control" role="group" aria-label="${escapeHtml(translate("sortMileageRows"))}">
+        <button type="button" data-action="mileage-sort" data-sort="miles" aria-pressed="${milesSelected}" aria-label="${escapeHtml(translate("sortByMilesDescending"))}">${escapeHtml(translate("miles"))} <span aria-hidden="true">↓</span></button>
+        <button type="button" data-action="mileage-sort" data-sort="name" aria-pressed="${nameSelected}" aria-label="${escapeHtml(translate("sortByProgramNameAscending"))}">${escapeHtml(translate("name"))} <span aria-hidden="true">↑</span></button>
       </div>
       ${
         hasPreferredPrograms
-          ? `<label><input type="checkbox" data-action="toggle-preferred-mileage-group" ${state.groupPreferredMileage ? "checked" : ""}> Preferred first</label>`
+          ? `<label><input type="checkbox" data-action="toggle-preferred-mileage-group" ${state.groupPreferredMileage ? "checked" : ""}> ${escapeHtml(translate("preferredFirst"))}</label>`
           : ""
       }
     </div>
@@ -2317,8 +2391,8 @@ function renderMileageEstimateEntry(
   return `
     <a href="${escapeHtml(estimate.url)}" target="_blank" rel="noopener noreferrer" class="earning ${preferenceClass}">
       ${showSegmentLabel ? `<span>${escapeHtml(mileageSegmentLabel(estimate))}</span>` : ""}
-      <em>${escapeHtml(estimate.program)}</em>
-      <small>${typeof estimate.estimatedMiles === "number" ? `${estimate.estimatedMiles.toLocaleString()} miles · ` : ""}${escapeHtml(estimate.formula)}</small>
+      <em>${escapeHtml(localizedMileageProgramDisplay(estimate.program, state.settings?.language || DEFAULT_SETTINGS.language))}</em>
+      <small>${typeof estimate.estimatedMiles === "number" ? `${estimate.estimatedMiles.toLocaleString()} ${t()("milesUnit")} · ` : ""}${escapeHtml(estimate.formula)}</small>
     </a>
   `;
 }
@@ -2341,9 +2415,9 @@ function renderMileageTierGroup(
   return `
     <div class="earning tier-group ${preferenceClass}">
       ${showSegmentLabel ? `<span>${escapeHtml(group.segmentLabel)}</span>` : ""}
-      <a href="${escapeHtml(group.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(group.parentProgram)}</a>
-      ${baseFare ? `<small>Base fare ${escapeHtml(baseFare)}</small>` : ""}
-      ${isApproximate ? `<small>FX conversion is approximate.</small>` : ""}
+      <a href="${escapeHtml(group.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(localizedMileageProgramDisplay(group.parentProgram, state.settings?.language || DEFAULT_SETTINGS.language))}</a>
+      ${baseFare ? `<small>${escapeHtml(t()("baseFare", { fare: baseFare }))}</small>` : ""}
+      ${isApproximate ? `<small>${escapeHtml(t()("fxApproximate"))}</small>` : ""}
       <table>
         <tbody>
           ${estimates
@@ -2351,7 +2425,7 @@ function renderMileageTierGroup(
               const parsedFormula = parsedFormulas[index];
               return `
                 <tr title="${escapeHtml(estimate.formula)}">
-                  <th>${escapeHtml(compactTierName(group.parentProgram, estimate.program))}</th>
+                  <th>${escapeHtml(compactTierName(group.parentProgram, estimate.program, state.settings?.language || DEFAULT_SETTINGS.language))}</th>
                   <td>${escapeHtml(typeof estimate.estimatedMiles === "number" ? estimate.estimatedMiles.toLocaleString() : "")}</td>
                   <td>${escapeHtml(parsedFormula?.rate || estimate.formula)}</td>
                 </tr>
@@ -2453,8 +2527,14 @@ function mileageSegmentLabel(estimate: EarningsEstimate): string {
   return `${estimate.segment.origin}-${estimate.segment.destination} ${estimate.segment.fareCarrier || estimate.segment.carrier} ${estimate.bookingClass}`;
 }
 
-function compactTierName(parentProgram: string, program: string): string {
-  const optionLabel = mileageProgramTierOptions(parentProgram).find((tier) => tier.program === program)?.label;
+function compactTierName(
+  parentProgram: string,
+  program: string,
+  language: ExtensionSettings["language"] = DEFAULT_SETTINGS.language,
+): string {
+  const optionLabel = mileageProgramTierOptions(parentProgram, language).find(
+    (tier) => tier.program === program,
+  )?.label;
   if (optionLabel) return optionLabel;
   return program
     .slice(parentProgram.length)
@@ -2507,7 +2587,7 @@ async function copyAirportPreview(successMessage: string): Promise<void> {
     await navigator.clipboard.writeText(state.airportPreview.join(" "));
     setStatus(successMessage);
   } catch (error) {
-    setError(`Could not copy airport codes: ${error instanceof Error ? error.message : String(error)}`);
+    setError(t()("couldNotCopyAirportCodes", { message: error instanceof Error ? error.message : String(error) }));
   }
 }
 

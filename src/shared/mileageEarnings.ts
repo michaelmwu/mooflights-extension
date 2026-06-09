@@ -44,6 +44,8 @@ export type MileageProgramOption = {
   program: string;
   carrierCodes: string[];
   label: string;
+  searchValue: string;
+  aliases: string[];
 };
 
 export type MileageProgramTierPreference = Record<string, string>;
@@ -267,15 +269,27 @@ export function uniqueMileagePrograms(): string[] {
   return [...uniqueMileageProgramsCache];
 }
 
-export function uniqueMileageProgramOptions(): MileageProgramOption[] {
+export function uniqueMileageProgramOptions(language: AppLanguage = "en"): MileageProgramOption[] {
   return uniqueMileagePrograms().map((program) => {
     const carrierCodes = PROGRAM_OWNER_CARRIER_CODES[program] || [];
+    const localized = localizedMileageProgramName(program, language);
+    const labelText = carrierCodes.length > 0 ? `${localized} (${carrierCodes.join("/")})` : localized;
+    const englishLabel = carrierCodes.length > 0 ? `${program} (${carrierCodes.join("/")})` : program;
     return {
       program,
       carrierCodes,
-      label: carrierCodes.length > 0 ? `${program} (${carrierCodes.join("/")})` : program,
+      label: labelText === englishLabel ? labelText : `${labelText} - ${englishLabel}`,
+      searchValue: labelText === englishLabel ? labelText : `${labelText} - ${englishLabel}`,
+      aliases: uniqueAliases([...mileageProgramAliases(program), labelText, englishLabel, ...carrierCodes]),
     };
   });
+}
+
+export function localizedMileageProgramDisplay(program: string, language: AppLanguage = "en"): string {
+  const parentProgram = tierParentProgram(program);
+  if (!parentProgram || parentProgram === program) return localizedMileageProgramName(program, language);
+  const tierLabel = mileageProgramTierOptions(parentProgram, language).find((tier) => tier.program === program)?.label;
+  return [localizedMileageProgramName(parentProgram, language), tierLabel].filter(Boolean).join(" ");
 }
 
 export function mileageProgramTierOptions(program: string, language: AppLanguage = "en"): MileageProgramTierOption[] {
@@ -645,6 +659,65 @@ function localizedTierLabel(label: string, language: AppLanguage): string {
   return TIER_LABEL_TRANSLATIONS[language]?.[label] || label;
 }
 
+function localizedMileageProgramName(program: string, language: AppLanguage): string {
+  return MILEAGE_PROGRAM_NAME_TRANSLATIONS[language]?.[program] || program;
+}
+
+function mileageProgramAliases(program: string): string[] {
+  return uniqueAliases([
+    program,
+    ...Object.values(MILEAGE_PROGRAM_NAME_TRANSLATIONS).map((translations) => translations?.[program] || ""),
+  ]);
+}
+
+function normalizeSearch(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function uniqueAliases(values: string[]): string[] {
+  const seen = new Set<string>();
+  return values
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .filter((value) => {
+      const normalized = normalizeSearch(value);
+      if (seen.has(normalized)) return false;
+      seen.add(normalized);
+      return true;
+    });
+}
+
+const MILEAGE_PROGRAM_NAME_TRANSLATIONS: Partial<Record<AppLanguage, Record<string, string>>> = {
+  es: {
+    "Air Canada Aeroplan": "Programa Aeroplan de Air Canada",
+    "American Airlines AAdvantage": "Programa AAdvantage de American Airlines",
+    "British Airways Club": "The British Airways Club",
+    "Delta SkyMiles": "Programa de lealtad SkyMiles de Delta",
+    "United MileagePlus": "MileagePlus de United",
+  },
+  "zh-Hans": {
+    "Air China PhoenixMiles": "凤凰知音",
+    "China Airlines Dynasty Flyer": "华夏会员",
+    "Eva Air Infinity MileageLands": "无限万哩游",
+    "Xiamen Airlines Egret Club": "白鹭俱乐部",
+  },
+  "zh-Hant": {
+    "Air China PhoenixMiles": "鳳凰知音",
+    "China Airlines Dynasty Flyer": "華夏會員",
+    "Eva Air Infinity MileageLands": "無限萬哩遊",
+    "Xiamen Airlines Egret Club": "白鷺俱樂部",
+  },
+  ja: {
+    "Air China PhoenixMiles": "エアチャイナ フェニックスマイル",
+    "ANA Mileage Club": "ANAマイレージクラブ",
+    "Japan Airlines Mileage Bank": "JALマイレージバンク",
+  },
+  ko: {
+    "Asiana Club": "아시아나클럽",
+    "Korean Air Skypass": "스카이패스",
+  },
+};
+
 const TIER_LABEL_TRANSLATIONS: Partial<Record<AppLanguage, Record<string, string>>> = {
   es: {
     Member: "Miembro",
@@ -700,7 +773,7 @@ const TIER_LABEL_TRANSLATIONS: Partial<Record<AppLanguage, Record<string, string
   },
   ko: {
     Member: "회원",
-    Standard: "스탠더드",
+    Standard: "스탠다드",
     Basic: "기본",
     Blue: "블루",
     Green: "그린",

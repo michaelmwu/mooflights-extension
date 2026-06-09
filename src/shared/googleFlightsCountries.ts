@@ -352,6 +352,7 @@ const NOT_USEFUL_GOOGLE_FLIGHTS_COUNTRY_CODES = new Set([
 ]);
 
 const ENGLISH_COUNTRY_DISPLAY = createCountryDisplayNames("en");
+const COUNTRY_DISPLAY_BY_LOCALE = new Map<string, Intl.DisplayNames | undefined>([["en", ENGLISH_COUNTRY_DISPLAY]]);
 
 export function allGoogleFlightsCountryCodes(): string[] {
   const defaultCodes = new Set(DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES);
@@ -468,7 +469,7 @@ function countryAliases(country: { code: string; label: string; searchValue: str
 }
 
 function googleFlightsCountryLabel(code: string, language: AppLanguage): string {
-  const display = createCountryDisplayNames(languageLocale(language));
+  const display = countryDisplayNames(languageLocale(language));
   try {
     return display?.of(code) || googleFlightsCountryEnglishLabel(code);
   } catch {
@@ -515,4 +516,11 @@ function createCountryDisplayNames(locale: string): Intl.DisplayNames | undefine
   } catch {
     return undefined;
   }
+}
+
+function countryDisplayNames(locale: string): Intl.DisplayNames | undefined {
+  if (!COUNTRY_DISPLAY_BY_LOCALE.has(locale)) {
+    COUNTRY_DISPLAY_BY_LOCALE.set(locale, createCountryDisplayNames(locale));
+  }
+  return COUNTRY_DISPLAY_BY_LOCALE.get(locale);
 }

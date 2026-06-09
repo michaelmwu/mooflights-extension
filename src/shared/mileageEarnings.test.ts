@@ -57,6 +57,26 @@ describe("Mileage earning estimates", () => {
       { program: "United MileagePlus Premier Gold", label: "ゴールド" },
       { program: "United MileagePlus Premier Platinum", label: "プラチナ" },
     ]);
+    expect(mileageProgramTierOptions("Korean Air Skypass", "ko")[0]).toEqual({
+      program: "Korean Air Skypass Standard",
+      label: "스탠다드",
+    });
+  });
+
+  it("localizes official program display names while keeping English aliases searchable", () => {
+    const japanesePrograms = uniqueMileageProgramOptions("ja");
+    expect(japanesePrograms.find((program) => program.program === "ANA Mileage Club")).toMatchObject({
+      program: "ANA Mileage Club",
+      label: "ANAマイレージクラブ (NH) - ANA Mileage Club (NH)",
+      aliases: expect.arrayContaining(["ANA Mileage Club", "ANAマイレージクラブ", "NH"]),
+    });
+
+    const koreanPrograms = uniqueMileageProgramOptions("ko");
+    expect(koreanPrograms.find((program) => program.program === "Korean Air Skypass")).toMatchObject({
+      program: "Korean Air Skypass",
+      label: "스카이패스 (KE) - Korean Air Skypass (KE)",
+      aliases: expect.arrayContaining(["Korean Air Skypass", "스카이패스", "KE"]),
+    });
   });
 
   it("removes repetitive program branding from imported tier labels", () => {

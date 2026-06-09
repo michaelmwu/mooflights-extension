@@ -4,6 +4,23 @@ const PANEL_ICON_64_PATH = "assets/extension-icons/icon-64.png";
 type PanelHeaderOptions = {
   optionsAction: string;
   minimizeAction?: string;
+  labels?: Partial<PanelChromeLabels>;
+};
+
+type PanelChromeLabels = {
+  panelActions: string;
+  hideForSession: string;
+  minimize: string;
+  settings: string;
+  expandPanel: string;
+};
+
+const DEFAULT_LABELS: PanelChromeLabels = {
+  panelActions: "Panel actions",
+  hideForSession: "Hide for this session",
+  minimize: "Minimize",
+  settings: "Settings",
+  expandPanel: "Expand MooFlights panel",
 };
 
 export function mooFlightsPanelIconUrl(): string {
@@ -17,7 +34,9 @@ export function mooFlightsMinimizedIconUrl(): string {
 export function renderMooFlightsPanelHeader({
   optionsAction,
   minimizeAction = "minimize-panel",
+  labels: labelOverrides = {},
 }: PanelHeaderOptions): string {
+  const labels = { ...DEFAULT_LABELS, ...labelOverrides };
   return `<header data-role="panel-header">
     <div class="brand">
       <img src="${escapeHtml(mooFlightsPanelIconUrl())}" alt="" width="32" height="32">
@@ -25,19 +44,19 @@ export function renderMooFlightsPanelHeader({
     </div>
     <div class="header-actions">
       <details class="panel-menu">
-        <summary class="icon-button" aria-label="Panel actions" title="Panel actions">⋮</summary>
-        <div class="panel-menu-popover" aria-label="Panel actions">
+        <summary class="icon-button" aria-label="${escapeHtml(labels.panelActions)}" title="${escapeHtml(labels.panelActions)}">⋮</summary>
+        <div class="panel-menu-popover" aria-label="${escapeHtml(labels.panelActions)}">
           <button type="button" class="menu-item" data-action="hide-panel-session">
             <span class="menu-icon" aria-hidden="true">✕</span>
-            <span>Hide for this session</span>
+            <span>${escapeHtml(labels.hideForSession)}</span>
           </button>
           <button type="button" class="menu-item" data-action="${escapeHtml(minimizeAction)}">
             <span class="menu-icon" aria-hidden="true">−</span>
-            <span>Minimize</span>
+            <span>${escapeHtml(labels.minimize)}</span>
           </button>
           <button type="button" class="menu-item" data-action="${escapeHtml(optionsAction)}">
             <span class="menu-icon" aria-hidden="true">⚙</span>
-            <span>Settings</span>
+            <span>${escapeHtml(labels.settings)}</span>
           </button>
         </div>
       </details>
@@ -45,8 +64,9 @@ export function renderMooFlightsPanelHeader({
   </header>`;
 }
 
-export function renderMooFlightsMinimizedButton(): string {
-  return `<button type="button" class="panel-icon" data-action="restore-panel" aria-label="Expand MooFlights panel">
+export function renderMooFlightsMinimizedButton(labels: Partial<Pick<PanelChromeLabels, "expandPanel">> = {}): string {
+  const label = labels.expandPanel || DEFAULT_LABELS.expandPanel;
+  return `<button type="button" class="panel-icon" data-action="restore-panel" aria-label="${escapeHtml(label)}">
     <img src="${escapeHtml(mooFlightsMinimizedIconUrl())}" alt="" width="64" height="64">
   </button>`;
 }

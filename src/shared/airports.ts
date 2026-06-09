@@ -47,6 +47,7 @@ export const AIRPORTS: Airport[] = Object.entries(DATA.airports)
 const AIRPORTS_BY_CODE = new Map(AIRPORTS.map((airport) => [airport.code, airport]));
 const REGION_PRESETS_BY_ID = new Map(AIRPORT_REGION_PRESETS.map((preset) => [preset.id, preset]));
 const ENGLISH_COUNTRY_DISPLAY = createCountryDisplayNames("en");
+const COUNTRY_DISPLAY_BY_LOCALE = new Map<string, Intl.DisplayNames | undefined>([["en", ENGLISH_COUNTRY_DISPLAY]]);
 
 export function filterAirports(filters: AirportFilters, list: Airport[] = AIRPORTS): Airport[] {
   if (!hasAirportAreaFilter(filters)) return [];
@@ -256,7 +257,7 @@ function countrySearchAliases(code: string, language: AppLanguage): string[] {
 
 function countryLabel(code: string, language: AppLanguage): string {
   const locale = languageLocale(language);
-  const display = createCountryDisplayNames(locale);
+  const display = countryDisplayNames(locale);
   try {
     return display?.of(code) || countryEnglishName(code);
   } catch {
@@ -327,6 +328,13 @@ function createCountryDisplayNames(locale: string): Intl.DisplayNames | undefine
   } catch {
     return undefined;
   }
+}
+
+function countryDisplayNames(locale: string): Intl.DisplayNames | undefined {
+  if (!COUNTRY_DISPLAY_BY_LOCALE.has(locale)) {
+    COUNTRY_DISPLAY_BY_LOCALE.set(locale, createCountryDisplayNames(locale));
+  }
+  return COUNTRY_DISPLAY_BY_LOCALE.get(locale);
 }
 
 const AREA_TYPE_LABELS: Partial<Record<AppLanguage, Record<"region" | "continent", string>>> = {
