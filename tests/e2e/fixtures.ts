@@ -1,5 +1,5 @@
 import path from "node:path";
-import { type BrowserContext, test as base, chromium, type Page, type Worker } from "@playwright/test";
+import { type BrowserContext, test as base, chromium, expect, type Page, type Worker } from "@playwright/test";
 
 type ExtensionFixtures = {
   extensionId: string;
@@ -42,7 +42,7 @@ export const test = base.extend<ExtensionFixtures>({
   },
 });
 
-export const expect = test.expect;
+export { expect };
 
 async function extensionServiceWorker(context: BrowserContext): Promise<Worker> {
   const existingWorker = context.serviceWorkers().find(isExtensionServiceWorker);
