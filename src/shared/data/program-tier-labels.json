@@ -1,5 +1,5 @@
 {
-  "source_note": "Program tier display labels imported from a Mu Travel reference snapshot. Labels only; no mileage earning rates or outbound lookup URLs are bundled here.",
+  "source_note": "Program tier display labels imported from a MooTravel reference snapshot. Labels only; no mileage earning rates or outbound lookup URLs are bundled here.",
   "fetched_at": "2026-05-23T02:43:15.556877+00:00",
   "programs": {
     "ANA Mileage Club": ["Member", "Bronze", "Platinum", "Diamond"],

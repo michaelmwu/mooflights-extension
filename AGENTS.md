@@ -2,7 +2,7 @@
 
 ## Project
 
-This repo contains the open-source Mu Travel Flights browser extension. Work in this repo should keep the extension offline-first and avoid coupling core ITA Matrix functionality to the hosted backend.
+This repo contains the open-source MooFlights browser extension. Work in this repo should keep the extension offline-first and avoid coupling core ITA Matrix functionality to the hosted backend.
 
 ## Commands
 
@@ -14,7 +14,7 @@ This repo contains the open-source Mu Travel Flights browser extension. Work in 
 ## Security Boundary
 
 - Never place `POSTGRES_URL`, service-role keys, OAuth client secrets, affiliate secrets, or premium entitlement logic in extension code.
-- The extension may call public/versioned Mu Travel API endpoints, but must gracefully fall back to local behavior.
+- The extension may call public/versioned MooTravel API endpoints, but must gracefully fall back to local behavior.
 - Direct browser-to-Postgres access is out of scope even with RLS.
 
 ## Ownership

@@ -7,12 +7,12 @@ const execFileAsync = promisify(execFile);
 const root = process.cwd();
 const artifacts = resolve(root, "artifacts");
 const packageVersion = await extensionVersion();
-const artifactBaseName = `mu-travel-flights-${packageVersion}`;
+const artifactBaseName = `mooflights-${packageVersion}`;
 const zipPath = resolve(artifacts, `${artifactBaseName}.zip`);
 const crxPath = resolve(artifacts, `${artifactBaseName}.crx`);
 const generatedCrxPath = resolve(root, "dist.crx");
 const generatedPemPath = resolve(root, "dist.pem");
-const providedCrxKeyPath = process.env.MU_TRAVEL_CRX_KEY_PATH ? resolve(process.env.MU_TRAVEL_CRX_KEY_PATH) : "";
+const providedCrxKeyPath = crxKeyPathEnv() ? resolve(crxKeyPathEnv()) : "";
 
 await mkdir(artifacts, { recursive: true });
 await removeExistingPackageArtifacts();
@@ -34,9 +34,9 @@ if (!chrome) {
 }
 
 const keyPath = await crxKeyPath();
-if (!keyPath && process.env.MU_TRAVEL_REQUIRE_CRX_KEY === "1") {
+if (!keyPath && (process.env.MOOFLIGHTS_REQUIRE_CRX_KEY === "1" || process.env.MU_TRAVEL_REQUIRE_CRX_KEY === "1")) {
   throw new Error(
-    "A stable CRX signing key is required for release packaging. Set MU_TRAVEL_CRX_KEY_B64 or MU_TRAVEL_CRX_KEY_PATH.",
+    "A stable CRX signing key is required for release packaging. Set MOOFLIGHTS_CRX_KEY_B64 or MOOFLIGHTS_CRX_KEY_PATH.",
   );
 }
 const args = [`--pack-extension=${resolve(root, "dist")}`, "--no-sandbox"];
@@ -63,7 +63,7 @@ async function removeExistingPackageArtifacts() {
   const entries = await readdir(artifacts);
   await Promise.all(
     entries
-      .filter((entry) => /^mu-travel-flights(?:-\d+\.\d+\.\d+)?\.(zip|crx)$/.test(entry))
+      .filter((entry) => /^(?:mooflights|mu-travel-flights)(?:-\d+\.\d+\.\d+)?\.(zip|crx)$/.test(entry))
       .map((entry) => rm(resolve(artifacts, entry), { force: true })),
   );
 }
@@ -100,11 +100,16 @@ async function chromeExecutable() {
 }
 
 async function crxKeyPath() {
-  if (process.env.MU_TRAVEL_CRX_KEY_B64) {
-    const path = resolve(artifacts, ".mu-travel-crx-key.pem");
-    await writeFile(path, Buffer.from(process.env.MU_TRAVEL_CRX_KEY_B64, "base64"));
+  const crxKeyB64 = process.env.MOOFLIGHTS_CRX_KEY_B64 || process.env.MU_TRAVEL_CRX_KEY_B64;
+  if (crxKeyB64) {
+    const path = resolve(artifacts, ".mooflights-crx-key.pem");
+    await writeFile(path, Buffer.from(crxKeyB64, "base64"));
     return { path, temporary: true };
   }
-  if (process.env.MU_TRAVEL_CRX_KEY_PATH) return { path: providedCrxKeyPath, temporary: false };
+  if (crxKeyPathEnv()) return { path: providedCrxKeyPath, temporary: false };
   return null;
+}
+
+function crxKeyPathEnv() {
+  return process.env.MOOFLIGHTS_CRX_KEY_PATH || process.env.MU_TRAVEL_CRX_KEY_PATH || "";
 }

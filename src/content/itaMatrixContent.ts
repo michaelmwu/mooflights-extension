@@ -22,7 +22,11 @@ import {
 import { ALWAYS_SHOWN_PROVIDER_IDS, rankProviderLinks, summarizeItinerary } from "../shared/providers";
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from "../shared/storage";
 import type { ExtensionSettings, ItinerarySegment, NormalizedItinerary, RankedProviderLink } from "../shared/types";
-import { muTravelPanelHeaderStyles, renderMuTravelMinimizedButton, renderMuTravelPanelHeader } from "./panelChrome";
+import {
+  mooFlightsPanelHeaderStyles,
+  renderMooFlightsMinimizedButton,
+  renderMooFlightsPanelHeader,
+} from "./panelChrome";
 
 type PanelEdge = "top" | "right" | "bottom" | "left";
 
@@ -74,9 +78,9 @@ type MileageFormula = {
 
 type MileageSortMode = "miles" | "name";
 
-const PANEL_ID = "mu-travel-flights-panel";
-const BRIDGE_ID = "mu-travel-flights-page-bridge";
-const MESSAGE_SOURCE = "mu-travel-flights";
+const PANEL_ID = "mooflights-panel";
+const BRIDGE_ID = "mooflights-page-bridge";
+const MESSAGE_SOURCE = "mooflights";
 const AUTO_CAPTURE_DEBOUNCE_MS = 150;
 const AUTO_SEARCH_DEBOUNCE_MS = 250;
 const AUTO_SEARCH_TIMEOUT_MS = 15_000;
@@ -85,6 +89,10 @@ const AUTO_OPEN_TIMEOUT_MS = 15_000;
 const AUTO_OPEN_REMEMBER_MS = 5 * 60 * 1000;
 const TAB_AUTO_OPEN_CHECK_DEBOUNCE_MS = 250;
 const TAB_AUTO_OPEN_CHECK_TIMEOUT_MS = 10_000;
+const AUTO_OPEN_FLAG = "mooFlightsAutoOpen";
+const AUTO_SEARCH_FLAG = "mooFlightsAutoSearch";
+const LEGACY_AUTO_OPEN_FLAG = "muTravelAutoOpen";
+const LEGACY_AUTO_SEARCH_FLAG = "muTravelAutoSearch";
 const AUTO_OPEN_STORAGE_KEY = "muTravelMatrixAutoOpen";
 const PANEL_SESSION_HIDE_STORAGE_KEY = "muTravelMatrixPanelHiddenForSession";
 const FLIGHT_RESULT_ROW_SELECTOR = "tr[mat-row].mat-mdc-row:not(.detail-row), tr[mat-row]:not(.detail-row)";
@@ -176,11 +184,11 @@ function render(): void {
 
   shadow.innerHTML = `
     <style>${styles()}</style>
-      <section class="panel ${state.panelMinimized ? "minimized" : ""}" style="${panelPositionStyle(state.panelPosition)}" aria-label="Mu Travel Flights">
+      <section class="panel ${state.panelMinimized ? "minimized" : ""}" style="${panelPositionStyle(state.panelPosition)}" aria-label="MooFlights">
         ${
           state.panelMinimized
-            ? renderMuTravelMinimizedButton()
-            : renderMuTravelPanelHeader({ optionsAction: "options" })
+            ? renderMooFlightsMinimizedButton()
+            : renderMooFlightsPanelHeader({ optionsAction: "options" })
         }
 
       ${state.panelMinimized ? "" : renderStatusMessage()}
@@ -929,7 +937,8 @@ function shouldAutoSubmitMatrixSearch(): boolean {
   const url = new URL(window.location.href);
   return (
     Boolean(url.searchParams.get("search")) &&
-    (url.searchParams.get("muTravelAutoSearch") === "1" || matrixSearchPayloadFlag("muTravelAutoSearch"))
+    (urlFlag(url, AUTO_SEARCH_FLAG, LEGACY_AUTO_SEARCH_FLAG) ||
+      matrixSearchPayloadFlag(AUTO_SEARCH_FLAG, LEGACY_AUTO_SEARCH_FLAG))
   );
 }
 
@@ -964,9 +973,9 @@ function maybeAutoOpenMatrixResult(): void {
   if (target) {
     const primaryRow = primaryResultRowFor(target);
     const clickedExpandedControl = autoOpenClickedPrimaryResult;
-    target.dataset.muTravelAutoOpenClicked = "true";
+    target.dataset.mooFlightsAutoOpenClicked = "true";
     if (primaryRow) {
-      primaryRow.dataset.muTravelAutoOpenClicked = "true";
+      primaryRow.dataset.mooFlightsAutoOpenClicked = "true";
       autoOpenClickedPrimaryResult = true;
       autoOpenPrimaryResultRow = primaryRow;
     }
@@ -998,14 +1007,17 @@ function maybeAutoOpenMatrixResult(): void {
 
 function shouldAutoOpenMatrixResultAfterSearch(): boolean {
   const url = new URL(window.location.href);
-  return url.searchParams.get("muTravelAutoOpen") === "1" || matrixSearchPayloadFlag("muTravelAutoOpen");
+  return (
+    urlFlag(url, AUTO_OPEN_FLAG, LEGACY_AUTO_OPEN_FLAG) ||
+    matrixSearchPayloadFlag(AUTO_OPEN_FLAG, LEGACY_AUTO_OPEN_FLAG)
+  );
 }
 
 function shouldAutoOpenMatrixResult(): boolean {
   const url = new URL(window.location.href);
   return (
-    url.searchParams.get("muTravelAutoOpen") === "1" ||
-    matrixSearchPayloadFlag("muTravelAutoOpen") ||
+    urlFlag(url, AUTO_OPEN_FLAG, LEGACY_AUTO_OPEN_FLAG) ||
+    matrixSearchPayloadFlag(AUTO_OPEN_FLAG, LEGACY_AUTO_OPEN_FLAG) ||
     rememberedAutoOpenRequest() ||
     tabScopedAutoOpenRequest()
   );
@@ -1020,7 +1032,7 @@ function matrixResultOpenTarget(): HTMLElement | null {
   if (alreadyExpandedControl) return alreadyExpandedControl;
 
   const row = firstVisibleFlightResultRow();
-  if (!row || row.dataset.muTravelAutoOpenClicked === "true") return null;
+  if (!row || row.dataset.mooFlightsAutoOpenClicked === "true") return null;
   const rowControl = firstItineraryPriceLink(row) || firstResultOpenControl(row);
   return rowControl || row;
 }
@@ -1047,8 +1059,8 @@ function firstResultOpenControl(scope: ParentNode): HTMLElement | null {
     Array.from(scope.querySelectorAll<HTMLElement>("button, a[href], [role='button']")).find(
       (control) =>
         !control.closest(`#${PANEL_ID}`) &&
-        control.dataset.muTravelAutoOpenClicked !== "true" &&
-        primaryResultRowFor(control)?.dataset.muTravelAutoOpenClicked !== "true" &&
+        control.dataset.mooFlightsAutoOpenClicked !== "true" &&
+        primaryResultRowFor(control)?.dataset.mooFlightsAutoOpenClicked !== "true" &&
         isVisibleElement(control) &&
         !isDisabledControl(control) &&
         isResultOpenControl(control),
@@ -1230,10 +1242,14 @@ function normalizeAutoOpenSearchToken(value: string): string {
     const payload = JSON.parse(decodeBase64SearchParam(value));
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) return "";
     const normalizedPayload = payload as {
+      mooFlightsAutoOpen?: unknown;
+      mooFlightsAutoSearch?: unknown;
       muTravelAutoOpen?: unknown;
       muTravelAutoSearch?: unknown;
       solution?: unknown;
     };
+    delete normalizedPayload.mooFlightsAutoOpen;
+    delete normalizedPayload.mooFlightsAutoSearch;
     delete normalizedPayload.muTravelAutoOpen;
     delete normalizedPayload.muTravelAutoSearch;
     delete normalizedPayload.solution;
@@ -1253,16 +1269,20 @@ function canonicalJsonValue(value: unknown): unknown {
   );
 }
 
-function matrixSearchPayloadFlag(key: "muTravelAutoOpen" | "muTravelAutoSearch"): boolean {
+function matrixSearchPayloadFlag(key: string, legacyKey: string): boolean {
   const url = new URL(window.location.href);
   const search = url.searchParams.get("search");
   if (!search) return false;
   try {
     const payload = JSON.parse(decodeBase64SearchParam(search)) as Record<string, unknown>;
-    return payload?.[key] === "1";
+    return payload?.[key] === "1" || payload?.[legacyKey] === "1";
   } catch {
     return false;
   }
+}
+
+function urlFlag(url: URL, key: string, legacyKey: string): boolean {
+  return url.searchParams.get(key) === "1" || url.searchParams.get(legacyKey) === "1";
 }
 
 function decodeBase64SearchParam(value: string): string {
@@ -1342,10 +1362,10 @@ function installResultTableColumns(): void {
 
     const detailCells = Array.from(table.querySelectorAll<HTMLTableCellElement>("tr.detail-row > td[colspan]"));
     for (const cell of detailCells) {
-      if (cell.dataset.muTravelColspanAdjusted === "true") continue;
+      if (cell.dataset.mooFlightsColspanAdjusted === "true") continue;
       const colspan = Number(cell.getAttribute("colspan") || 0);
       if (Number.isFinite(colspan) && colspan > 0) cell.setAttribute("colspan", String(colspan + 1));
-      cell.dataset.muTravelColspanAdjusted = "true";
+      cell.dataset.mooFlightsColspanAdjusted = "true";
     }
   }
 }
@@ -1614,9 +1634,9 @@ function renderResultMileageLine(segment: ItinerarySegment, estimate: EarningsEs
 }
 
 function installFlightResultStyles(): void {
-  if (document.getElementById("mu-travel-flight-result-styles")) return;
+  if (document.getElementById("mooflights-flight-result-styles")) return;
   const style = document.createElement("style");
-  style.id = "mu-travel-flight-result-styles";
+  style.id = "mooflights-flight-result-styles";
   style.textContent = `
     .mu-mileage-column {
       min-width: 190px;
@@ -1863,8 +1883,8 @@ function renderAirportAreaSelection(settings: ExtensionSettings): string {
 }
 
 function renderAirportHelper(settings: ExtensionSettings): string {
-  const areaInputId = "mu-travel-airport-area";
-  const areaDropdownId = "mu-travel-airport-area-dropdown";
+  const areaInputId = "mooflights-airport-area";
+  const areaDropdownId = "mooflights-airport-area-dropdown";
   const areaInputValue = state.airportAreaSearch;
   const areaDropdownOptions = airportAreaDropdownOptions();
   return `
@@ -1935,7 +1955,7 @@ function addLocationClearButtons(): void {
     .querySelectorAll<HTMLButtonElement>('button.add-airport, button[aria-label="add location"]')
     .forEach((nearbyAirportButton) => {
       const suffix = nearbyAirportButton.closest(".mat-mdc-form-field-icon-suffix");
-      const existingClearButton = suffix?.querySelector<HTMLButtonElement>(".mu-travel-location-clear");
+      const existingClearButton = suffix?.querySelector<HTMLButtonElement>(".mooflights-location-clear");
       if (existingClearButton) {
         syncLocationClearButton(existingClearButton, nearbyAirportButton);
         return;
@@ -1943,7 +1963,7 @@ function addLocationClearButtons(): void {
       if (!suffix) return;
       const clearButton = document.createElement("button");
       clearButton.type = "button";
-      clearButton.className = "mu-travel-location-clear";
+      clearButton.className = "mooflights-location-clear";
       clearButton.setAttribute("aria-label", "Clear selected airports");
       clearButton.setAttribute("title", "Clear selected airports");
       clearButton.tabIndex = -1;
@@ -1987,7 +2007,7 @@ async function clearLocationField(anchor: HTMLElement): Promise<void> {
     input.dispatchEvent(new Event("change", { bubbles: true }));
     input.focus();
   }
-  const clearButton = formField?.querySelector<HTMLButtonElement>(".mu-travel-location-clear");
+  const clearButton = formField?.querySelector<HTMLButtonElement>(".mooflights-location-clear");
   if (clearButton) syncLocationClearButton(clearButton, anchor);
 }
 
@@ -2002,11 +2022,11 @@ async function clearLocationChipGrid(chipGrid: Element | null): Promise<void> {
 }
 
 function installLocationClearButtonStyles(): void {
-  if (document.getElementById("mu-travel-location-clear-styles")) return;
+  if (document.getElementById("mooflights-location-clear-styles")) return;
   const style = document.createElement("style");
-  style.id = "mu-travel-location-clear-styles";
+  style.id = "mooflights-location-clear-styles";
   style.textContent = `
-    .mu-travel-location-clear {
+    .mooflights-location-clear {
       align-items: center;
       background: #ffffff;
       border: 0;
@@ -2029,16 +2049,16 @@ function installLocationClearButtonStyles(): void {
       width: 22px;
       z-index: 2;
     }
-    .mu-travel-location-clear[hidden] {
+    .mooflights-location-clear[hidden] {
       display: none;
     }
-    .mu-travel-location-clear:hover,
-    .mu-travel-location-clear:focus-visible {
+    .mooflights-location-clear:hover,
+    .mooflights-location-clear:focus-visible {
       background: #f8fafc;
       color: rgba(0, 0, 0, 0.86);
       outline: none;
     }
-    .mu-travel-location-clear .material-icons {
+    .mooflights-location-clear .material-icons {
       font-size: 16px;
       line-height: 1;
     }
@@ -2524,7 +2544,7 @@ function styles(): string {
       background: transparent;
       box-shadow: none;
     }
-    ${muTravelPanelHeaderStyles()}
+    ${mooFlightsPanelHeaderStyles()}
     strong { display: block; font-size: 15px; }
     .brand strong { font-size: 18px; }
     header span, .muted, small { color: #64748b; }
