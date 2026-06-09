@@ -627,15 +627,10 @@ void init();
 async function init(): Promise<void> {
   try {
     const settings = await loadSettings();
-    state.countryInput = (
-      readSessionGoogleFlightsCountrySelection() ||
-      filterAvailableGoogleFlightsCountryCodes(settings.googleFlights.countryCodes)
-    ).join(", ");
+    applyGoogleFlightsCountryInput(readSessionGoogleFlightsCountrySelection() || settings.googleFlights.countryCodes);
     state.language = settings.language;
   } catch {
-    state.countryInput = (readSessionGoogleFlightsCountrySelection() || DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES).join(
-      ", ",
-    );
+    applyGoogleFlightsCountryInput(readSessionGoogleFlightsCountrySelection() || DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES);
   }
   chrome.storage?.onChanged?.addListener(onSettingsChanged);
   scheduleRender();
@@ -647,7 +642,7 @@ function onSettingsChanged(changes: Record<string, chrome.storage.StorageChange>
   const next = mergeSettings(changes[SETTINGS_KEY].newValue);
   const languageChanged = next.language !== state.language;
   state.language = next.language;
-  state.countryInput = filterAvailableGoogleFlightsCountryCodes(next.googleFlights.countryCodes).join(", ");
+  applyGoogleFlightsCountryInput(readSessionGoogleFlightsCountrySelection() || next.googleFlights.countryCodes);
   if (languageChanged) state.countrySearch = "";
   render();
 }
@@ -1357,16 +1352,21 @@ function removeGoogleFlightsCountry(countryCode: string): void {
 }
 
 function updateGoogleFlightsCountrySelection(countryCodes: string[]): void {
+  const nextCountries = applyGoogleFlightsCountryInput(countryCodes);
+  writeSessionGoogleFlightsCountrySelection(nextCountries);
+}
+
+function applyGoogleFlightsCountryInput(countryCodes: string[]): string[] {
   const nextCountries = filterAvailableGoogleFlightsCountryCodes(countryCodes);
   const selectedCountrySet = new Set(nextCountries);
   state.countryInput = nextCountries.join(", ");
-  writeSessionGoogleFlightsCountrySelection(nextCountries);
   state.countrySearch = "";
   state.results = state.results.filter((result) => selectedCountrySet.has(result.country));
   state.searchResults = state.searchResults.filter((result) => selectedCountrySet.has(result.country));
   state.searchBestByRowKey = bestPricesBySearchRow(state.searchBaseline, state.searchResults);
   state.resultsCachedAt = 0;
   state.error = "";
+  return nextCountries;
 }
 
 function selectedGoogleFlightsCountries(): string[] {
