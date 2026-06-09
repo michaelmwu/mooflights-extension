@@ -50,6 +50,15 @@ describe("Mileage earning estimates", () => {
     expect(uniqueMileagePrograms()).not.toContain("Air Canada Aeroplan 2026");
   });
 
+  it("localizes common tier labels without changing stored tier program ids", () => {
+    expect(mileageProgramTierOptions("United MileagePlus", "ja").slice(0, 4)).toEqual([
+      { program: "United MileagePlus Member", label: "メンバー" },
+      { program: "United MileagePlus Premier Silver", label: "シルバー" },
+      { program: "United MileagePlus Premier Gold", label: "ゴールド" },
+      { program: "United MileagePlus Premier Platinum", label: "プラチナ" },
+    ]);
+  });
+
   it("removes repetitive program branding from imported tier labels", () => {
     expect(mileageProgramTierOptions("Singapore Airlines KrisFlyer")).toEqual([
       { program: "Singapore Airlines KrisFlyer KrisFlyer", label: "KrisFlyer" },

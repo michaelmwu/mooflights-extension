@@ -5,7 +5,7 @@ import {
   airportAreaFromSearchValue,
   airportAreaOptions,
   airportAreaSearchValue,
-  countrySearchValue,
+  countryDisplayName,
 } from "../shared/airports";
 import { flagEmoji } from "../shared/flags";
 import { DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES, parseGoogleFlightsCountryInput } from "../shared/googleFlightsBooking";
@@ -33,8 +33,11 @@ function Options(): React.ReactElement {
   const [googleFlightsCountrySearch, setGoogleFlightsCountrySearch] = useState("");
   const [saved, setSaved] = useState(false);
   const t = useMemo(() => createTranslator(settings.language), [settings.language]);
-  const airportAreas = useMemo(() => airportAreaOptions(), []);
-  const googleFlightsCountries = useMemo(() => googleFlightsAvailableCountryOptions(), []);
+  const airportAreas = useMemo(() => airportAreaOptions(settings.language), [settings.language]);
+  const googleFlightsCountries = useMemo(
+    () => googleFlightsAvailableCountryOptions(settings.language),
+    [settings.language],
+  );
   const allGoogleFlightsCountries = useMemo(() => allGoogleFlightsCountryCodes(), []);
   const usesAllGoogleFlightsCountries = isAllGoogleFlightsCountryCodes(settings.googleFlights.countryCodes);
   const mileagePrograms = useMemo(() => uniqueMileageProgramOptions(), []);
@@ -235,7 +238,7 @@ function Options(): React.ReactElement {
         {usesAllGoogleFlightsCountries ? <p className="note country-warning">{t("allCountriesWarning")}</p> : null}
         <div className="country-list">
           {settings.googleFlights.countryCodes.map((country) => {
-            const displayName = countryDisplayName(country);
+            const displayName = countryDisplayName(country, settings.language);
             return (
               <span className="country-chip" key={country}>
                 <span className="flag" aria-hidden="true">
@@ -274,7 +277,7 @@ function Options(): React.ReactElement {
             <legend>{t("preferredFrequentFlyerPrograms")}</legend>
             <div className="program-list-scroll">
               {visibleMileagePrograms.map((program) => {
-                const tierOptions = mileageProgramTierOptions(program.program);
+                const tierOptions = mileageProgramTierOptions(program.program, settings.language);
                 return (
                   <div className={`program-row ${tierOptions.length > 0 ? "with-tier" : ""}`} key={program.program}>
                     <label className="program-choice">
@@ -338,15 +341,19 @@ function Options(): React.ReactElement {
             <label>
               {t("area")}
               <input
-                key={airportAreaSearchValue(settings.airportHelper) || "any-area"}
+                key={airportAreaSearchValue(settings.airportHelper, settings.language) || "any-area"}
                 type="search"
                 list="airport-area-options"
-                defaultValue={airportAreaSearchValue(settings.airportHelper)}
+                defaultValue={airportAreaSearchValue(settings.airportHelper, settings.language)}
                 placeholder={t("airportAreaPlaceholder")}
                 onBlur={(event) => {
-                  const nextAirportHelper = airportHelperWithArea(settings.airportHelper, event.currentTarget.value);
+                  const nextAirportHelper = airportHelperWithArea(
+                    settings.airportHelper,
+                    event.currentTarget.value,
+                    settings.language,
+                  );
                   if (nextAirportHelper === settings.airportHelper) {
-                    event.currentTarget.value = airportAreaSearchValue(settings.airportHelper);
+                    event.currentTarget.value = airportAreaSearchValue(settings.airportHelper, settings.language);
                     return;
                   }
                   void persist({
@@ -576,7 +583,11 @@ function categoryLabel(category: string, t: ReturnType<typeof createTranslator>)
   return category;
 }
 
-function airportHelperWithArea(airportHelper: AirportFilters, value: string): AirportFilters {
+function airportHelperWithArea(
+  airportHelper: AirportFilters,
+  value: string,
+  language: ExtensionSettings["language"],
+): AirportFilters {
   if (!value.trim()) {
     return {
       ...airportHelper,
@@ -587,11 +598,11 @@ function airportHelperWithArea(airportHelper: AirportFilters, value: string): Ai
     };
   }
 
-  const area = airportAreaFromSearchValue(value);
+  const area = airportAreaFromSearchValue(value, language);
   if (!hasAirportArea(area)) return airportHelper;
 
-  const currentAreaValue = airportAreaSearchValue(airportHelper);
-  const nextAreaValue = airportAreaSearchValue({ ...airportHelper, ...area });
+  const currentAreaValue = airportAreaSearchValue(airportHelper, language);
+  const nextAreaValue = airportAreaSearchValue({ ...airportHelper, ...area }, language);
   const areaChanged = currentAreaValue !== nextAreaValue;
 
   return {
@@ -603,11 +614,6 @@ function airportHelperWithArea(airportHelper: AirportFilters, value: string): Ai
 
 function hasAirportArea(area: Pick<AirportFilters, "region" | "continent" | "countries">): boolean {
   return Boolean(area.region || area.continent || area.countries.length > 0);
-}
-
-function countryDisplayName(code: string): string {
-  const searchValue = countrySearchValue(code);
-  return searchValue.replace(/\s+\([A-Z]{2}\)$/, "") || code;
 }
 
 function filteredMileagePrograms(

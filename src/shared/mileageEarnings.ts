@@ -3,7 +3,7 @@ import type { UsdCurrencyRates } from "./currencyRates";
 import mileageEarningData from "./data/mileage-earning.json";
 import programTierLabels from "./data/program-tier-labels.json";
 import { flattenSegments } from "./itinerary";
-import type { ItinerarySegment, NormalizedItinerary } from "./types";
+import type { AppLanguage, ItinerarySegment, NormalizedItinerary } from "./types";
 
 type CompactBookingClass = {
   redeemable_miles: CompactProgramEarning[];
@@ -278,7 +278,7 @@ export function uniqueMileageProgramOptions(): MileageProgramOption[] {
   });
 }
 
-export function mileageProgramTierOptions(program: string): MileageProgramTierOption[] {
+export function mileageProgramTierOptions(program: string, language: AppLanguage = "en"): MileageProgramTierOption[] {
   const tierPrograms = new Map<string, { label: string; rank: number }>();
   const importedLabels = PROGRAM_TIER_LABELS.programs[program] || [];
   for (const [index, tierLabel] of importedLabels.entries()) {
@@ -305,7 +305,7 @@ export function mileageProgramTierOptions(program: string): MileageProgramTierOp
   return Array.from(tierPrograms.entries())
     .map(([tierProgram, value]) => ({ program: tierProgram, label: value.label, rank: value.rank }))
     .sort((left, right) => left.rank - right.rank || left.label.localeCompare(right.label))
-    .map(({ program, label }) => ({ program, label }));
+    .map(({ program, label }) => ({ program, label: localizedTierLabel(label, language) }));
 }
 
 function inspectWhereToCreditSegment(segment: ItinerarySegment): WhereToCreditSegmentInsight | null {
@@ -640,6 +640,78 @@ function tierRank(label: string): number {
   ]);
   return ranks.get(label) ?? 100;
 }
+
+function localizedTierLabel(label: string, language: AppLanguage): string {
+  return TIER_LABEL_TRANSLATIONS[language]?.[label] || label;
+}
+
+const TIER_LABEL_TRANSLATIONS: Partial<Record<AppLanguage, Record<string, string>>> = {
+  es: {
+    Member: "Miembro",
+    Standard: "Estándar",
+    Basic: "Básico",
+    Blue: "Azul",
+    Green: "Verde",
+    Red: "Rojo",
+    Bronze: "Bronce",
+    Silver: "Plata",
+    Gold: "Oro",
+    Platinum: "Platino",
+    Diamond: "Diamante",
+  },
+  "zh-Hans": {
+    Member: "会员",
+    Standard: "标准",
+    Basic: "基础",
+    Blue: "蓝卡",
+    Green: "绿卡",
+    Red: "红卡",
+    Bronze: "铜卡",
+    Silver: "银卡",
+    Gold: "金卡",
+    Platinum: "白金卡",
+    Diamond: "钻石卡",
+  },
+  "zh-Hant": {
+    Member: "會員",
+    Standard: "標準",
+    Basic: "基本",
+    Blue: "藍卡",
+    Green: "綠卡",
+    Red: "紅卡",
+    Bronze: "銅卡",
+    Silver: "銀卡",
+    Gold: "金卡",
+    Platinum: "白金卡",
+    Diamond: "鑽石卡",
+  },
+  ja: {
+    Member: "メンバー",
+    Standard: "スタンダード",
+    Basic: "ベーシック",
+    Blue: "ブルー",
+    Green: "グリーン",
+    Red: "レッド",
+    Bronze: "ブロンズ",
+    Silver: "シルバー",
+    Gold: "ゴールド",
+    Platinum: "プラチナ",
+    Diamond: "ダイヤモンド",
+  },
+  ko: {
+    Member: "회원",
+    Standard: "스탠더드",
+    Basic: "기본",
+    Blue: "블루",
+    Green: "그린",
+    Red: "레드",
+    Bronze: "브론즈",
+    Silver: "실버",
+    Gold: "골드",
+    Platinum: "플래티넘",
+    Diamond: "다이아몬드",
+  },
+};
 
 function computeMiles(
   percent: number | null,
