@@ -43,12 +43,32 @@ bun run dev
 
 Reload the unpacked extension after rebuilds.
 
+For browser-extension E2E tests:
+
+```sh
+bunx playwright install chromium
+bun run test:e2e
+```
+
+The default Playwright suite builds and loads `dist/` into Playwright's bundled Chromium, then uses routed ITA Matrix and Google Flights fixture pages so CI does not hit real travel sites. During local development, prefer these Playwright tests for repeatable extension QA before falling back to manual Chrome checks.
+
+To smoke-test real sites locally, run:
+
+```sh
+bun run test:e2e:real
+MU_TRAVEL_REAL_GOOGLE_FLIGHTS_BOOKING_URL="https://www.google.com/travel/flights/booking/..." bun run test:e2e:real
+MU_TRAVEL_REAL_COMPARE_E2E=1 bun run test:e2e:real
+```
+
+The Google Flights smoke test defaults to a generated future-dated one-way TPE-NRT booking URL. Set `MU_TRAVEL_REAL_GOOGLE_FLIGHTS_BOOKING_URL` to override it with a copied booking URL. The real compare-flow smoke starts from US and opens CA and ZA comparison tabs only when `MU_TRAVEL_REAL_COMPARE_E2E=1` is set. Real-site tests are opt-in because Google/ITA can change markup, rate-limit, or show bot-detection interstitials.
+
 ## Common Commands
 
 ```sh
 bun run check
 bun run typecheck
 bun run test
+bun run test:e2e
 bun run package
 bun run release:package:next-patch
 bun run release:package:next-minor

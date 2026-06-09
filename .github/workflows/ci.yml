@@ -18,7 +18,7 @@ jobs:
   verify:
     name: Verify extension
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -34,6 +34,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium
+
       - name: Biome check
         run: bun run check
 
@@ -45,3 +48,6 @@ jobs:
 
       - name: Build extension
         run: bun run build
+
+      - name: Extension E2E tests
+        run: bun run test:e2e
