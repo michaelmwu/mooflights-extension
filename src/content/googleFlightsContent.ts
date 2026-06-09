@@ -90,6 +90,8 @@ const SEARCH_COMPARISON_HANDOFF_STORAGE_KEY = "muTravelGoogleFlightsSearchCompar
 const SEARCH_COMPARISON_CACHE_STORAGE_KEY = "muTravelGoogleFlightsSearchComparisonCache";
 const SEARCH_COUNTRY_SELECTION_SESSION_KEY = "muTravelGoogleFlightsCountrySelection";
 const SEARCH_DEBUG_LOG_SESSION_KEY = "muTravelGoogleFlightsDebugLog";
+const OWN_SEARCH_ANNOTATION_SELECTOR =
+  "[data-mu-travel-search-badge], #mu-travel-google-flights-panel, #mu-travel-search-badge-styles";
 const DEFAULT_PANEL_POSITION: PanelPosition = { edge: "right", ratio: 1 };
 const PANEL_EDGE_OFFSET_PX = 16;
 const GOOGLE_FLIGHTS_HEADER_HEIGHT_PX = 64;
@@ -759,7 +761,7 @@ function invalidatePositiveInferredCurrencyCache(): void {
 
 function isOwnSearchAnnotationMutation(mutation: MutationRecord): boolean {
   const target = mutation.target;
-  if (target instanceof Element && target.closest("[data-mu-travel-search-badge], #mu-travel-google-flights-panel")) {
+  if (target instanceof Element && target.closest(OWN_SEARCH_ANNOTATION_SELECTOR)) {
     return true;
   }
   const nodes = [...Array.from(mutation.addedNodes), ...Array.from(mutation.removedNodes)];
@@ -769,8 +771,7 @@ function isOwnSearchAnnotationMutation(mutation: MutationRecord): boolean {
 function isOwnSearchAnnotationNode(node: Node): boolean {
   return (
     node instanceof Element &&
-    (node.matches("[data-mu-travel-search-badge], #mu-travel-google-flights-panel") ||
-      Boolean(node.closest("[data-mu-travel-search-badge], #mu-travel-google-flights-panel")))
+    (node.matches(OWN_SEARCH_ANNOTATION_SELECTOR) || Boolean(node.closest(OWN_SEARCH_ANNOTATION_SELECTOR)))
   );
 }
 
@@ -2134,7 +2135,7 @@ function reconcileSearchBadge(
       event.stopPropagation();
       void openSearchResultDeepLink(best);
     };
-    badge.setAttribute("aria-label", `Open cheapest price in ${countryDisplayName(best.country)}`);
+    badge.setAttribute("aria-label", `Open ${countryDisplayName(best.country)} price ${best.priceText}`);
   } else {
     badge.removeAttribute("aria-label");
     badge.onclick = null;
