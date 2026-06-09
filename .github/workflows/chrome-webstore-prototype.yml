@@ -74,8 +74,8 @@ jobs:
       - name: Package extension
         env:
           CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
-          MU_TRAVEL_CRX_KEY_B64: ${{ secrets.MU_TRAVEL_CRX_KEY_B64 }}
-          MU_TRAVEL_REQUIRE_CRX_KEY: ${{ inputs.release_tag != '' && '1' || '' }}
+          MOOFLIGHTS_CRX_KEY_B64: ${{ secrets.MOOFLIGHTS_CRX_KEY_B64 }}
+          MOOFLIGHTS_REQUIRE_CRX_KEY: ${{ inputs.release_tag != '' && '1' || '' }}
         run: bun run package
 
       - name: Upload package artifact
@@ -83,8 +83,8 @@ jobs:
         with:
           name: chrome-webstore-prototype-package
           path: |
-            artifacts/mu-travel-flights-*.zip
-            artifacts/mu-travel-flights-*.crx
+            artifacts/mooflights-*.zip
+            artifacts/mooflights-*.crx
           if-no-files-found: error
 
       - name: Submit to Chrome Web Store

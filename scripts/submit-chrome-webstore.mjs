@@ -174,10 +174,10 @@ async function fetchJson(url, init, label) {
 async function detectZipArtifact() {
   const artifactsDir = resolve(root, "artifacts");
   const entries = await readdir(artifactsDir).catch(() => []);
-  const candidates = entries.filter((entry) => /^mu-travel-flights-\d+\.\d+\.\d+\.zip$/.test(entry));
+  const candidates = entries.filter((entry) => /^mooflights-\d+\.\d+\.\d+\.zip$/.test(entry));
   if (candidates.length !== 1) {
     throw new Error(
-      `Expected exactly one artifacts/mu-travel-flights-*.zip file; found ${candidates.length}. Pass --artifact=path.`,
+      `Expected exactly one artifacts/mooflights-*.zip file; found ${candidates.length}. Pass --artifact=path.`,
     );
   }
   return resolve(artifactsDir, candidates[0]);
