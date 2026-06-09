@@ -2063,10 +2063,11 @@ function applySearchBadges(): void {
   const existingBadges = existingSearchBadgesByRowKey();
   const rows = searchResultRows(document);
   const currentRows = parseCurrentSearchPage().results;
+  const currentRowsByIndex = new Map(currentRows.map((result) => [result.rowIndex, result]));
   let created = 0;
   let missingBest = 0;
   rows.forEach((row, index) => {
-    const currentParsed = currentRows[index];
+    const currentParsed = currentRowsByIndex.get(index);
     const baselineParsed = currentParsed
       ? bestSearchResultMatch(currentParsed, state.searchBaseline?.results || [], 0.58)
       : null;
