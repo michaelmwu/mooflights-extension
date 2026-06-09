@@ -8,7 +8,7 @@ const uploadOnly = args.has("upload-only") || process.env.CHROME_WEBSTORE_UPLOAD
 const publishType = stringArg("publish-type", process.env.CHROME_WEBSTORE_PUBLISH_TYPE || "STAGED_PUBLISH");
 const blockOnWarnings = !args.has("allow-warnings") && process.env.CHROME_WEBSTORE_BLOCK_ON_WARNINGS !== "0";
 const skipReview = args.has("skip-review") || process.env.CHROME_WEBSTORE_SKIP_REVIEW === "1";
-const artifactPath = resolve(root, args.get("artifact") || (await detectZipArtifact()));
+const artifactPath = resolve(root, optionArg("artifact") || (await detectZipArtifact()));
 const artifact = await stat(artifactPath);
 
 if (!artifact.isFile()) throw new Error(`Chrome Web Store artifact is not a file: ${artifactPath}`);
@@ -58,6 +58,7 @@ console.log(
   `Chrome Web Store upload state: ${upload.uploadState || "unknown"}${upload.crxVersion ? ` (${upload.crxVersion})` : ""}`,
 );
 
+assertUploadDidNotFail(upload.uploadState);
 if (isUploadInProgress(upload.uploadState)) {
   await waitForUpload(token, itemName);
 }
@@ -127,9 +128,8 @@ async function waitForUpload(token, itemName) {
     const uploadState = status.lastAsyncUploadState || "unknown";
     console.log(`Chrome Web Store async upload state ${attempt}/12: ${uploadState}`);
     if (uploadState === "SUCCEEDED") return;
-    if (uploadState === "FAILED" || uploadState === "NOT_FOUND") {
-      throw new Error(`Chrome Web Store async upload did not succeed: ${uploadState}`);
-    }
+    assertUploadDidNotFail(uploadState);
+    if (uploadState === "NOT_FOUND") throw new Error(`Chrome Web Store async upload did not succeed: ${uploadState}`);
   }
   throw new Error("Chrome Web Store async upload did not finish within 120 seconds.");
 }
@@ -182,19 +182,38 @@ function parseArgs(values) {
   const parsed = new Map();
   for (const value of values) {
     if (!value.startsWith("--")) throw new Error(`Unexpected argument: ${value}`);
-    const [key, raw = ""] = value.slice(2).split("=", 2);
-    parsed.set(key, raw || "1");
+    const body = value.slice(2);
+    const separator = body.indexOf("=");
+    if (separator === -1) {
+      parsed.set(body, "");
+    } else {
+      parsed.set(body.slice(0, separator), body.slice(separator + 1));
+    }
   }
   return parsed;
 }
 
+function optionArg(name) {
+  if (!args.has(name)) return "";
+  const value = args.get(name);
+  if (!value) throw new Error(`--${name} requires a value. Use --${name}=value.`);
+  return value;
+}
+
 function stringArg(name, value) {
+  if (args.has(name) && !args.get(name)) throw new Error(`--${name} requires a value. Use --${name}=value.`);
   const cliValue = args.get(name);
   return String(cliValue || value || "").trim();
 }
 
 function isUploadInProgress(uploadState) {
   return uploadState === "IN_PROGRESS" || uploadState === "UPLOAD_IN_PROGRESS";
+}
+
+function assertUploadDidNotFail(uploadState) {
+  if (uploadState === "FAILED" || uploadState === "FAILURE" || uploadState === "UPLOAD_FAILED") {
+    throw new Error(`Chrome Web Store upload did not succeed: ${uploadState}`);
+  }
 }
 
 function sleep(ms) {
