@@ -104,6 +104,7 @@ const PANEL_EDGE_OFFSET_PX = 16;
 const PANEL_CORNER_SNAP_PX = 96;
 const PANEL_MINIMIZED_ICON_SIZE_PX = 64;
 let mileageProgramsByLengthCache: string[] | undefined;
+const airportAreaOptionsByLanguage = new Map<ExtensionSettings["language"], AirportAreaOption[]>();
 let autoCaptureCheckTimer: number | undefined;
 let flightResultAnnotationTimer: number | undefined;
 let autoSearchTimer: number | undefined;
@@ -1990,7 +1991,12 @@ function renderAirportHelper(settings: ExtensionSettings): string {
 }
 
 function currentAirportAreaOptions(): AirportAreaOption[] {
-  return airportAreaOptions(state.settings?.language || DEFAULT_SETTINGS.language);
+  const language = state.settings?.language || DEFAULT_SETTINGS.language;
+  const cached = airportAreaOptionsByLanguage.get(language);
+  if (cached) return cached;
+  const options = airportAreaOptions(language);
+  airportAreaOptionsByLanguage.set(language, options);
+  return options;
 }
 
 function installChipClearShortcut(): void {
