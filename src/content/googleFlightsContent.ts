@@ -16,6 +16,7 @@ import {
   parseGoogleFlightsMatrixSearch,
   parseGoogleFlightsSearchResults,
   searchResultRows,
+  stableHash as stableContentHash,
 } from "../shared/googleFlightsBooking";
 import {
   allGoogleFlightsCountryCodes,
@@ -892,7 +893,8 @@ function scheduleRender(): void {
       const previousSearchBaseline = state.searchBaseline;
       const keepSearchResults =
         previousSearchBaseline && searchBaseline
-          ? searchBaselineIncludesPreviousRows(previousSearchBaseline, searchBaseline)
+          ? searchBaselineIncludesPreviousRows(previousSearchBaseline, searchBaseline) ||
+            shouldKeepHandoffResultsForInitialRows(previousSearchBaseline, searchBaseline)
           : false;
       debugSearch("signature-change", {
         previousSignatureHash: stableContentHash(state.baselineSignature),
@@ -1750,15 +1752,6 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function stableContentHash(value: string): string {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(36);
-}
-
 function searchDebugEnabled(): boolean {
   try {
     return (
@@ -2510,6 +2503,13 @@ function searchBaselineIncludesPreviousRows(
   return matchedRows / previousBaseline.results.length >= 0.8;
 }
 
+function shouldKeepHandoffResultsForInitialRows(
+  previousBaseline: GoogleFlightsSearchCountryResult,
+  nextBaseline: GoogleFlightsSearchCountryResult,
+): boolean {
+  return previousBaseline.results.length === 0 && nextBaseline.results.length > 0 && state.searchResults.length > 0;
+}
+
 function bestSearchResultMatch(
   baseline: GoogleFlightsSearchResult,
   candidates: GoogleFlightsSearchResult[],
@@ -2599,8 +2599,47 @@ function isGoogleFlightsSearchCountryResult(value: unknown): value is GoogleFlig
     typeof candidate.country === "string" &&
     typeof candidate.url === "string" &&
     Array.isArray(candidate.results) &&
+    candidate.results.every(isGoogleFlightsSearchResult) &&
     typeof candidate.status === "string"
   );
+}
+
+function isGoogleFlightsSearchResult(value: unknown): value is GoogleFlightsSearchResult {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const candidate = value as {
+    rowKey?: unknown;
+    matchKey?: unknown;
+    rowIndex?: unknown;
+    price?: unknown;
+    currency?: unknown;
+    priceText?: unknown;
+    summaryText?: unknown;
+    carrierText?: unknown;
+    timeText?: unknown;
+    durationText?: unknown;
+    stopsText?: unknown;
+    itineraryKey?: unknown;
+    matchConfidence?: unknown;
+  };
+  return (
+    typeof candidate.rowKey === "string" &&
+    typeof candidate.matchKey === "string" &&
+    typeof candidate.rowIndex === "number" &&
+    typeof candidate.price === "number" &&
+    typeof candidate.currency === "string" &&
+    typeof candidate.priceText === "string" &&
+    typeof candidate.summaryText === "string" &&
+    optionalString(candidate.carrierText) &&
+    optionalString(candidate.timeText) &&
+    optionalString(candidate.durationText) &&
+    optionalString(candidate.stopsText) &&
+    optionalString(candidate.itineraryKey) &&
+    (candidate.matchConfidence === "high" || candidate.matchConfidence === "medium")
+  );
+}
+
+function optionalString(value: unknown): boolean {
+  return value === undefined || typeof value === "string";
 }
 
 function getShadowRoot(): ShadowRoot | null {
