@@ -4,11 +4,12 @@ import { basename, resolve } from "node:path";
 const root = process.cwd();
 const REQUEST_TIMEOUT_MS = 30_000;
 const args = parseArgs(process.argv.slice(2));
-const dryRun = args.has("dry-run") || process.env.CHROME_WEBSTORE_DRY_RUN === "1";
-const uploadOnly = args.has("upload-only") || process.env.CHROME_WEBSTORE_UPLOAD_ONLY === "1";
+const dryRun = booleanArg("dry-run", process.env.CHROME_WEBSTORE_DRY_RUN === "1");
+const uploadOnly = booleanArg("upload-only", process.env.CHROME_WEBSTORE_UPLOAD_ONLY === "1");
 const publishType = stringArg("publish-type", process.env.CHROME_WEBSTORE_PUBLISH_TYPE || "STAGED_PUBLISH");
-const blockOnWarnings = !args.has("allow-warnings") && process.env.CHROME_WEBSTORE_BLOCK_ON_WARNINGS !== "0";
-const skipReview = args.has("skip-review") || process.env.CHROME_WEBSTORE_SKIP_REVIEW === "1";
+const allowWarnings = booleanArg("allow-warnings", false);
+const blockOnWarnings = !allowWarnings && process.env.CHROME_WEBSTORE_BLOCK_ON_WARNINGS !== "0";
+const skipReview = booleanArg("skip-review", process.env.CHROME_WEBSTORE_SKIP_REVIEW === "1");
 const artifactPath = resolve(root, optionArg("artifact") || (await detectZipArtifact()));
 const artifact = await stat(artifactPath);
 
@@ -102,7 +103,7 @@ async function accessToken(config) {
 async function uploadZip(token, itemName, path) {
   const body = await readFile(path);
   return fetchJson(
-    `https://chromewebstore.googleapis.com/upload/v2/${itemName}:upload`,
+    `https://chromewebstore.googleapis.com/upload/v2/${itemName}:upload?uploadType=media`,
     {
       method: "POST",
       headers: {
@@ -202,6 +203,16 @@ function optionArg(name) {
   const value = args.get(name);
   if (!value) throw new Error(`--${name} requires a value. Use --${name}=value.`);
   return value;
+}
+
+function booleanArg(name, fallback) {
+  if (!args.has(name)) return fallback;
+  const value = args.get(name);
+  if (!value) return true;
+  const normalized = value.toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  throw new Error(`--${name} requires a boolean value. Use true/false or 1/0.`);
 }
 
 function stringArg(name, value) {
