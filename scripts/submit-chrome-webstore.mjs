@@ -2,6 +2,7 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 
 const root = process.cwd();
+const REQUEST_TIMEOUT_MS = 30_000;
 const args = parseArgs(process.argv.slice(2));
 const dryRun = args.has("dry-run") || process.env.CHROME_WEBSTORE_DRY_RUN === "1";
 const uploadOnly = args.has("upload-only") || process.env.CHROME_WEBSTORE_UPLOAD_ONLY === "1";
@@ -54,13 +55,13 @@ if (missing.length > 0) {
 const itemName = `publishers/${config.CHROME_WEBSTORE_PUBLISHER_ID}/items/${config.CHROME_WEBSTORE_EXTENSION_ID}`;
 const token = await accessToken(config);
 const upload = await uploadZip(token, itemName, artifactPath);
-console.log(
-  `Chrome Web Store upload state: ${upload.uploadState || "unknown"}${upload.crxVersion ? ` (${upload.crxVersion})` : ""}`,
-);
+const uploadState = upload.uploadState || "UPLOAD_STATE_UNSPECIFIED";
+console.log(`Chrome Web Store upload state: ${uploadState}${upload.crxVersion ? ` (${upload.crxVersion})` : ""}`);
 
-assertUploadDidNotFail(upload.uploadState);
-if (isUploadInProgress(upload.uploadState)) {
+if (isUploadInProgress(uploadState)) {
   await waitForUpload(token, itemName);
+} else {
+  assertUploadSucceeded(uploadState, "upload");
 }
 
 if (uploadOnly) {
@@ -125,11 +126,12 @@ async function waitForUpload(token, itemName) {
       },
       "upload status",
     );
-    const uploadState = status.lastAsyncUploadState || "unknown";
+    const uploadState = status.lastAsyncUploadState || "UPLOAD_STATE_UNSPECIFIED";
     console.log(`Chrome Web Store async upload state ${attempt}/12: ${uploadState}`);
     if (uploadState === "SUCCEEDED") return;
-    assertUploadDidNotFail(uploadState);
-    if (uploadState === "NOT_FOUND") throw new Error(`Chrome Web Store async upload did not succeed: ${uploadState}`);
+    if (!isUploadInProgress(uploadState)) {
+      throw new Error(`Chrome Web Store async upload did not succeed: ${uploadState}`);
+    }
   }
   throw new Error("Chrome Web Store async upload did not finish within 120 seconds.");
 }
@@ -150,7 +152,9 @@ async function postJson(url, token, payload, label) {
 }
 
 async function fetchJson(url, init, label) {
-  const response = await fetch(url, init);
+  const timeoutSignal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  const signal = init?.signal ? AbortSignal.any([init.signal, timeoutSignal]) : timeoutSignal;
+  const response = await fetch(url, { ...init, signal });
   const text = await response.text();
   let body = {};
   if (text) {
@@ -210,10 +214,8 @@ function isUploadInProgress(uploadState) {
   return uploadState === "IN_PROGRESS" || uploadState === "UPLOAD_IN_PROGRESS";
 }
 
-function assertUploadDidNotFail(uploadState) {
-  if (uploadState === "FAILED" || uploadState === "FAILURE" || uploadState === "UPLOAD_FAILED") {
-    throw new Error(`Chrome Web Store upload did not succeed: ${uploadState}`);
-  }
+function assertUploadSucceeded(uploadState, label) {
+  if (uploadState !== "SUCCEEDED") throw new Error(`Chrome Web Store ${label} did not succeed: ${uploadState}`);
 }
 
 function sleep(ms) {
