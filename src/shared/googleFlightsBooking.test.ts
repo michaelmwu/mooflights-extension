@@ -292,10 +292,10 @@ describe("Google Flights booking option parser", () => {
     expect(result.results[0]?.itineraryKey).toBe("CJU-GMP-OZ8920-20260624|ICN-NRT-OZ106-20260624");
   });
 
-  it("ignores Mu Travel search badges when parsing Google Flights search rows", () => {
+  it("ignores MooFlights search badges when parsing Google Flights search rows", () => {
     document.body.innerHTML = `
       <div class="pIav2d">
-        <span data-mu-travel-search-badge>Best JP $120</span>
+        <span data-moo-flights-search-badge>Best JP $120</span>
         <div class="wtdjmc">7:00 AM - 10:30 AM</div>
         <div class="sSHqwe">STARLUX</div>
         <div>3 hr 30 min</div>
@@ -312,13 +312,13 @@ describe("Google Flights booking option parser", () => {
     expect(result.results[0]?.matchKey).not.toContain("120");
   });
 
-  it("ignores Mu Travel search badges inside price containers", () => {
+  it("ignores MooFlights search badges inside price containers", () => {
     document.body.innerHTML = `
       <div class="pIav2d">
         <div class="JMc5Xc" role="link" aria-label="From 40369 Japanese yen. Nonstop flight with Korean Air. Leaves Jeju International Airport at 12:55 PM on Wednesday, June 24 and arrives at Narita International Airport at 3:25 PM on Wednesday, June 24. Total duration 2 hr 30 min. Select flight"></div>
-        <div class="YMlIz FpEdX" data-mu-travel-search-badge-target="1">
+        <div class="YMlIz FpEdX" data-moo-flights-search-badge-target="1">
           <span aria-label="40369 Japanese yen" role="text">¥40,369</span>
-          <span data-mu-travel-search-badge="1">Cheapest</span>
+          <span data-moo-flights-search-badge="1">Cheapest</span>
         </div>
       </div>
     `;
@@ -749,13 +749,13 @@ describe("Google Flights booking option parser", () => {
 
     const search = new URL(result?.matrixUrl || "").searchParams.get("search") || "";
     expect(new URL(result?.matrixUrl || "").pathname).toBe("/search");
-    expect(new URL(result?.matrixUrl || "").searchParams.get("muTravelAutoOpen")).toBe("1");
-    expect(new URL(result?.matrixUrl || "").searchParams.get("muTravelAutoSearch")).toBe("1");
+    expect(new URL(result?.matrixUrl || "").searchParams.get("mooFlightsAutoOpen")).toBe("1");
+    expect(new URL(result?.matrixUrl || "").searchParams.get("mooFlightsAutoSearch")).toBe("1");
     const decoded = JSON.parse(atob(search));
     expect(decoded).toMatchObject({
       type: "one-way",
-      muTravelAutoOpen: "1",
-      muTravelAutoSearch: "1",
+      mooFlightsAutoOpen: "1",
+      mooFlightsAutoSearch: "1",
       slices: [
         {
           origin: ["HKG"],
@@ -830,8 +830,8 @@ describe("Google Flights booking option parser", () => {
     const decoded = JSON.parse(atob(search));
     expect(decoded).toMatchObject({
       type: "multi-city",
-      muTravelAutoOpen: "1",
-      muTravelAutoSearch: "1",
+      mooFlightsAutoOpen: "1",
+      mooFlightsAutoSearch: "1",
       options: {
         cabin: "BUSINESS",
         currency: {

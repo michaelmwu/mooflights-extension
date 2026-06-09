@@ -76,7 +76,7 @@ export type WhereToCreditSegmentInsight = {
 };
 
 // This generated snapshot must come from airline/program public earning charts,
-// licensed datasets, or curated Mu Travel reference data. Where to Credit URLs
+// licensed datasets, or curated MooTravel reference data. Where to Credit URLs
 // are outbound lookup destinations, not the source copied into this file.
 const DATA = mileageEarningData as unknown as CompactMileageEarningData;
 const PROGRAM_TIER_LABELS = programTierLabels as ProgramTierLabelData;

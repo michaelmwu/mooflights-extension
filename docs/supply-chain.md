@@ -40,5 +40,5 @@ GitHub Dependency Review is opt-in through the repository variable `ENABLE_DEPEN
 Dependency changes must preserve the offline-first extension boundary:
 
 - Do not add packages that require backend credentials in extension code.
-- Do not move private Mu Travel backend logic into this repository.
+- Do not move private MooTravel backend logic into this repository.
 - Prefer browser-safe shared code under `src/shared/` for functionality that must run offline.

@@ -29,7 +29,11 @@ import {
 } from "../shared/googleFlightsCountries";
 import { mileageCarrierName } from "../shared/mileageCarriers";
 import { loadSettings } from "../shared/storage";
-import { muTravelPanelHeaderStyles, renderMuTravelMinimizedButton, renderMuTravelPanelHeader } from "./panelChrome";
+import {
+  mooFlightsPanelHeaderStyles,
+  renderMooFlightsMinimizedButton,
+  renderMooFlightsPanelHeader,
+} from "./panelChrome";
 
 type CompareState = {
   comparing: boolean;
@@ -83,20 +87,23 @@ type PanelPosition = {
   ratio: number;
 };
 
-const PANEL_ID = "mu-travel-google-flights-panel";
+const PANEL_ID = "mooflights-google-flights-panel";
 const RESULT_CACHE_TTL_MS = 10 * 60 * 1000;
 const INFERRED_CURRENCY_CACHE_TTL_MS = 5000;
 const RESULT_CACHE_STORAGE_KEY = "muTravelGoogleFlightsCountryResults";
 const PANEL_UI_STORAGE_KEY = "muTravelGoogleFlightsPanelUi";
 const PANEL_SESSION_HIDE_STORAGE_KEY = "muTravelGoogleFlightsPanelHiddenForSession";
-const SEARCH_HIGHLIGHT_STORAGE_KEY = "muTravelGoogleFlightsSearchHighlight";
-const SEARCH_COMPARISON_HANDOFF_STORAGE_KEY = "muTravelGoogleFlightsSearchComparisonHandoff";
-const SEARCH_COMPARISON_CACHE_STORAGE_KEY = "muTravelGoogleFlightsSearchComparisonCache";
-const SEARCH_COUNTRY_SELECTION_SESSION_KEY = "muTravelGoogleFlightsCountrySelection";
-const SEARCH_DEBUG_LOG_SESSION_KEY = "muTravelGoogleFlightsDebugLog";
+const SEARCH_HIGHLIGHT_STORAGE_KEY = "mooFlightsGoogleFlightsSearchHighlight";
+const SEARCH_COMPARISON_HANDOFF_STORAGE_KEY = "mooFlightsGoogleFlightsSearchComparisonHandoff";
+const SEARCH_COMPARISON_CACHE_STORAGE_KEY = "mooFlightsGoogleFlightsSearchComparisonCache";
+const SEARCH_COUNTRY_SELECTION_SESSION_KEY = "mooFlightsGoogleFlightsCountrySelection";
+const SEARCH_DEBUG_LOG_SESSION_KEY = "mooFlightsGoogleFlightsDebugLog";
 const MULTICITY_FILTER_PRESERVATION_SESSION_KEY = "mooFlightsGoogleFlightsPreserveMulticityFilters";
-const OWN_SEARCH_ANNOTATION_SELECTOR =
-  "[data-mu-travel-search-badge], #mu-travel-google-flights-panel, #mu-travel-search-badge-styles";
+const SEARCH_BADGE_SELECTOR = "[data-moo-flights-search-badge]";
+const SEARCH_BADGE_TARGET_SELECTOR = "[data-moo-flights-search-badge-target]";
+const SEARCH_HIGHLIGHT_SELECTOR = "[data-moo-flights-search-highlight]";
+const SEARCH_BADGE_STYLES_ID = "moo-flights-search-badge-styles";
+const OWN_SEARCH_ANNOTATION_SELECTOR = `${SEARCH_BADGE_SELECTOR}, #${PANEL_ID}, #${SEARCH_BADGE_STYLES_ID}`;
 const DEFAULT_PANEL_POSITION: PanelPosition = { edge: "right", ratio: 1 };
 const PANEL_EDGE_OFFSET_PX = 16;
 const GOOGLE_FLIGHTS_HEADER_HEIGHT_PX = 64;
@@ -858,7 +865,7 @@ function scheduleRender(): void {
     parsedRows: searchBaseline?.results.length || 0,
     stateRows: state.searchBaseline?.results.length || 0,
     comparedCountries: state.searchResults.map((result) => result.country),
-    badgeCount: document.querySelectorAll("[data-mu-travel-search-badge]").length,
+    badgeCount: document.querySelectorAll(SEARCH_BADGE_SELECTOR).length,
   });
   if (
     mode === "search" &&
@@ -1008,11 +1015,11 @@ function render(): void {
 
   shadow.innerHTML = `
     <style>${styles()}</style>
-    <section class="panel ${state.panelMinimized ? "minimized" : ""}" style="${panelPositionStyle(state.panelPosition)}" aria-label="Mu Travel country price comparison">
+    <section class="panel ${state.panelMinimized ? "minimized" : ""}" style="${panelPositionStyle(state.panelPosition)}" aria-label="MooFlights country price comparison">
       ${
         state.panelMinimized
-          ? renderMuTravelMinimizedButton()
-          : `${renderMuTravelPanelHeader({ optionsAction: "open-options" })}
+          ? renderMooFlightsMinimizedButton()
+          : `${renderMooFlightsPanelHeader({ optionsAction: "open-options" })}
             ${
               mode === "search"
                 ? renderSearchComparisonPanel(selectedCodes)
@@ -1818,10 +1825,8 @@ function clamp(value: number, min: number, max: number): number {
 
 function searchDebugEnabled(): boolean {
   try {
-    return (
-      window.localStorage.getItem("muTravelFlightsDebug") === "1" ||
-      new URL(window.location.href).searchParams.get("muTravelDebug") === "1"
-    );
+    const params = new URL(window.location.href).searchParams;
+    return window.localStorage.getItem("mooFlightsDebug") === "1" || params.get("mooFlightsDebug") === "1";
   } catch {
     return false;
   }
@@ -1835,7 +1840,7 @@ function debugSearch(event: string, details: Record<string, unknown> = {}): void
     details,
   };
   try {
-    console.debug("[Mu Travel flights]", event, details);
+    console.debug("[MooFlights]", event, details);
   } catch {
     // Console logging is best-effort.
   }
@@ -2122,10 +2127,11 @@ function applySearchBadges(): void {
   const existingBadges = existingSearchBadgesByRowKey();
   const rows = searchResultRows(document);
   const currentRows = parseCurrentSearchPage().results;
+  const currentRowsByIndex = new Map(currentRows.map((result) => [result.rowIndex, result]));
   let created = 0;
   let missingBest = 0;
   rows.forEach((row, index) => {
-    const currentParsed = currentRows[index];
+    const currentParsed = currentRowsByIndex.get(index);
     const baselineParsed = currentParsed
       ? bestSearchResultMatch(currentParsed, state.searchBaseline?.results || [], 0.58)
       : null;
@@ -2137,7 +2143,7 @@ function applySearchBadges(): void {
     const badge = reconcileSearchBadge(existingBadges.get(baselineParsed.rowKey), baselineParsed, best);
     const target = searchBadgeTarget(row, currentParsed);
     if (target instanceof HTMLElement) {
-      target.dataset.muTravelSearchBadgeTarget = "1";
+      target.dataset.mooFlightsSearchBadgeTarget = "1";
       activeTargets.add(target);
     }
     if (badge.parentElement !== target) target.append(badge);
@@ -2159,9 +2165,9 @@ function applySearchBadges(): void {
 
 function existingSearchBadgesByRowKey(): Map<string, HTMLElement> {
   const badges = new Map<string, HTMLElement>();
-  for (const badge of Array.from(document.querySelectorAll("[data-mu-travel-search-badge]"))) {
+  for (const badge of Array.from(document.querySelectorAll(SEARCH_BADGE_SELECTOR))) {
     if (!(badge instanceof HTMLElement)) continue;
-    const rowKey = badge.dataset.muTravelSearchRowKey;
+    const rowKey = badge.dataset.mooFlightsSearchRowKey;
     if (rowKey && !badges.has(rowKey)) badges.set(rowKey, badge);
   }
   return badges;
@@ -2179,9 +2185,9 @@ function reconcileSearchBadge(
       ? existingBadge
       : document.createElement(isCurrentCountryBest ? "span" : "button");
   if (existingBadge && existingBadge !== badge) existingBadge.remove();
-  badge.dataset.muTravelSearchBadge = "1";
-  badge.dataset.muTravelSearchRowKey = row.rowKey;
-  badge.className = "mu-travel-search-badge";
+  badge.dataset.mooFlightsSearchBadge = "1";
+  badge.dataset.mooFlightsSearchRowKey = row.rowKey;
+  badge.className = "moo-flights-search-badge";
   badge.textContent = searchBadgeText(best);
   const title = searchBadgeTitle(row, best);
   if (title) badge.title = title;
@@ -2202,12 +2208,12 @@ function reconcileSearchBadge(
 }
 
 function pruneInactiveSearchBadges(activeBadges: Set<HTMLElement>, activeTargets: Set<HTMLElement>): void {
-  for (const badge of Array.from(document.querySelectorAll("[data-mu-travel-search-badge]"))) {
+  for (const badge of Array.from(document.querySelectorAll(SEARCH_BADGE_SELECTOR))) {
     if (badge instanceof HTMLElement && !activeBadges.has(badge)) badge.remove();
   }
-  for (const target of Array.from(document.querySelectorAll("[data-mu-travel-search-badge-target]"))) {
+  for (const target of Array.from(document.querySelectorAll(SEARCH_BADGE_TARGET_SELECTOR))) {
     if (target instanceof HTMLElement && !activeTargets.has(target)) {
-      target.removeAttribute("data-mu-travel-search-badge-target");
+      target.removeAttribute("data-moo-flights-search-badge-target");
     }
   }
 }
@@ -2215,7 +2221,7 @@ function pruneInactiveSearchBadges(activeBadges: Set<HTMLElement>, activeTargets
 function searchResultDeepLink(best: SearchBestPrice): string {
   try {
     const url = new URL(best.url);
-    url.hash = `muTravelFlight=${encodeURIComponent(best.targetMatchKey)}`;
+    url.hash = `mooFlightsFlight=${encodeURIComponent(best.targetMatchKey)}`;
     return url.toString();
   } catch {
     return best.url;
@@ -2256,7 +2262,7 @@ function applyRequestedSearchHighlight(searchBaseline: GoogleFlightsSearchCountr
   const target = row ? searchHighlightTarget(row) : null;
   if (!target) return;
   ensureSearchBadgeStyles();
-  target.dataset.muTravelSearchHighlight = "1";
+  target.dataset.mooFlightsSearchHighlight = "1";
   const deepLink = `${currentSearchHighlightPageKey()}:${requestedMatchKey}`;
   if (highlightedSearchDeepLink !== deepLink) {
     highlightedSearchDeepLink = deepLink;
@@ -2288,15 +2294,15 @@ function searchHighlightTarget(row: Element): HTMLElement | null {
 }
 
 function removeSearchHighlights(): void {
-  for (const row of Array.from(document.querySelectorAll("[data-mu-travel-search-highlight]"))) {
-    row.removeAttribute("data-mu-travel-search-highlight");
+  for (const row of Array.from(document.querySelectorAll(SEARCH_HIGHLIGHT_SELECTOR))) {
+    row.removeAttribute("data-moo-flights-search-highlight");
   }
 }
 
 function requestedSearchMatchKey(): string {
   const pageKey = currentSearchHighlightPageKey();
   const hash = window.location.hash || "";
-  const marker = "muTravelFlight=";
+  const marker = "mooFlightsFlight=";
   const index = hash.indexOf(marker);
   if (index === -1) return storedSearchHighlightMatchKey(pageKey);
   try {
@@ -2332,9 +2338,11 @@ function storedSearchHighlightMatchKey(pageKey: string): string {
 }
 
 function removeSearchBadges(): void {
-  for (const badge of Array.from(document.querySelectorAll("[data-mu-travel-search-badge]"))) badge.remove();
-  for (const target of Array.from(document.querySelectorAll("[data-mu-travel-search-badge-target]"))) {
-    target.removeAttribute("data-mu-travel-search-badge-target");
+  for (const badge of Array.from(document.querySelectorAll(SEARCH_BADGE_SELECTOR))) {
+    badge.remove();
+  }
+  for (const target of Array.from(document.querySelectorAll(SEARCH_BADGE_TARGET_SELECTOR))) {
+    target.removeAttribute("data-moo-flights-search-badge-target");
   }
 }
 
@@ -2357,7 +2365,7 @@ function searchBadgeTarget(row: Element, parsed: GoogleFlightsSearchResult): Ele
   if (hiddenMatchingPriceContainer) return priceBlockTarget(hiddenMatchingPriceContainer);
 
   const priceElement = Array.from(row.querySelectorAll("[aria-label], [role='text'], span, div")).find((element) => {
-    if (element.closest("[data-mu-travel-search-badge]")) return false;
+    if (element.closest(SEARCH_BADGE_SELECTOR)) return false;
     return searchTargetContainsPrice(element, parsed.priceText);
   });
   return priceElement?.parentElement || row.querySelector(".YMlIz, .FpEdX, .U3gSDe")?.parentElement || row;
@@ -2376,7 +2384,7 @@ function searchTargetContainsPrice(element: Element, priceText: string): boolean
 function textContentWithoutSearchBadges(element: Element): string {
   const clone = element.cloneNode(true);
   if (!(clone instanceof Element)) return element.textContent || "";
-  for (const badge of Array.from(clone.querySelectorAll("[data-mu-travel-search-badge]"))) badge.remove();
+  for (const badge of Array.from(clone.querySelectorAll(SEARCH_BADGE_SELECTOR))) badge.remove();
   return clone.textContent || "";
 }
 
@@ -2431,15 +2439,15 @@ function searchBadgeIsCurrentCountry(best: SearchBestPrice): boolean {
 }
 
 function ensureSearchBadgeStyles(): void {
-  if (document.getElementById("mu-travel-search-badge-styles")) return;
+  if (document.getElementById(SEARCH_BADGE_STYLES_ID)) return;
   const style = document.createElement("style");
-  style.id = "mu-travel-search-badge-styles";
+  style.id = SEARCH_BADGE_STYLES_ID;
   style.textContent = `
-    [data-mu-travel-search-badge-target] {
+    [data-moo-flights-search-badge-target] {
       position: relative !important;
       overflow: visible !important;
     }
-    .mu-travel-search-badge {
+    .moo-flights-search-badge {
       position: absolute;
       top: -13px;
       left: auto;
@@ -2466,15 +2474,15 @@ function ensureSearchBadgeStyles(): void {
       box-shadow: none;
       text-align: right;
     }
-    button.mu-travel-search-badge {
+    button.moo-flights-search-badge {
       pointer-events: auto;
       cursor: pointer;
     }
-    .mu-travel-search-badge:hover {
+    .moo-flights-search-badge:hover {
       color: #f1f3f4;
       text-decoration: underline;
     }
-    [data-mu-travel-search-highlight] {
+    [data-moo-flights-search-highlight] {
       outline: 3px solid #0f766e !important;
       outline-offset: 2px !important;
       border-radius: 8px !important;
@@ -2768,7 +2776,7 @@ function styles(): string {
       background: transparent;
       box-shadow: none;
     }
-    ${muTravelPanelHeaderStyles()}
+    ${mooFlightsPanelHeaderStyles()}
     .panel-icon {
       display: inline-grid;
       place-items: center;

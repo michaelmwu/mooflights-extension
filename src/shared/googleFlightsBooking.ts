@@ -27,6 +27,7 @@ export const GOOGLE_FLIGHTS_SEARCH_RESULT_ROW_SELECTOR = [
   "[data-flt-ve]",
   "[role='listitem']",
 ].join(",");
+const MOO_FLIGHTS_SEARCH_BADGE_SELECTOR = "[data-moo-flights-search-badge]";
 const GOOGLE_FLIGHTS_CURRENCIES = new Set(
   "AED AFN ALL AMD ANG AOA ARS AUD AWG AZN BAM BBD BDT BGN BHD BIF BMD BND BOB BOV BRL BSD BTN BWP BYN BZD CAD CDF CHE CHF CHW CLF CLP CNY COP COU CRC CUC CUP CVE CZK DJF DKK DOP DZD EGP ERN ETB EUR FJD FKP GBP GEL GHS GIP GMD GNF GTQ GYD HKD HNL HTG HUF IDR ILS INR IQD IRR ISK JMD JOD JPY KES KGS KHR KMF KPW KRW KWD KYD KZT LAK LBP LKR LRD LSL LYD MAD MDL MGA MKD MMK MNT MOP MRU MUR MVR MWK MXN MXV MYR MZN NAD NGN NIO NOK NPR NZD OMR PAB PEN PGK PHP PKR PLN PYG QAR RON RSD RUB RWF SAR SBD SCR SDG SEK SGD SHP SLE SLL SOS SRD SSP STN SVC SYP SZL THB TJS TMT TND TOP TRY TTD TWD TZS UAH UGX USD USN UYI UYU UYW UZS VED VES VND VUV WST XAF XCD XDR XOF XPF XSU XUA YER ZAR ZMW ZWG".split(
     " ",
@@ -302,7 +303,7 @@ export function searchResultRows(root: ParentNode): Element[] {
   const seen = new Set<Element>();
   const rows: Element[] = [];
   for (const element of Array.from(root.querySelectorAll(GOOGLE_FLIGHTS_SEARCH_RESULT_ROW_SELECTOR))) {
-    if (seen.has(element) || element.closest("[data-mu-travel-search-badge]")) continue;
+    if (seen.has(element) || element.closest(MOO_FLIGHTS_SEARCH_BADGE_SELECTOR)) continue;
     seen.add(element);
     const text = normalizedSearchResultText(element);
     if (!text || text.length < 20) continue;
@@ -653,8 +654,8 @@ function buildItaMatrixSearchUrl(
       : slices.map((slice) => matrixSearchSlice(slice));
   const payload = {
     type: tripType,
-    muTravelAutoOpen: "1",
-    muTravelAutoSearch: "1",
+    mooFlightsAutoOpen: "1",
+    mooFlightsAutoSearch: "1",
     slices: matrixSlices,
     options: {
       cabin,
@@ -670,8 +671,8 @@ function buildItaMatrixSearchUrl(
   };
   const params = new URLSearchParams({
     search: encodeBase64(JSON.stringify(payload)),
-    muTravelAutoOpen: "1",
-    muTravelAutoSearch: "1",
+    mooFlightsAutoOpen: "1",
+    mooFlightsAutoSearch: "1",
   });
   return `https://matrix.itasoftware.com/search?${params.toString()}`;
 }
@@ -781,7 +782,7 @@ function parseSearchResultRow(row: Element, rowIndex: number): GoogleFlightsSear
 
 function parseSearchResultPrice(row: Element): { price: number; currency: string; priceText: string } | null {
   const candidates = Array.from(row.querySelectorAll("[aria-label], [role='text'], span, div"))
-    .filter((element) => !element.closest("[data-mu-travel-search-badge]"))
+    .filter((element) => !element.closest(MOO_FLIGHTS_SEARCH_BADGE_SELECTOR))
     .map((element) => ({
       ariaLabel: element.getAttribute("aria-label") || "",
       visibleText: textContentWithoutSearchBadges(element),
@@ -802,7 +803,7 @@ function parseSearchResultPrice(row: Element): { price: number; currency: string
 function textContentWithoutSearchBadges(element: Element): string {
   const clone = element.cloneNode(true);
   if (!(clone instanceof Element)) return normalizedText(element.textContent || "");
-  for (const badge of Array.from(clone.querySelectorAll("[data-mu-travel-search-badge]"))) badge.remove();
+  for (const badge of Array.from(clone.querySelectorAll(MOO_FLIGHTS_SEARCH_BADGE_SELECTOR))) badge.remove();
   return normalizedText(clone.textContent || "");
 }
 
@@ -826,7 +827,7 @@ function isLikelyFlightPrice(price: { price: number; priceText: string }, source
 function normalizedSearchResultText(row: Element): string {
   const clone = row.cloneNode(true);
   if (clone instanceof Element) {
-    for (const badge of Array.from(clone.querySelectorAll("[data-mu-travel-search-badge]"))) badge.remove();
+    for (const badge of Array.from(clone.querySelectorAll(MOO_FLIGHTS_SEARCH_BADGE_SELECTOR))) badge.remove();
     const selectFlightSummary = rankedSearchResultSummaries(clone)[0]?.text || "";
     if (selectFlightSummary) return selectFlightSummary;
     return normalizedText(clone.textContent || "");

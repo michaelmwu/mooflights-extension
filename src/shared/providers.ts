@@ -248,7 +248,7 @@ function googleFlightsUrl(itinerary: NormalizedItinerary): string {
   const firstSlice = itinerary.slices[0];
   const lastSlice = itinerary.slices.at(-1);
   const params = new URLSearchParams();
-  params.set("utm_source", "mu-travel-extension");
+  params.set("utm_source", "mooflights-extension");
   if (firstSlice?.origin) params.set("origin", firstSlice.origin);
   if (firstSlice?.destination) params.set("destination", firstSlice.destination);
   if (firstSlice?.departureDate) params.set("depart", firstSlice.departureDate);

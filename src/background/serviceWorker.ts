@@ -17,6 +17,13 @@ type RuntimeMessage = {
   waitForExpansion?: boolean;
 };
 
+type GoogleFlightsSearchExpansionResult = {
+  ok?: boolean;
+  clicked?: boolean;
+  beforeRows?: number;
+  afterRows?: number;
+};
+
 const GOOGLE_FLIGHTS_COMPARE_CONCURRENCY = 3;
 const GOOGLE_FLIGHTS_TAB_CREATE_SPACING_MS = 750;
 const MATRIX_AUTO_OPEN_TABS_STORAGE_KEY = "muTravelMatrixAutoOpenTabs";
@@ -430,8 +437,7 @@ async function parseGoogleFlightsSearchTab(
   while (Date.now() < deadline) {
     try {
       if (!expanded) {
-        await sendTabMessage(tabId, { command: "expandGoogleFlightsSearchResults", waitForExpansion: false });
-        expanded = true;
+        expanded = await tryExpandGoogleFlightsSearchResults(tabId);
       }
       latest = await sendTabMessage<GoogleFlightsSearchCountryResult>(tabId, {
         command: "parseGoogleFlightsSearchResults",
@@ -455,9 +461,13 @@ async function waitForExpandedGoogleFlightsSearchTab(
   if (previousResultCount <= 0) return null;
   const deadline = Date.now() + 6500;
   let latest: GoogleFlightsSearchCountryResult | null = null;
+  let expanded = false;
   while (Date.now() < deadline) {
     await delay(600);
     try {
+      if (!expanded) {
+        expanded = await tryExpandGoogleFlightsSearchResults(tabId);
+      }
       latest = await sendTabMessage<GoogleFlightsSearchCountryResult>(tabId, {
         command: "parseGoogleFlightsSearchResults",
       });
@@ -469,8 +479,16 @@ async function waitForExpandedGoogleFlightsSearchTab(
   return latest && latest.results.length > previousResultCount ? { ...latest, country, url } : null;
 }
 
+async function tryExpandGoogleFlightsSearchResults(tabId: number): Promise<boolean> {
+  const result = await sendTabMessage<GoogleFlightsSearchExpansionResult>(tabId, {
+    command: "expandGoogleFlightsSearchResults",
+    waitForExpansion: false,
+  });
+  return result.clicked === true;
+}
+
 async function fetchProviderMetadata(baseUrl: string): Promise<RemoteProviderMetadata[]> {
-  if (typeof __MU_TRAVEL_DEV_BUILD__ !== "undefined" && !__MU_TRAVEL_DEV_BUILD__) return [];
+  if (typeof __MOOFLIGHTS_DEV_BUILD__ !== "undefined" && !__MOOFLIGHTS_DEV_BUILD__) return [];
   if (!baseUrl) return [];
   const origin = hostPermissionOrigin(baseUrl);
   if (origin && !(await hasHostPermission(origin))) return [];

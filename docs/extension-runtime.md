@@ -24,17 +24,17 @@ debugging can work without runtime permission prompts. Production builds do not 
 - Supports manual JSON paste fallback.
 - Renders ranked provider links.
 - Provides airport-code filtering, insert, and copy actions.
-- Auto-submits ITA Matrix `/search` only when a Mu Travel handoff URL includes `muTravelAutoSearch=1` and the
+- Auto-submits ITA Matrix `/search` only when a MooFlights handoff URL includes `mooFlightsAutoSearch=1` and the
   prefilled form has enabled the native Search button.
-- Attempts to open the first visible ITA Matrix `/flights` result only when a Mu Travel handoff URL includes
-  `muTravelAutoOpen=1`.
+- Attempts to open the first visible ITA Matrix `/flights` result only when a MooFlights handoff URL includes
+  `mooFlightsAutoOpen=1`.
 
 `src/content/googleFlightsContent.ts` runs on Google Flights pages so it can survive Google Flights SPA navigation. It
 injects the visible panel on booking pages and on ITA Matrix handoff itinerary pages with `source=ita_matrix`. It:
 
 - Parses visible booking options, prices, and direct-airline markers from the current booking page.
 - Lets the user start an opt-in country price comparison.
-- Builds ITA Matrix `/search?search=...&muTravelAutoSearch=1&muTravelAutoOpen=1` handoff URLs from Google Flights
+- Builds ITA Matrix `/search?search=...&mooFlightsAutoSearch=1&mooFlightsAutoOpen=1` handoff URLs from Google Flights
   booking-page data.
 - Asks the background service worker to open temporary inactive Google Flights tabs with different `gl` country codes
   while preserving the current itinerary URL and currency. If the URL omits `curr`, the content script infers the
@@ -74,5 +74,5 @@ It is used to show rough earning estimates such as:
 - fixed miles
 
 This snapshot should be generated only from approved airline/program public earning charts, licensed datasets, or curated
-Mu Travel reference data. Where to Credit should be treated as an outbound lookup destination, not as the source copied
+MooTravel reference data. Where to Credit should be treated as an outbound lookup destination, not as the source copied
 into the extension. Snapshot refresh automation is tracked in GitHub issue #7.
