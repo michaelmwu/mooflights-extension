@@ -283,7 +283,8 @@ function regionLabel(region: AirportRegionPreset, language: AppLanguage): string
 
 function areaRegionLabel(place: string, language: AppLanguage): string {
   if (language === "es") return `Área de ${place}`;
-  if (language === "zh-Hans" || language === "zh-Hant") return `${place}地区`;
+  if (language === "zh-Hans") return `${place}地区`;
+  if (language === "zh-Hant") return `${place}地區`;
   if (language === "ja") return `${place}地域`;
   if (language === "ko") return `${place} 지역`;
   return `${place} Area`;
