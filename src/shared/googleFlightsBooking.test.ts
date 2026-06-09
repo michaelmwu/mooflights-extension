@@ -236,6 +236,42 @@ describe("Google Flights booking option parser", () => {
     expect(result.results[0]?.matchKey).not.toContain("日圓");
   });
 
+  it("converts Chinese noon times after 12 PM", () => {
+    document.body.innerHTML = `
+      <ul>
+        <li class="pIav2d">
+          <div class="JMc5Xc" role="link" aria-label="17552 日圓起。 搭乘濟州航空的航班，中途停留 1 次。 星期三, 6月 24 中午1:30 於濟州國際機場出發，星期三, 6月 24 下午3:25 抵達成田國際機場。 總交通時間：1 小時 55 分鐘. 選擇航班"></div>
+          <span aria-label="17552 日圓" role="text">¥17,552</span>
+        </li>
+      </ul>
+    `;
+
+    const result = parseGoogleFlightsSearchResults(document, "JP", "https://www.google.com/travel/flights?tfs=abc");
+
+    expect(result.results[0]?.timeText).toBe("13:30-15:25");
+  });
+
+  it("parses all Google Flights search rows by default", () => {
+    document.body.innerHTML = `
+      <ul>
+        ${Array.from({ length: 13 }, (_, index) => {
+          const hour = 6 + index;
+          const price = 10000 + index;
+          return `
+            <li class="pIav2d">
+              <div class="JMc5Xc" role="link" aria-label="From ${price} Japanese yen. Nonstop flight with Test Air ${index}. Leaves Jeju International Airport at ${hour}:00 AM on Wednesday, June 24 and arrives at Narita International Airport at ${hour}:30 AM on Wednesday, June 24. Total duration 30 min. Select flight"></div>
+              <span aria-label="${price} Japanese yen" role="text">¥${price}</span>
+            </li>
+          `;
+        }).join("")}
+      </ul>
+    `;
+
+    const result = parseGoogleFlightsSearchResults(document, "JP", "https://www.google.com/travel/flights?tfs=abc");
+
+    expect(result.results).toHaveLength(13);
+  });
+
   it("uses Travel Impact itinerary metadata when available", () => {
     document.body.innerHTML = `
       <ul>

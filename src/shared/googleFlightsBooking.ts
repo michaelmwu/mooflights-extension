@@ -257,7 +257,7 @@ export function parseGoogleFlightsSearchResults(
   root: ParentNode,
   country: string,
   url: string,
-  limit = 12,
+  limit = Number.POSITIVE_INFINITY,
 ): GoogleFlightsSearchCountryResult {
   const results = searchResultRows(root)
     .map((row, index) => parseSearchResultRow(row, index))
@@ -280,8 +280,8 @@ export function searchResultRows(root: ParentNode): Element[] {
     seen.add(element);
     const text = normalizedSearchResultText(element);
     if (!text || text.length < 20) continue;
-    if (!parseSearchResultPrice(element)) continue;
     if (!hasSearchResultSignal(text)) continue;
+    if (!parseSearchResultPrice(element)) continue;
     if (rows.some((row) => row !== element && row.contains(element))) continue;
     for (let index = rows.length - 1; index >= 0; index -= 1) {
       if (element.contains(rows[index])) rows.splice(index, 1);
@@ -817,7 +817,12 @@ function normalizedClockTime(value: string): string {
   const cjkMeridiem = match[2] || "";
   if (!Number.isFinite(hour) || hour < 0 || hour > 23) return "";
   if ((latinMeridiem === "AM" || cjkMeridiem === "凌晨") && hour === 12) hour = 0;
-  if ((latinMeridiem === "PM" || cjkMeridiem === "下午" || cjkMeridiem === "晚上") && hour < 12) hour += 12;
+  if (
+    (latinMeridiem === "PM" || cjkMeridiem === "下午" || cjkMeridiem === "晚上" || cjkMeridiem === "中午") &&
+    hour < 12
+  ) {
+    hour += 12;
+  }
   return `${String(hour).padStart(2, "0")}:${minute}`;
 }
 

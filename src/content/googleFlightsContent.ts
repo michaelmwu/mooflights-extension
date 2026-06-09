@@ -97,6 +97,16 @@ const GOOGLE_FLIGHTS_HEADER_BUFFER_PX = 12;
 const PANEL_CORNER_SNAP_PX = 96;
 const PANEL_MINIMIZED_ICON_SIZE_PX = 64;
 const STORED_OPTIONS_LIMIT = 24;
+const VIEW_MORE_FLIGHTS_LABEL_PATTERNS = [
+  /^view more flights$/i,
+  /^more flights$/i,
+  /^さらに表示$/i,
+  /^他のフライトを表示$/i,
+  /^その他のフライトを表示$/i,
+  /^查看更多航班$/,
+  /^顯示更多航班$/,
+  /^显示更多航班$/,
+];
 const COUNTRY_OPTIONS = googleFlightsAvailableCountryOptions();
 let regionDisplayNames: Intl.DisplayNames | null | undefined;
 let countryCodeByDisplayName: Map<string, string> | null | undefined;
@@ -686,8 +696,19 @@ function viewMoreFlightsButton(): HTMLButtonElement | null {
     buttons.find((button): button is HTMLButtonElement => {
       if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
       const label = normalizeText(button.getAttribute("aria-label") || button.textContent || "");
-      return /^View more flights$/i.test(label);
+      return isViewMoreFlightsLabel(label);
     }) || null
+  );
+}
+
+function isViewMoreFlightsLabel(label: string): boolean {
+  if (!label) return false;
+  if (VIEW_MORE_FLIGHTS_LABEL_PATTERNS.some((pattern) => pattern.test(label))) return true;
+  const normalized = label.toLocaleLowerCase("en-US");
+  return (
+    (normalized.includes("view") && normalized.includes("flight")) ||
+    (label.includes("フライト") && label.includes("表示")) ||
+    (label.includes("航班") && (label.includes("更多") || label.includes("查看更多") || label.includes("顯示")))
   );
 }
 
@@ -1934,6 +1955,7 @@ async function compareSearchRows(): Promise<void> {
   state.progressCompleted = 0;
   state.searchBaseline = baseline;
   state.searchResults = [];
+  state.baselineSignature = googleFlightsSearchResultSignature(baseline);
   state.searchBestByRowKey = bestPricesBySearchRow(baseline, state.searchResults);
 
   const comparableCurrency = currentComparableCurrencyCode();
