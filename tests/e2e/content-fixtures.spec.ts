@@ -1,7 +1,12 @@
 import { readFileSync } from "node:fs";
 import type { BrowserContext, Page, Worker } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { setGoogleFlightsCountries, waitForComparisonTab } from "./helpers";
+import {
+  MOOFLIGHTS_GOOGLE_FLIGHTS_RESULTS_STORAGE_KEY,
+  MOOFLIGHTS_SETTINGS_STORAGE_KEY,
+  setGoogleFlightsCountries,
+  waitForComparisonTab,
+} from "./helpers";
 
 const itaFixtureJson = readFileSync("src/shared/fixtures/itaRoundTrip.json", "utf8");
 
@@ -136,12 +141,12 @@ async function setGoogleFlightsCachedResults(extensionServiceWorker: Worker, pag
   await extensionServiceWorker.evaluate(
     async (fixtureState) => {
       await chrome.storage.local.set({
-        muTravelSettings: {
+        [fixtureState.settingsStorageKey]: {
           googleFlights: {
             countryCodes: ["US", "CA", "ZA"],
           },
         },
-        muTravelGoogleFlightsCountryResults: {
+        [fixtureState.googleFlightsResultsStorageKey]: {
           [fixtureState.cacheKey]: {
             cachedAt: Date.now(),
             results: ["US", "CA", "ZA"].map((country) => {
@@ -176,6 +181,8 @@ async function setGoogleFlightsCachedResults(extensionServiceWorker: Worker, pag
     },
     {
       cacheKey,
+      googleFlightsResultsStorageKey: MOOFLIGHTS_GOOGLE_FLIGHTS_RESULTS_STORAGE_KEY,
+      settingsStorageKey: MOOFLIGHTS_SETTINGS_STORAGE_KEY,
       fixtures: {
         US: googleFlightsCountryFixture("US"),
         CA: googleFlightsCountryFixture("CA"),
