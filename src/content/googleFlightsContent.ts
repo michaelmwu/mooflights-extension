@@ -1271,9 +1271,8 @@ function preserveCurrentMulticityFilters(): void {
     refreshCurrentMulticityFilters();
     return;
   }
-  history.replaceState(history.state, "", nextUrl);
   refreshedMulticityFiltersHref = nextUrl;
-  dispatchMulticityFilterRefresh();
+  window.location.replace(nextUrl);
 }
 
 function refreshCurrentMulticityFilters(): void {
