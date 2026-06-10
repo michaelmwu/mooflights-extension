@@ -1,4 +1,5 @@
 import { safeChromeCall, sendRuntimeMessage } from "../shared/chromeRuntime";
+import { createContentTranslator } from "../shared/contentI18n";
 import { flagEmoji } from "../shared/flags";
 import {
   DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES,
@@ -26,7 +27,8 @@ import {
   isAllGoogleFlightsCountryCodes,
 } from "../shared/googleFlightsCountries";
 import { mileageCarrierName } from "../shared/mileageCarriers";
-import { loadSettings } from "../shared/storage";
+import { DEFAULT_SETTINGS, loadSettings, mergeSettings, SETTINGS_KEY } from "../shared/storage";
+import type { AppLanguage } from "../shared/types";
 import {
   mooFlightsPanelHeaderStyles,
   renderMooFlightsMinimizedButton,
@@ -51,6 +53,7 @@ type CompareState = {
   progressCompleted: number;
   progressTotal: number;
   countrySearch: string;
+  language: AppLanguage;
   searchBaseline: GoogleFlightsSearchCountryResult | null;
   searchResults: GoogleFlightsSearchCountryResult[];
   searchBestByRowKey: Record<string, SearchBestPrice>;
@@ -117,7 +120,7 @@ const VIEW_MORE_FLIGHTS_LABEL_PATTERNS = [
   /^顯示更多航班$/,
   /^显示更多航班$/,
 ];
-const COUNTRY_OPTIONS = googleFlightsAvailableCountryOptions();
+const COUNTRY_OPTIONS_BY_LANGUAGE = new Map<AppLanguage, ReturnType<typeof googleFlightsAvailableCountryOptions>>();
 let regionDisplayNames: Intl.DisplayNames | null | undefined;
 let countryCodeByDisplayName: Map<string, string> | null | undefined;
 let suppressPanelRestoreClick = false;
@@ -143,6 +146,7 @@ const state: CompareState = {
   progressCompleted: 0,
   progressTotal: 0,
   countrySearch: "",
+  language: DEFAULT_SETTINGS.language,
   searchBaseline: null,
   searchResults: [],
   searchBestByRowKey: {},
@@ -623,17 +627,24 @@ void init();
 async function init(): Promise<void> {
   try {
     const settings = await loadSettings();
-    state.countryInput = (
-      readSessionGoogleFlightsCountrySelection() ||
-      filterAvailableGoogleFlightsCountryCodes(settings.googleFlights.countryCodes)
-    ).join(", ");
+    applyGoogleFlightsCountryInput(readSessionGoogleFlightsCountrySelection() || settings.googleFlights.countryCodes);
+    state.language = settings.language;
   } catch {
-    state.countryInput = (readSessionGoogleFlightsCountrySelection() || DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES).join(
-      ", ",
-    );
+    applyGoogleFlightsCountryInput(readSessionGoogleFlightsCountrySelection() || DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES);
   }
+  chrome.storage?.onChanged?.addListener(onSettingsChanged);
   scheduleRender();
   installObserver();
+}
+
+function onSettingsChanged(changes: Record<string, chrome.storage.StorageChange>, areaName: string): void {
+  if (areaName !== "local" || !changes[SETTINGS_KEY]) return;
+  const next = mergeSettings(changes[SETTINGS_KEY].newValue);
+  const languageChanged = next.language !== state.language;
+  state.language = next.language;
+  applyGoogleFlightsCountryInput(readSessionGoogleFlightsCountrySelection() || next.googleFlights.countryCodes);
+  if (languageChanged) state.countrySearch = "";
+  render();
 }
 
 function currentCountryCode(): string {
@@ -1004,24 +1015,25 @@ function render(): void {
   if (!shadow) return;
   const matrixSearch = parseGoogleFlightsMatrixSearch(window.location.href, currentComparableCurrencyCode());
   const selectedCodes = selectedGoogleFlightsCountries();
+  const translate = t();
   const mode = currentGoogleFlightsPanelMode();
 
   shadow.innerHTML = `
     <style>${styles()}</style>
-    <section class="panel ${state.panelMinimized ? "minimized" : ""}" style="${panelPositionStyle(state.panelPosition)}" aria-label="MooFlights country price comparison">
+    <section class="panel ${state.panelMinimized ? "minimized" : ""}" style="${panelPositionStyle(state.panelPosition)}" aria-label="${escapeHtml(translate("googleFlightsCountryPriceComparison"))}">
       ${
         state.panelMinimized
-          ? renderMooFlightsMinimizedButton()
-          : `${renderMooFlightsPanelHeader({ optionsAction: "open-options" })}
+          ? renderMooFlightsMinimizedButton(panelChromeLabels())
+          : `${renderMooFlightsPanelHeader({ optionsAction: "open-options", labels: panelChromeLabels() })}
             ${
               mode === "search"
                 ? renderSearchComparisonPanel(selectedCodes)
                 : `${renderMilesEstimatePrompt(matrixSearch)}
-                  <div class="section-heading">Compare country pricing</div>
+                  <div class="section-heading">${escapeHtml(translate("compareCountryPricing"))}</div>
                   ${renderCountrySelect(selectedCodes)}
                   <div class="actions">
                     <button type="button" class="wide" ${state.comparing || selectedCodes.length === 0 ? "disabled" : ""} data-action="compare-countries">
-                      ${state.comparing ? "Checking..." : `Compare (${selectedCodes.length})`}
+                      ${escapeHtml(state.comparing ? translate("checking") : translate("compareCount", { count: selectedCodes.length }))}
                     </button>
                   </div>
                   ${state.error ? `<p class="error">${escapeHtml(state.error)}</p>` : ""}
@@ -1147,6 +1159,27 @@ function render(): void {
   applySearchBadges();
 }
 
+function t(): ReturnType<typeof createContentTranslator> {
+  return createContentTranslator(state.language);
+}
+
+function panelChromeLabels(): {
+  panelActions: string;
+  hideForSession: string;
+  minimize: string;
+  settings: string;
+  expandPanel: string;
+} {
+  const translate = t();
+  return {
+    panelActions: translate("panelActions"),
+    hideForSession: translate("hideForSession"),
+    minimize: translate("minimize"),
+    settings: translate("settings"),
+    expandPanel: translate("expandPanel"),
+  };
+}
+
 function closePanelMenu(event: Event): void {
   const item = event.currentTarget;
   if (!(item instanceof HTMLElement)) return;
@@ -1167,14 +1200,15 @@ function minimizePanel(root: ShadowRoot): void {
 function renderCountrySelect(selectedCodes: string[]): string {
   const dropdownOptions = countryDropdownOptions();
   const disabled = state.comparing ? "disabled" : "";
+  const translate = t();
   return `
     <div class="country-select">
       <div class="country-head">
-        <span>Countries</span>
-        <small>${selectedCodes.length} selected</small>
+        <span>${escapeHtml(translate("countries"))}</span>
+        <small>${escapeHtml(translate("selectedShort", { count: selectedCodes.length }))}</small>
       </div>
       <div class="country-combo">
-        <input type="search" data-role="country-search" aria-label="Add a country" placeholder="Add a country..." autocomplete="off" spellcheck="false" value="${escapeHtml(state.countrySearch)}" ${disabled}>
+        <input type="search" data-role="country-search" aria-label="${escapeHtml(translate("addCountry"))}" placeholder="${escapeHtml(translate("addCountryPlaceholder"))}" autocomplete="off" spellcheck="false" value="${escapeHtml(state.countrySearch)}" ${disabled}>
         <ul class="country-dropdown" data-role="country-dropdown" ${dropdownOptions.length === 0 ? "hidden" : ""}>
           ${renderCountryDropdownRows(dropdownOptions)}
         </ul>
@@ -1183,7 +1217,7 @@ function renderCountrySelect(selectedCodes: string[]): string {
         ${selectedCodes
           .map(
             (code) => `
-              <button type="button" class="country-chip" data-action="remove-country" data-code="${escapeHtml(code)}" aria-label="Remove ${escapeHtml(countryDisplayName(code))}" ${disabled}>
+              <button type="button" class="country-chip" data-action="remove-country" data-code="${escapeHtml(code)}" aria-label="${escapeHtml(translate("removeAirportCode", { code: panelCountryDisplayName(code) }))}" ${disabled}>
                 <span class="flag" aria-hidden="true">${escapeHtml(flagEmoji(code))}</span>${escapeHtml(code)}<span class="x">x</span>
               </button>
             `,
@@ -1191,42 +1225,60 @@ function renderCountrySelect(selectedCodes: string[]): string {
           .join("")}
       </div>
       <div class="country-toolbar">
-        <button type="button" class="link" data-action="country-recommended" ${disabled}>Recommended</button>
-        <button type="button" class="link" data-action="country-all" ${disabled}>All useful</button>
-        <button type="button" class="link" data-action="country-clear" ${disabled}>Clear</button>
+        <button type="button" class="link" data-action="country-recommended" ${disabled}>${escapeHtml(translate("recommended"))}</button>
+        <button type="button" class="link" data-action="country-all" ${disabled}>${escapeHtml(translate("allUseful"))}</button>
+        <button type="button" class="link" data-action="country-clear" ${disabled}>${escapeHtml(translate("clear"))}</button>
       </div>
     </div>
   `;
 }
 
 function renderSearchComparisonPanel(selectedCodes: string[]): string {
+  const translate = t();
   const visibleRows = state.searchBaseline?.results.length || parseCurrentSearchPage().results.length;
   return `
-    <div class="section-heading">Compare visible flight rows</div>
+    <div class="section-heading">${escapeHtml(translate("compareVisibleFlightRows"))}</div>
     ${renderCountrySelect(selectedCodes)}
     <div class="actions">
       <button type="button" class="wide" ${state.comparing || selectedCodes.length === 0 || visibleRows === 0 ? "disabled" : ""} data-action="compare-search-rows">
-        ${state.comparing ? "Checking..." : `Compare rows (${selectedCodes.length})`}
+        ${escapeHtml(state.comparing ? translate("checking") : translate("compareRowsCount", { count: selectedCodes.length }))}
       </button>
     </div>
     ${state.error ? `<p class="error">${escapeHtml(state.error)}</p>` : ""}
-    ${state.comparing ? `<p class="cache-note">${state.progressCompleted} of ${state.progressTotal} countries checked.</p>` : ""}
-    ${visibleRows === 0 ? `<p class="cache-note">No visible Google Flights result rows found yet.</p>` : ""}
+    ${
+      state.comparing
+        ? `<p class="cache-note">${escapeHtml(
+            translate("countriesChecked", { completed: state.progressCompleted, total: state.progressTotal }),
+          )}</p>`
+        : ""
+    }
+    ${visibleRows === 0 ? `<p class="cache-note">${escapeHtml(translate("noVisibleGoogleFlightsRows"))}</p>` : ""}
   `;
 }
 
-function countryDropdownOptions(): Array<{ code: string; label: string; searchValue: string }> {
+function countryDropdownOptions(): Array<{ code: string; label: string; searchValue: string; aliases?: string[] }> {
   const query = normalizeCountryName(state.countrySearch);
   if (!query) return [];
   const selectedCodes = new Set(selectedGoogleFlightsCountries());
-  return COUNTRY_OPTIONS.filter((country) => {
-    if (selectedCodes.has(country.code)) return false;
-    return (
-      country.code.toLowerCase().includes(query) ||
-      normalizeCountryName(country.label).includes(query) ||
-      normalizeCountryName(country.searchValue).includes(query)
-    );
-  }).slice(0, 8);
+  return countryOptions()
+    .filter((country) => {
+      if (selectedCodes.has(country.code)) return false;
+      return (
+        country.code.toLowerCase().includes(query) ||
+        normalizeCountryName(country.label).includes(query) ||
+        normalizeCountryName(country.searchValue).includes(query) ||
+        (country.aliases || []).some((alias) => normalizeCountryName(alias).includes(query))
+      );
+    })
+    .slice(0, 8);
+}
+
+function countryOptions(): ReturnType<typeof googleFlightsAvailableCountryOptions> {
+  const cached = COUNTRY_OPTIONS_BY_LANGUAGE.get(state.language);
+  if (cached) return cached;
+  const options = googleFlightsAvailableCountryOptions(state.language);
+  COUNTRY_OPTIONS_BY_LANGUAGE.set(state.language, options);
+  return options;
 }
 
 function renderCountryDropdownRows(countries: Array<{ code: string; label: string }>): string {
@@ -1267,7 +1319,7 @@ function addCountrySearchValue(parseAsList: boolean): void {
     ? filterAvailableGoogleFlightsCountryCodes(parseGoogleFlightsCountryInput(state.countrySearch))
     : [];
   const firstMatch = countryDropdownOptions()[0]?.code || "";
-  const code = googleFlightsCountryCodeFromSearchValue(state.countrySearch, COUNTRY_OPTIONS) || firstMatch;
+  const code = googleFlightsCountryCodeFromSearchValue(state.countrySearch, countryOptions()) || firstMatch;
   const countryCodes = parsedCodes.length > 0 ? parsedCodes : code ? [code] : [];
   addGoogleFlightsCountries(countryCodes, true);
 }
@@ -1276,7 +1328,7 @@ function addGoogleFlightsCountries(countryCodes: string[], refocusSearch: boolea
   if (state.comparing) return;
   const availableCountryCodes = filterAvailableGoogleFlightsCountryCodes(countryCodes);
   if (availableCountryCodes.length === 0) {
-    state.error = "Choose an available Google Flights country.";
+    state.error = t()("chooseAvailableGoogleFlightsCountry");
     render();
     if (refocusSearch) focusCountrySearch();
     return;
@@ -1300,16 +1352,21 @@ function removeGoogleFlightsCountry(countryCode: string): void {
 }
 
 function updateGoogleFlightsCountrySelection(countryCodes: string[]): void {
+  const nextCountries = applyGoogleFlightsCountryInput(countryCodes);
+  writeSessionGoogleFlightsCountrySelection(nextCountries);
+}
+
+function applyGoogleFlightsCountryInput(countryCodes: string[]): string[] {
   const nextCountries = filterAvailableGoogleFlightsCountryCodes(countryCodes);
   const selectedCountrySet = new Set(nextCountries);
   state.countryInput = nextCountries.join(", ");
-  writeSessionGoogleFlightsCountrySelection(nextCountries);
   state.countrySearch = "";
   state.results = state.results.filter((result) => selectedCountrySet.has(result.country));
   state.searchResults = state.searchResults.filter((result) => selectedCountrySet.has(result.country));
   state.searchBestByRowKey = bestPricesBySearchRow(state.searchBaseline, state.searchResults);
   state.resultsCachedAt = 0;
   state.error = "";
+  return nextCountries;
 }
 
 function selectedGoogleFlightsCountries(): string[] {
@@ -1346,37 +1403,42 @@ function focusCountrySearch(): void {
 function renderCacheNotice(now = Date.now()): string {
   if (!state.resultsCachedAt || state.results.length === 0) return "";
   const minutes = Math.max(0, Math.floor((now - state.resultsCachedAt) / 60000));
-  const age = minutes <= 0 ? "just now" : `${minutes} min ago`;
-  return `<p class="cache-note">Cached country comparison from ${escapeHtml(age)}.</p>`;
+  const translate = t();
+  const age = minutes <= 0 ? translate("justNow") : translate("minutesAgo", { count: minutes });
+  return `<p class="cache-note">${escapeHtml(translate("cachedCountryComparison", { age }))}</p>`;
 }
 
 function renderComparisonNotice(): string {
+  const translate = t();
   if (state.comparing) {
-    return `<p class="cache-note">${state.progressCompleted} of ${state.progressTotal} countries checked.</p>`;
+    return `<p class="cache-note">${escapeHtml(
+      translate("countriesChecked", { completed: state.progressCompleted, total: state.progressTotal }),
+    )}</p>`;
   }
   const selectedCountries = selectedGoogleFlightsCountries();
   const selectedCount = selectedCountries.length;
   if (selectedCount <= DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES.length) return "";
   if (isAllGoogleFlightsCountryCodes(selectedCountries)) {
-    return `<p class="cache-note">All useful countries excludes unsupported and not-useful markets. Large checks can take a long time.</p>`;
+    return `<p class="cache-note">${escapeHtml(translate("allUsefulCountriesNotice"))}</p>`;
   }
-  return `<p class="cache-note">Large country selections can take a long time. Results appear as each country finishes.</p>`;
+  return `<p class="cache-note">${escapeHtml(translate("largeCountrySelectionNotice"))}</p>`;
 }
 
 function renderMilesEstimatePrompt(matrixSearch: GoogleFlightsMatrixSearch | null): string {
   if (!matrixSearch) return "";
+  const translate = t();
   const earningCarriers = matrixSearch.carriers
     .map((carrier) => ({ carrier, name: mileageCarrierName(carrier) }))
     .filter((carrier): carrier is { carrier: string; name: string } => Boolean(carrier.name));
   const carrierLabels = earningCarriers.map((carrier) => `${carrier.name} (${carrier.carrier})`).join(", ");
   const promptText =
     earningCarriers.length > 0
-      ? ` to see booking classes and mileage earning details for ${escapeHtml(carrierLabels)}.`
-      : " to see booking classes and mileage earning details.";
+      ? translate("bookingClassesAndMileageFor", { carriers: carrierLabels })
+      : translate("bookingClassesAndMileage");
   return `
     <div class="mileage-prompt">
-      <strong>Miles earning</strong>
-      <span><a href="${escapeHtml(matrixSearch.matrixUrl)}" target="_blank" rel="noopener noreferrer" data-action="open-matrix">Search ITA Matrix</a>${promptText}</span>
+      <strong>${escapeHtml(translate("milesEarning"))}</strong>
+      <span><a href="${escapeHtml(matrixSearch.matrixUrl)}" target="_blank" rel="noopener noreferrer" data-action="open-matrix">${escapeHtml(translate("searchItaMatrix"))}</a>${escapeHtml(promptText)}</span>
     </div>
   `;
 }
@@ -1393,6 +1455,7 @@ async function openMatrixWithAutoOpen(matrixUrl: string, openedByPage = false): 
 
 function renderResults(results: GoogleFlightsCountryResult[]): string {
   if (results.length === 0) return "";
+  const translate = t();
   const sorted = [...results].sort(
     (left, right) =>
       (left.cheapest?.price ?? Number.POSITIVE_INFINITY) - (right.cheapest?.price ?? Number.POSITIVE_INFINITY) ||
@@ -1404,13 +1467,13 @@ function renderResults(results: GoogleFlightsCountryResult[]): string {
       ${sorted
         .map((result) => {
           const cheapest = renderCheapest(result);
-          const direct = result.direct ? `${result.direct.priceText} direct` : "No direct";
+          const direct = result.direct ? `${result.direct.priceText} ${translate("direct")}` : translate("noDirect");
           const isCurrent = state.baseline?.url === result.url;
           return `
             <div class="result ${result.status}">
-              <strong>${escapeHtml(countryDisplayName(result.country))}${isCurrent ? ' <span class="current">current</span>' : ""}</strong>
+              <strong>${escapeHtml(panelCountryDisplayName(result.country))}${isCurrent ? ` <span class="current">${escapeHtml(translate("current"))}</span>` : ""}</strong>
               <span>${escapeHtml(cheapest)}</span>
-              <small>${escapeHtml(direct)} · ${result.options.length} option(s)${result.refreshed ? " · retried" : ""}</small>
+              <small>${escapeHtml(direct)} · ${escapeHtml(translate("optionCount", { count: result.options.length }))}${result.refreshed ? ` · ${escapeHtml(translate("retried"))}` : ""}</small>
               ${renderResultActions(result)}
             </div>
           `;
@@ -1424,7 +1487,7 @@ function renderResultActions(result: GoogleFlightsCountryResult): string {
   const bookingTargets = bookingActionTargets(result);
   return `
     <div class="result-actions">
-      <a href="${escapeHtml(result.url)}" target="_blank" rel="noopener noreferrer">Open country page</a>
+      <a href="${escapeHtml(result.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(t()("openCountryPage"))}</a>
       ${bookingTargets
         .map(
           (target) =>
@@ -1498,16 +1561,19 @@ function bookingOptionKey(option: GoogleFlightsCountryResult["options"][number])
 function bookingActionTargets(result: GoogleFlightsCountryResult): Array<{ label: string; url: string }> {
   const targets: Array<{ label: string; url: string }> = [];
   if (result.cheapest?.bookingUrl) {
-    targets.push({ label: `Book ${result.cheapest.provider}`, url: result.cheapest.bookingUrl });
+    targets.push({
+      label: t()("bookProvider", { provider: result.cheapest.provider }),
+      url: result.cheapest.bookingUrl,
+    });
   }
   if (result.direct?.bookingUrl && result.direct.bookingUrl !== result.cheapest?.bookingUrl) {
-    targets.push({ label: `Book direct`, url: result.direct.bookingUrl });
+    targets.push({ label: t()("bookDirect"), url: result.direct.bookingUrl });
   }
   return targets;
 }
 
 function renderCheapest(result: GoogleFlightsCountryResult): string {
-  if (!result.cheapest) return "No options";
+  if (!result.cheapest) return t()("noOptions");
   const tiedProviders = result.options
     .filter((option) => option.price === result.cheapest?.price)
     .map((option) => option.provider);
@@ -1818,6 +1884,13 @@ function countryDisplayName(country: string): string {
   return code;
 }
 
+function panelCountryDisplayName(country: string): string {
+  const code = country.toUpperCase();
+  if (country === "CURRENT") return t()("current");
+  if (!/^[A-Z]{2}$/.test(code)) return country;
+  return countryOptions().find((option) => option.code === code)?.label || countryDisplayName(country);
+}
+
 function urlCountryCode(): string {
   const country = new URL(window.location.href).searchParams.get("gl")?.toUpperCase() || "";
   return /^[A-Z]{2}$/.test(country) ? country : "";
@@ -1884,7 +1957,7 @@ function normalizeCountryName(value: string): string {
 async function compareCountries(): Promise<void> {
   const selectedCountries = selectedGoogleFlightsCountries();
   if (selectedCountries.length === 0) {
-    state.error = "Enter at least one country code.";
+    state.error = t()("enterAtLeastOneCountryCode");
     render();
     return;
   }
@@ -1921,10 +1994,10 @@ async function compareCountries(): Promise<void> {
       requestId,
     })) as { ok?: boolean; error?: string } | undefined;
     if (state.pageKey !== comparePageKey || state.comparingRequestId !== requestId) return;
-    if (!response?.ok) throw new Error(response?.error || "Country comparison failed.");
+    if (!response?.ok) throw new Error(response?.error || t()("countryComparisonFailed"));
   } catch (error) {
     if (state.pageKey !== comparePageKey || state.comparingRequestId !== requestId) return;
-    state.error = error instanceof Error ? error.message : "Country comparison failed.";
+    state.error = error instanceof Error ? error.message : t()("countryComparisonFailed");
     state.comparing = false;
     state.comparingRequestId = "";
     state.comparingCountryCodes = [];
@@ -2007,7 +2080,7 @@ function applyGoogleFlightsCountryProgress(payload: { requestId?: unknown; resul
 function applyGoogleFlightsCountryComplete(payload: { requestId?: unknown; ok?: unknown; error?: unknown }): void {
   if (typeof payload.requestId !== "string" || payload.requestId !== state.comparingRequestId) return;
   if (!payload.ok) {
-    state.error = typeof payload.error === "string" ? payload.error : "Country comparison failed.";
+    state.error = typeof payload.error === "string" ? payload.error : t()("countryComparisonFailed");
   } else if (state.cacheKey || state.pageKey) {
     state.resultsCachedAt = Date.now();
     pruneExpiredResultCache();

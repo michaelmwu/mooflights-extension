@@ -1,11 +1,13 @@
 import { DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES, normalizeGoogleFlightsCountryCodes } from "./googleFlightsBooking";
 import { filterAvailableGoogleFlightsCountryCodes } from "./googleFlightsCountries";
+import { DEFAULT_LANGUAGE, normalizeLanguage } from "./i18n";
 import { ALWAYS_SHOWN_PROVIDER_IDS } from "./providers";
 import type { ExtensionSettings } from "./types";
 
 const LEGACY_GOOGLE_FLIGHTS_COUNTRY_CODES = ["US", "CA", "GB", "JP", "TW", "HK", "SG", "KR", "AU", "MY"];
 
 export const DEFAULT_SETTINGS: ExtensionSettings = {
+  language: DEFAULT_LANGUAGE,
   hiddenProviderIds: [],
   preferredProviderIds: ["kayak"],
   preferredFrequentFlyerPrograms: [],
@@ -26,7 +28,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   },
 };
 
-const SETTINGS_KEY = "muTravelSettings";
+export const SETTINGS_KEY = "muTravelSettings";
 
 export async function loadSettings(): Promise<ExtensionSettings> {
   const stored = await chrome.storage.local.get(SETTINGS_KEY);
@@ -66,6 +68,7 @@ export function mergeSettings(value: unknown): ExtensionSettings {
   const googleFlights = isRecord(candidate.googleFlights) ? candidate.googleFlights : {};
 
   return {
+    language: normalizeLanguage(candidate.language),
     hiddenProviderIds: providerPreferenceArray(candidate.hiddenProviderIds, DEFAULT_SETTINGS.hiddenProviderIds),
     preferredProviderIds: providerPreferenceArray(
       candidate.preferredProviderIds,
