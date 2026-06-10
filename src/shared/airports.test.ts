@@ -2,9 +2,11 @@ import {
   AIRPORT_REGION_PRESETS,
   AIRPORTS,
   airportAreaFromSearchValue,
+  airportAreaOptions,
   airportAreaSearchValue,
   airportCodes,
   countryCodeFromSearchValue,
+  countryDisplayName,
   countrySearchValue,
   filterAirports,
   parseAirportCodes,
@@ -114,6 +116,14 @@ describe("airport helper", () => {
     expect(countryCodeFromSearchValue("XX")).toBe("");
   });
 
+  it("localizes airport helper country labels while preserving English and code search", () => {
+    expect(countryDisplayName("JP", "ja")).toBe("日本");
+    expect(countrySearchValue("JP", "ja")).toBe("日本 (JP) - Japan");
+    expect(countryCodeFromSearchValue("日本", "ja")).toBe("JP");
+    expect(countryCodeFromSearchValue("Japan", "ja")).toBe("JP");
+    expect(countryCodeFromSearchValue("JP", "ja")).toBe("JP");
+  });
+
   it("maps universal airport area search values to one active filter scope", () => {
     expect(airportAreaFromSearchValue("Tokyo Area (region)")).toEqual({
       region: "tokyo",
@@ -161,6 +171,34 @@ describe("airport helper", () => {
     expect(airportAreaSearchValue({ ...DEFAULT_SETTINGS.airportHelper, region: "tokyo" })).toBe("Tokyo Area (region)");
     expect(airportAreaSearchValue({ ...DEFAULT_SETTINGS.airportHelper, continent: "Asia" })).toBe("Asia (continent)");
     expect(airportAreaSearchValue({ ...DEFAULT_SETTINGS.airportHelper, countries: ["JP"] })).toBe("Japan (JP)");
+  });
+
+  it("localizes airport helper area labels while preserving English search aliases", () => {
+    expect(airportAreaSearchValue({ ...DEFAULT_SETTINGS.airportHelper, region: "tokyo" }, "ja")).toBe(
+      "東京地域 (地域)",
+    );
+    expect(airportAreaSearchValue({ ...DEFAULT_SETTINGS.airportHelper, continent: "Asia" }, "ja")).toBe(
+      "アジア (大陸)",
+    );
+    expect(airportAreaSearchValue({ ...DEFAULT_SETTINGS.airportHelper, countries: ["JP"] }, "ja")).toBe(
+      "日本 (JP) - Japan",
+    );
+    expect(airportAreaFromSearchValue("東京地域", "ja")).toEqual({
+      region: "tokyo",
+      continent: "",
+      countries: [],
+    });
+    expect(airportAreaFromSearchValue("Tokyo Area", "ja")).toEqual({
+      region: "tokyo",
+      continent: "",
+      countries: [],
+    });
+    expect(airportAreaFromSearchValue("Japan", "ja")).toEqual({
+      region: "",
+      continent: "",
+      countries: ["JP"],
+    });
+    expect(airportAreaOptions("zh-Hant").find((option) => option.value === "taipei")?.label).toBe("台北地區");
   });
 
   it("falls back to country codes when Intl.DisplayNames labels are unavailable", () => {

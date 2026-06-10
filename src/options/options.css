@@ -225,6 +225,10 @@ label {
   gap: 6px;
 }
 
+.language-select {
+  max-width: 320px;
+}
+
 .check {
   grid-template-columns: auto 1fr;
   align-items: center;

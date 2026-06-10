@@ -1,0 +1,8 @@
+{
+  "extensionName": {
+    "message": "MooFlights"
+  },
+  "extensionDescription": {
+    "message": "适用于 Google Flights 和 ITA Matrix 的辅助工具，可显示价格比较和里程累积。"
+  }
+}

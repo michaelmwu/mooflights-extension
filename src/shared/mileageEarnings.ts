@@ -3,7 +3,7 @@ import type { UsdCurrencyRates } from "./currencyRates";
 import mileageEarningData from "./data/mileage-earning.json";
 import programTierLabels from "./data/program-tier-labels.json";
 import { flattenSegments } from "./itinerary";
-import type { ItinerarySegment, NormalizedItinerary } from "./types";
+import type { AppLanguage, ItinerarySegment, NormalizedItinerary } from "./types";
 
 type CompactBookingClass = {
   redeemable_miles: CompactProgramEarning[];
@@ -44,6 +44,8 @@ export type MileageProgramOption = {
   program: string;
   carrierCodes: string[];
   label: string;
+  searchValue: string;
+  aliases: string[];
 };
 
 export type MileageProgramTierPreference = Record<string, string>;
@@ -267,18 +269,30 @@ export function uniqueMileagePrograms(): string[] {
   return [...uniqueMileageProgramsCache];
 }
 
-export function uniqueMileageProgramOptions(): MileageProgramOption[] {
+export function uniqueMileageProgramOptions(language: AppLanguage = "en"): MileageProgramOption[] {
   return uniqueMileagePrograms().map((program) => {
     const carrierCodes = PROGRAM_OWNER_CARRIER_CODES[program] || [];
+    const localized = localizedMileageProgramName(program, language);
+    const labelText = carrierCodes.length > 0 ? `${localized} (${carrierCodes.join("/")})` : localized;
+    const englishLabel = carrierCodes.length > 0 ? `${program} (${carrierCodes.join("/")})` : program;
     return {
       program,
       carrierCodes,
-      label: carrierCodes.length > 0 ? `${program} (${carrierCodes.join("/")})` : program,
+      label: labelText === englishLabel ? labelText : `${labelText} - ${englishLabel}`,
+      searchValue: labelText === englishLabel ? labelText : `${labelText} - ${englishLabel}`,
+      aliases: uniqueAliases([...mileageProgramAliases(program), labelText, englishLabel, ...carrierCodes]),
     };
   });
 }
 
-export function mileageProgramTierOptions(program: string): MileageProgramTierOption[] {
+export function localizedMileageProgramDisplay(program: string, language: AppLanguage = "en"): string {
+  const parentProgram = tierParentProgram(program);
+  if (!parentProgram || parentProgram === program) return localizedMileageProgramName(program, language);
+  const tierLabel = mileageProgramTierOptions(parentProgram, language).find((tier) => tier.program === program)?.label;
+  return [localizedMileageProgramName(parentProgram, language), tierLabel].filter(Boolean).join(" ");
+}
+
+export function mileageProgramTierOptions(program: string, language: AppLanguage = "en"): MileageProgramTierOption[] {
   const tierPrograms = new Map<string, { label: string; rank: number }>();
   const importedLabels = PROGRAM_TIER_LABELS.programs[program] || [];
   for (const [index, tierLabel] of importedLabels.entries()) {
@@ -305,7 +319,7 @@ export function mileageProgramTierOptions(program: string): MileageProgramTierOp
   return Array.from(tierPrograms.entries())
     .map(([tierProgram, value]) => ({ program: tierProgram, label: value.label, rank: value.rank }))
     .sort((left, right) => left.rank - right.rank || left.label.localeCompare(right.label))
-    .map(({ program, label }) => ({ program, label }));
+    .map(({ program, label }) => ({ program, label: localizedTierLabel(label, language) }));
 }
 
 function inspectWhereToCreditSegment(segment: ItinerarySegment): WhereToCreditSegmentInsight | null {
@@ -640,6 +654,150 @@ function tierRank(label: string): number {
   ]);
   return ranks.get(label) ?? 100;
 }
+
+function localizedTierLabel(label: string, language: AppLanguage): string {
+  return TIER_LABEL_TRANSLATIONS[language]?.[label] || label;
+}
+
+function localizedMileageProgramName(program: string, language: AppLanguage): string {
+  return MILEAGE_PROGRAM_NAME_TRANSLATIONS[language]?.[program] || program;
+}
+
+function mileageProgramAliases(program: string): string[] {
+  return uniqueAliases([
+    program,
+    ...Object.values(MILEAGE_PROGRAM_NAME_TRANSLATIONS).map((translations) => translations?.[program] || ""),
+  ]);
+}
+
+function normalizeSearch(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function uniqueAliases(values: string[]): string[] {
+  const seen = new Set<string>();
+  return values
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .filter((value) => {
+      const normalized = normalizeSearch(value);
+      if (seen.has(normalized)) return false;
+      seen.add(normalized);
+      return true;
+    });
+}
+
+const MILEAGE_PROGRAM_NAME_TRANSLATIONS: Partial<Record<AppLanguage, Record<string, string>>> = {
+  es: {
+    "Aerolíneas Argentinas AerolíneasPlus": "Aerolíneas Plus",
+    "Aeromexico Club Premier": "Aeroméxico Rewards",
+    "Air Canada Aeroplan": "Aeroplan",
+    "Air Europa Suma": "Air Europa SUMA",
+    "American Airlines AAdvantage": "AAdvantage",
+    "Delta SkyMiles": "SkyMiles",
+    "Iberia Plus": "Iberia Club",
+    "JetBlue TrueBlue": "TrueBlue",
+    "United MileagePlus": "MileagePlus",
+  },
+  "zh-Hans": {
+    "Air China PhoenixMiles": "凤凰知音",
+    "Cathay Marco Polo Club / Asia Miles": "国泰会员计划 / 亚洲万里通",
+    "China Airlines Dynasty Flyer": "华夏会员",
+    "Eva Air Infinity MileageLands": "无限万哩游",
+    "Hainan Fortune Wings Club": "金鹏俱乐部",
+    "United MileagePlus": "前程万里 (MileagePlus)",
+    "Xiamen Airlines Egret Club": "白鹭俱乐部",
+  },
+  "zh-Hant": {
+    "Air China PhoenixMiles": "鳳凰知音",
+    "Cathay Marco Polo Club / Asia Miles": "國泰會員計劃 / 亞洲萬里通",
+    "China Airlines Dynasty Flyer": "華夏會員",
+    "Eva Air Infinity MileageLands": "無限萬哩遊",
+    "Hainan Fortune Wings Club": "金鵬俱樂部",
+    "United MileagePlus": "前程萬里飛行計劃 (MileagePlus)",
+    "Xiamen Airlines Egret Club": "白鷺俱樂部",
+  },
+  ja: {
+    "Air China PhoenixMiles": "フェニックスマイル",
+    "ANA Mileage Club": "ANAマイレージクラブ",
+    "Hainan Fortune Wings Club": "金鵬倶楽部",
+    "Japan Airlines Mileage Bank": "JALマイレージバンク",
+    "United MileagePlus": "マイレージプラス",
+  },
+  ko: {
+    "Asiana Club": "아시아나클럽",
+    "Korean Air Skypass": "스카이패스",
+    "United MileagePlus": "마일리지플러스",
+  },
+};
+
+const TIER_LABEL_TRANSLATIONS: Partial<Record<AppLanguage, Record<string, string>>> = {
+  es: {
+    Member: "Miembro",
+    Standard: "Estándar",
+    Basic: "Básico",
+    Blue: "Azul",
+    Green: "Verde",
+    Red: "Rojo",
+    Bronze: "Bronce",
+    Silver: "Plata",
+    Gold: "Oro",
+    Platinum: "Platino",
+    Diamond: "Diamante",
+  },
+  "zh-Hans": {
+    Member: "会员",
+    Standard: "标准",
+    Basic: "基础",
+    Blue: "蓝卡",
+    Green: "绿卡",
+    Red: "红卡",
+    Bronze: "铜卡",
+    Silver: "银卡",
+    Gold: "金卡",
+    Platinum: "白金卡",
+    Diamond: "钻石卡",
+  },
+  "zh-Hant": {
+    Member: "會員",
+    Standard: "標準",
+    Basic: "基本",
+    Blue: "藍卡",
+    Green: "綠卡",
+    Red: "紅卡",
+    Bronze: "銅卡",
+    Silver: "銀卡",
+    Gold: "金卡",
+    Platinum: "白金卡",
+    Diamond: "鑽石卡",
+  },
+  ja: {
+    Member: "メンバー",
+    Standard: "スタンダード",
+    Basic: "ベーシック",
+    Blue: "ブルー",
+    Green: "グリーン",
+    Red: "レッド",
+    Bronze: "ブロンズ",
+    Silver: "シルバー",
+    Gold: "ゴールド",
+    Platinum: "プラチナ",
+    Diamond: "ダイヤモンド",
+  },
+  ko: {
+    Member: "회원",
+    Standard: "스탠다드",
+    Basic: "기본",
+    Blue: "블루",
+    Green: "그린",
+    Red: "레드",
+    Bronze: "브론즈",
+    Silver: "실버",
+    Gold: "골드",
+    Platinum: "플래티넘",
+    Diamond: "다이아몬드",
+  },
+};
 
 function computeMiles(
   percent: number | null,

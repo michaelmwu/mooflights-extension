@@ -50,6 +50,59 @@ describe("Mileage earning estimates", () => {
     expect(uniqueMileagePrograms()).not.toContain("Air Canada Aeroplan 2026");
   });
 
+  it("localizes common tier labels without changing stored tier program ids", () => {
+    expect(mileageProgramTierOptions("United MileagePlus", "ja").slice(0, 4)).toEqual([
+      { program: "United MileagePlus Member", label: "メンバー" },
+      { program: "United MileagePlus Premier Silver", label: "シルバー" },
+      { program: "United MileagePlus Premier Gold", label: "ゴールド" },
+      { program: "United MileagePlus Premier Platinum", label: "プラチナ" },
+    ]);
+    expect(mileageProgramTierOptions("Korean Air Skypass", "ko")[0]).toEqual({
+      program: "Korean Air Skypass Standard",
+      label: "스탠다드",
+    });
+  });
+
+  it("localizes official program display names while keeping English aliases searchable", () => {
+    const spanishPrograms = uniqueMileageProgramOptions("es");
+    expect(spanishPrograms.find((program) => program.program === "Aeromexico Club Premier")).toMatchObject({
+      program: "Aeromexico Club Premier",
+      label: "Aeroméxico Rewards (AM) - Aeromexico Club Premier (AM)",
+      aliases: expect.arrayContaining(["Aeromexico Club Premier", "Aeroméxico Rewards", "AM"]),
+    });
+
+    const traditionalChinesePrograms = uniqueMileageProgramOptions("zh-Hant");
+    expect(traditionalChinesePrograms.find((program) => program.program === "United MileagePlus")).toMatchObject({
+      program: "United MileagePlus",
+      label: "前程萬里飛行計劃 (MileagePlus) (UA) - United MileagePlus (UA)",
+      aliases: expect.arrayContaining(["United MileagePlus", "前程萬里飛行計劃 (MileagePlus)", "UA"]),
+    });
+
+    const japanesePrograms = uniqueMileageProgramOptions("ja");
+    expect(japanesePrograms.find((program) => program.program === "ANA Mileage Club")).toMatchObject({
+      program: "ANA Mileage Club",
+      label: "ANAマイレージクラブ (NH) - ANA Mileage Club (NH)",
+      aliases: expect.arrayContaining(["ANA Mileage Club", "ANAマイレージクラブ", "NH"]),
+    });
+    expect(japanesePrograms.find((program) => program.program === "Hainan Fortune Wings Club")).toMatchObject({
+      program: "Hainan Fortune Wings Club",
+      label: "金鵬倶楽部 (HU) - Hainan Fortune Wings Club (HU)",
+      aliases: expect.arrayContaining(["Hainan Fortune Wings Club", "金鵬倶楽部", "HU"]),
+    });
+
+    const koreanPrograms = uniqueMileageProgramOptions("ko");
+    expect(koreanPrograms.find((program) => program.program === "Korean Air Skypass")).toMatchObject({
+      program: "Korean Air Skypass",
+      label: "스카이패스 (KE) - Korean Air Skypass (KE)",
+      aliases: expect.arrayContaining(["Korean Air Skypass", "스카이패스", "KE"]),
+    });
+    expect(koreanPrograms.find((program) => program.program === "Asiana Club")).toMatchObject({
+      program: "Asiana Club",
+      label: "아시아나클럽 (OZ) - Asiana Club (OZ)",
+      aliases: expect.arrayContaining(["Asiana Club", "아시아나클럽", "OZ"]),
+    });
+  });
+
   it("removes repetitive program branding from imported tier labels", () => {
     expect(mileageProgramTierOptions("Singapore Airlines KrisFlyer")).toEqual([
       { program: "Singapore Airlines KrisFlyer KrisFlyer", label: "KrisFlyer" },

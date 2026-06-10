@@ -21,6 +21,13 @@ export const DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES = [
 const DEFAULT_GOOGLE_FLIGHTS_CURRENCY = "USD";
 const GOOGLE_FLIGHTS_BOOKING_PATH_RE = /^\/travel\/flights\/booking/;
 const GOOGLE_FLIGHTS_ITINERARY_PATH = "/travel/flights";
+export const GOOGLE_FLIGHTS_SEARCH_RESULT_ROW_SELECTOR = [
+  ".pIav2d",
+  ".yR1fYc",
+  "[data-flt-ve]",
+  "[role='listitem']",
+].join(",");
+const MOO_FLIGHTS_SEARCH_BADGE_SELECTOR = "[data-moo-flights-search-badge]";
 const GOOGLE_FLIGHTS_CURRENCIES = new Set(
   "AED AFN ALL AMD ANG AOA ARS AUD AWG AZN BAM BBD BDT BGN BHD BIF BMD BND BOB BOV BRL BSD BTN BWP BYN BZD CAD CDF CHE CHF CHW CLF CLP CNY COP COU CRC CUC CUP CVE CZK DJF DKK DOP DZD EGP ERN ETB EUR FJD FKP GBP GEL GHS GIP GMD GNF GTQ GYD HKD HNL HTG HUF IDR ILS INR IQD IRR ISK JMD JOD JPY KES KGS KHR KMF KPW KRW KWD KYD KZT LAK LBP LKR LRD LSL LYD MAD MDL MGA MKD MMK MNT MOP MRU MUR MVR MWK MXN MXV MYR MZN NAD NGN NIO NOK NPR NZD OMR PAB PEN PGK PHP PKR PLN PYG QAR RON RSD RUB RWF SAR SBD SCR SDG SEK SGD SHP SLE SLL SOS SRD SSP STN SVC SYP SZL THB TJS TMT TND TOP TRY TTD TWD TZS UAH UGX USD USN UYI UYU UYW UZS VED VES VND VUV WST XAF XCD XDR XOF XPF XSU XUA YER ZAR ZMW ZWG".split(
     " ",
@@ -44,6 +51,30 @@ export type GoogleFlightsCountryResult = {
   direct?: GoogleFlightsBookingOption;
   status: "ready" | "sparse" | "empty" | "error";
   refreshed?: boolean;
+  error?: string;
+};
+
+export type GoogleFlightsSearchResult = {
+  rowKey: string;
+  matchKey: string;
+  rowIndex: number;
+  price: number;
+  currency: string;
+  priceText: string;
+  summaryText: string;
+  carrierText?: string;
+  timeText?: string;
+  durationText?: string;
+  stopsText?: string;
+  itineraryKey?: string;
+  matchConfidence: "high" | "medium";
+};
+
+export type GoogleFlightsSearchCountryResult = {
+  country: string;
+  url: string;
+  results: GoogleFlightsSearchResult[];
+  status: "ready" | "empty" | "error";
   error?: string;
 };
 
@@ -124,8 +155,8 @@ function isGoogleFlightsPanelPage(url: URL): boolean {
   if (GOOGLE_FLIGHTS_BOOKING_PATH_RE.test(url.pathname)) return true;
   return (
     (url.pathname === GOOGLE_FLIGHTS_ITINERARY_PATH || url.pathname.startsWith(`${GOOGLE_FLIGHTS_ITINERARY_PATH}/`)) &&
-    url.searchParams.get("source") === "ita_matrix" &&
-    Boolean(url.searchParams.get("tfs"))
+    Boolean(url.searchParams.get("tfs")) &&
+    (url.searchParams.get("source") === "ita_matrix" || !GOOGLE_FLIGHTS_BOOKING_PATH_RE.test(url.pathname))
   );
 }
 
@@ -220,6 +251,44 @@ export function parseGoogleFlightsBookingOptions(
     direct: options.find((option) => option.isDirect),
     status: options.length > 0 ? "ready" : "empty",
   };
+}
+
+export function parseGoogleFlightsSearchResults(
+  root: ParentNode,
+  country: string,
+  url: string,
+  limit = Number.POSITIVE_INFINITY,
+): GoogleFlightsSearchCountryResult {
+  const results = searchResultRows(root)
+    .map((row, index) => parseSearchResultRow(row, index))
+    .filter((result): result is GoogleFlightsSearchResult => Boolean(result))
+    .slice(0, limit);
+
+  return {
+    country,
+    url,
+    results,
+    status: results.length > 0 ? "ready" : "empty",
+  };
+}
+
+export function searchResultRows(root: ParentNode): Element[] {
+  const seen = new Set<Element>();
+  const rows: Element[] = [];
+  for (const element of Array.from(root.querySelectorAll(GOOGLE_FLIGHTS_SEARCH_RESULT_ROW_SELECTOR))) {
+    if (seen.has(element) || element.closest(MOO_FLIGHTS_SEARCH_BADGE_SELECTOR)) continue;
+    seen.add(element);
+    const text = normalizedSearchResultText(element);
+    if (!text || text.length < 20) continue;
+    if (!hasSearchResultSignal(text)) continue;
+    if (!parseSearchResultPrice(element)) continue;
+    if (rows.some((row) => row !== element && row.contains(element))) continue;
+    for (let index = rows.length - 1; index >= 0; index -= 1) {
+      if (element.contains(rows[index])) rows.splice(index, 1);
+    }
+    rows.push(element);
+  }
+  return rows;
 }
 
 function parseGoogleFlightsTfsSegments(tfs: string): GoogleFlightsFlightSegment[] {
@@ -534,6 +603,263 @@ function isString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
 }
 
+function parseSearchResultRow(row: Element, rowIndex: number): GoogleFlightsSearchResult | null {
+  const price = parseSearchResultPrice(row);
+  if (!price) return null;
+
+  const summaryText = normalizedSearchResultText(row);
+  const matchKey = searchResultMatchKey(summaryText, price.priceText);
+  if (matchKey.length < 12) return null;
+
+  const timeText =
+    searchResultTimeSignature(summaryText) ||
+    firstSearchResultText(row, [
+      ".wtdjmc",
+      ".Ak5kof",
+      "[aria-label*='AM']",
+      "[aria-label*='PM']",
+      "[aria-label*='am']",
+      "[aria-label*='pm']",
+    ]);
+  const durationText = firstPatternText(summaryText, /\b\d+\s*hr(?:\s*\d+\s*min)?\b/i);
+  const stopsText = firstPatternText(summaryText, /\b(?:nonstop|direct|\d+\s+stops?)\b/i);
+  const carrierText = firstSearchResultText(row, [".sSHqwe", ".Ir0Voe", ".C3iPNc"]);
+  const itineraryKey = searchResultItineraryKey(row);
+  const confidence =
+    itineraryKey || /(?:nonstop|direct|\d+\s+stops?|\b\d+\s*hr\b)/i.test(summaryText) ? "high" : "medium";
+
+  return {
+    rowKey: `gf-row-${stableHash(matchKey)}`,
+    matchKey,
+    rowIndex,
+    price: price.price,
+    currency: price.currency,
+    priceText: price.priceText,
+    summaryText,
+    ...(carrierText ? { carrierText } : {}),
+    ...(timeText ? { timeText } : {}),
+    ...(durationText ? { durationText } : {}),
+    ...(stopsText ? { stopsText } : {}),
+    ...(itineraryKey ? { itineraryKey } : {}),
+    matchConfidence: confidence,
+  };
+}
+
+function parseSearchResultPrice(row: Element): { price: number; currency: string; priceText: string } | null {
+  const candidates = Array.from(row.querySelectorAll("[aria-label], [role='text'], span, div"))
+    .filter((element) => !element.closest(MOO_FLIGHTS_SEARCH_BADGE_SELECTOR))
+    .map((element) => ({
+      ariaLabel: element.getAttribute("aria-label") || "",
+      visibleText: textContentWithoutSearchBadges(element),
+    }))
+    .map((candidate) => ({
+      ...candidate,
+      sourceText: normalizedText(candidate.ariaLabel || candidate.visibleText),
+      price: parsePriceText(candidate.ariaLabel, candidate.visibleText),
+    }))
+    .filter(
+      (candidate): candidate is typeof candidate & { price: { price: number; currency: string; priceText: string } } =>
+        Boolean(candidate.price && isLikelyFlightPrice(candidate.price, candidate.sourceText)),
+    )
+    .sort((left, right) => priceCandidateScore(left) - priceCandidateScore(right));
+  return candidates[0]?.price || null;
+}
+
+function textContentWithoutSearchBadges(element: Element): string {
+  const clone = element.cloneNode(true);
+  if (!(clone instanceof Element)) return normalizedText(element.textContent || "");
+  for (const badge of Array.from(clone.querySelectorAll(MOO_FLIGHTS_SEARCH_BADGE_SELECTOR))) badge.remove();
+  return normalizedText(clone.textContent || "");
+}
+
+function priceCandidateScore(candidate: { sourceText: string; price: { priceText: string } }): number {
+  const extraTextLength = Math.max(0, candidate.sourceText.length - candidate.price.priceText.length);
+  return extraTextLength;
+}
+
+function isLikelyFlightPrice(price: { price: number; priceText: string }, sourceText: string): boolean {
+  if (!Number.isFinite(price.price) || price.price <= 0) return false;
+  if (price.priceText.length > 40 || !/[0-9]/.test(price.priceText)) return false;
+  if (
+    sourceText.length > price.priceText.length + 16 &&
+    /\b(?:AM|PM|hr|min|stop|stops|nonstop|direct)\b/i.test(sourceText)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function normalizedSearchResultText(row: Element): string {
+  const clone = row.cloneNode(true);
+  if (clone instanceof Element) {
+    for (const badge of Array.from(clone.querySelectorAll(MOO_FLIGHTS_SEARCH_BADGE_SELECTOR))) badge.remove();
+    const selectFlightSummary = rankedSearchResultSummaries(clone)[0]?.text || "";
+    if (selectFlightSummary) return selectFlightSummary;
+    return normalizedText(clone.textContent || "");
+  }
+  return normalizedText(row.textContent || "");
+}
+
+function rankedSearchResultSummaries(row: Element): Array<{ text: string; score: number }> {
+  return Array.from(row.querySelectorAll("[aria-label]"))
+    .map((element) => ({
+      text: normalizedText(element.getAttribute("aria-label") || ""),
+      score: searchSummaryScore(element),
+    }))
+    .filter((candidate) => candidate.text.length >= 20 && hasSearchResultSignal(candidate.text))
+    .sort((left, right) => right.score - left.score || right.text.length - left.text.length);
+}
+
+function searchSummaryScore(element: Element): number {
+  const text = normalizedText(element.getAttribute("aria-label") || "");
+  if (!text) return 0;
+  if (isEnglishSelectFlightSummary(text)) return 1000;
+  if (element.matches(".JMc5Xc[aria-label], [role='link'][aria-label]") && isPrimaryFlightSummary(text)) return 800;
+  if (/^Flight details\./i.test(text)) return 250;
+  if (hasSearchResultSignal(text)) return 100;
+  return 0;
+}
+
+function isEnglishSelectFlightSummary(text: string): boolean {
+  return (
+    /\bSelect flight\b/i.test(text) &&
+    /\bLeaves\b/i.test(text) &&
+    /\barrives\b/i.test(text) &&
+    /\bTotal duration\b/i.test(text) &&
+    /\b(?:(?:nonstop|direct|\d+\s+stops?|\d+\s+stop)\s+flight|flight with)\b/i.test(text)
+  );
+}
+
+function isPrimaryFlightSummary(text: string): boolean {
+  if (isEnglishSelectFlightSummary(text)) return true;
+  const hasPrice = Boolean(parsePriceAmount(text)) || /円|日圓|日元|yen|dollars?|euros?|pounds?/i.test(text);
+  return hasPrice && hasSearchResultSignal(text);
+}
+
+function hasSearchResultSignal(text: string): boolean {
+  return /\b(?:nonstop|direct|\d+\s+stops?|\d+\s*hr|AM|PM|am|pm)\b/.test(text) || /\d{1,2}:\d{2}/.test(text);
+}
+
+function searchResultMatchKey(text: string, priceText: string): string {
+  return normalizeSearchKey(stripSearchPriceText(stripSearchUiText(text), priceText));
+}
+
+function stripSearchUiText(text: string): string {
+  return text
+    .replace(/\bselect flight\b/gi, " ")
+    .replace(/\bflight details\b/gi, " ")
+    .replace(/\bview more flights\b/gi, " ")
+    .replace(/\b(?:best|cheapest)\s+(?:here|[A-Z]{2})\b/gi, " ")
+    .replace(/\bnot found\b/gi, " ")
+    .replace(/\bchecking\b/gi, " ");
+}
+
+function stripSearchPriceText(text: string, priceText: string): string {
+  const escapedPrice = escapeRegExp(priceText);
+  return text
+    .replace(new RegExp(escapedPrice, "gi"), " ")
+    .replace(/\bfrom\s+/gi, " ")
+    .replace(
+      /\b[0-9][0-9.,\s'’]*\s+(?:US|Hong Kong|Taiwan|Canadian|Australian|New Zealand|Singapore)?\s*dollars?\b/gi,
+      " ",
+    )
+    .replace(
+      /\b[0-9][0-9.,\s'’]*\s+(?:Japanese|Korean|Thai|Malaysian|Chinese|Indian|Swiss|Danish|Norwegian|Swedish|Mexican|Philippine|New Taiwan|Taiwan)?\s*(?:euros?|pounds?|yen|won|baht|ringgit|yuan|rupees?|francs?|kron(?:er|a)|pesos?)\b/gi,
+      " ",
+    )
+    .replace(/[0-9][0-9.,\s'’]*\s*円(?:～|から)?/g, " ")
+    .replace(/[0-9][0-9.,\s'’]*\s*(?:日圓|日元)(?:起)?/g, " ")
+    .replace(/\b(?:USD|HKD|TWD|CAD|AUD|NZD|SGD|EUR|GBP|JPY|KRW|THB|MYR|CNY|INR|CHF)\s*[0-9][0-9.,\s'’]*/gi, " ")
+    .replace(/[A-Z]{0,3}[$€£¥￥₩฿₹]\s*[0-9][0-9.,\s'’]*/g, " ")
+    .replace(/[0-9][0-9.,\s'’]*\s*(?:USD|HKD|TWD|CAD|AUD|NZD|SGD|EUR|GBP|JPY|KRW|THB|MYR|CNY|INR|CHF)\b/gi, " ");
+}
+
+function normalizeSearchKey(text: string): string {
+  return text
+    .toLocaleLowerCase("en-US")
+    .replace(/[^\p{L}\p{N}:]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function firstSearchResultText(row: Element, selectors: string[]): string {
+  for (const selector of selectors) {
+    const value = normalizedText(row.querySelector(selector)?.textContent || "");
+    if (value && value.length <= 80 && !parsePriceAmount(value)) return value;
+  }
+  return "";
+}
+
+function firstPatternText(text: string, pattern: RegExp): string {
+  return normalizedText(text.match(pattern)?.[0] || "");
+}
+
+function searchResultTimeSignature(text: string): string {
+  const times = Array.from(
+    text.matchAll(
+      /(?:\b(?:AM|PM|am|pm)\s*)?(?:(?:上午|下午|晚上|早上|中午|凌晨)\s*)?(?:[01]?\d|2[0-3]):[0-5]\d(?:\s*(?:AM|PM|am|pm))?\b/g,
+    ),
+  )
+    .map((match) => normalizedClockTime(match[0]))
+    .filter(isString);
+  return times.length >= 2 ? `${times[0]}-${times[times.length - 1]}` : "";
+}
+
+function normalizedClockTime(value: string): string {
+  const text = normalizedText(value);
+  const match = text.match(
+    /^(?:(AM|PM|am|pm)\s*)?(?:(上午|下午|晚上|早上|中午|凌晨)\s*)?(\d{1,2}):(\d{2})(?:\s*(AM|PM|am|pm))?$/,
+  );
+  if (!match) return "";
+  let hour = Number(match[3]);
+  const minute = match[4] || "";
+  const latinMeridiem = (match[1] || match[5] || "").toUpperCase();
+  const cjkMeridiem = match[2] || "";
+  if (!Number.isFinite(hour) || hour < 0 || hour > 23) return "";
+  if ((latinMeridiem === "AM" || cjkMeridiem === "凌晨") && hour === 12) hour = 0;
+  if (
+    (latinMeridiem === "PM" || cjkMeridiem === "下午" || cjkMeridiem === "晚上" || cjkMeridiem === "中午") &&
+    hour < 12
+  ) {
+    hour += 12;
+  }
+  return `${String(hour).padStart(2, "0")}:${minute}`;
+}
+
+function searchResultItineraryKey(row: Element): string {
+  const itineraryUrl = Array.from(row.querySelectorAll("[data-travelimpactmodelwebsiteurl]"))
+    .map((element) => element.getAttribute("data-travelimpactmodelwebsiteurl") || "")
+    .find(Boolean);
+  if (!itineraryUrl) return "";
+  try {
+    const itinerary = new URL(itineraryUrl, "https://www.google.com").searchParams.get("itinerary") || "";
+    return itinerary
+      .split(",")
+      .map((segment) => {
+        const [origin, destination, carrier, flightNumber, date] = segment.split("-");
+        if (!origin || !destination || !carrier || !flightNumber) return "";
+        return `${origin}-${destination}-${carrier}${flightNumber}${date ? `-${date}` : ""}`;
+      })
+      .filter(Boolean)
+      .join("|");
+  } catch {
+    return "";
+  }
+}
+
+export function stableHash(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function parseBookingOption(row: Element, pageUrl: string): GoogleFlightsBookingOption | null {
   const label = providerLabel(row);
   const price = providerPrice(row);
@@ -665,7 +991,9 @@ function priceLikeTextFromValue(value: string): string {
 }
 
 function hasCurrencyNameHint(value: string): boolean {
-  return /francs?|kron(?:er|a)|pesos?|dollars?|euros?|pounds?|yen|rupees?|won|baht|ringgit|yuan/i.test(value);
+  return /francs?|kron(?:er|a)|pesos?|dollars?|euros?|pounds?|yen|rupees?|won|baht|ringgit|yuan|円|日圓|日元/i.test(
+    value,
+  );
 }
 
 function priceTextFromValue(value: string): string {
@@ -725,7 +1053,7 @@ function currencyFromText(value: string): string {
   if (/\$/i.test(value)) return "USD";
   if (/€|euros?|EUR/i.test(value)) return "EUR";
   if (/£|pounds?|GBP/i.test(value)) return "GBP";
-  if (/¥|￥|Japanese yen|JPY/i.test(value)) return "JPY";
+  if (/¥|￥|Japanese yen|JPY|円|日圓|日元/i.test(value)) return "JPY";
   if (/₩|Korean won|KRW/i.test(value)) return "KRW";
   if (/฿|baht|THB/i.test(value)) return "THB";
   if (/ringgit|MYR/i.test(value)) return "MYR";

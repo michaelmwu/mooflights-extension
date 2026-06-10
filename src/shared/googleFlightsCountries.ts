@@ -1,4 +1,5 @@
 import { DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES } from "./googleFlightsBooking";
+import type { AppLanguage } from "./types";
 
 const AVAILABLE_GOOGLE_FLIGHTS_COUNTRY_CODES = [
   "AF",
@@ -350,7 +351,8 @@ const NOT_USEFUL_GOOGLE_FLIGHTS_COUNTRY_CODES = new Set([
   "ZW",
 ]);
 
-const COUNTRY_DISPLAY = createCountryDisplayNames();
+const ENGLISH_COUNTRY_DISPLAY = createCountryDisplayNames("en");
+const COUNTRY_DISPLAY_BY_LOCALE = new Map<string, Intl.DisplayNames | undefined>([["en", ENGLISH_COUNTRY_DISPLAY]]);
 
 export function allGoogleFlightsCountryCodes(): string[] {
   const defaultCodes = new Set(DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES);
@@ -380,17 +382,26 @@ export function filterAvailableGoogleFlightsCountryCodes(codes: readonly string[
     });
 }
 
-export function googleFlightsCountryOptions(): Array<{ code: string; label: string; searchValue: string }> {
-  return googleFlightsCountryOptionsForCodes(allGoogleFlightsCountryCodes());
+export function googleFlightsCountryOptions(
+  language: AppLanguage = "en",
+): Array<{ code: string; label: string; searchValue: string; aliases: string[] }> {
+  return googleFlightsCountryOptionsForCodes(allGoogleFlightsCountryCodes(), language);
 }
 
-export function googleFlightsAvailableCountryOptions(): Array<{ code: string; label: string; searchValue: string }> {
-  return googleFlightsCountryOptionsForCodes(AVAILABLE_GOOGLE_FLIGHTS_COUNTRY_CODES);
+export function googleFlightsAvailableCountryOptions(
+  language: AppLanguage = "en",
+): Array<{ code: string; label: string; searchValue: string; aliases: string[] }> {
+  return googleFlightsCountryOptionsForCodes(AVAILABLE_GOOGLE_FLIGHTS_COUNTRY_CODES, language);
 }
 
 export function googleFlightsCountryCodeFromSearchValue(
   value: string,
-  countries: Array<{ code: string; label: string; searchValue: string }> = googleFlightsAvailableCountryOptions(),
+  countries: Array<{
+    code: string;
+    label: string;
+    searchValue: string;
+    aliases?: string[];
+  }> = googleFlightsAvailableCountryOptions(),
 ): string {
   const query = value.trim();
   if (!query) return "";
@@ -398,24 +409,34 @@ export function googleFlightsCountryCodeFromSearchValue(
   const directCode = query.toUpperCase();
   if (countries.some((country) => country.code === directCode)) return directCode;
 
-  const parenthesizedCode = query.match(/\(([A-Z]{2})\)$/i)?.[1]?.toUpperCase();
+  const parenthesizedCode = query.match(/\(([A-Z]{2})\)/i)?.[1]?.toUpperCase();
   if (parenthesizedCode && countries.some((country) => country.code === parenthesizedCode)) {
     return parenthesizedCode;
   }
 
-  return countries.find((country) => country.label.toLowerCase() === query.toLowerCase())?.code || "";
+  const normalizedQuery = normalizeSearch(query);
+  return (
+    countries.find((country) => countryAliases(country).some((alias) => normalizeSearch(alias) === normalizedQuery))
+      ?.code ||
+    countries.find((country) =>
+      countryAliases(country).some((alias) => normalizeSearch(alias).startsWith(normalizedQuery)),
+    )?.code ||
+    ""
+  );
 }
 
 function googleFlightsCountryOptionsForCodes(
   codes: string[],
-): Array<{ code: string; label: string; searchValue: string }> {
+  language: AppLanguage,
+): Array<{ code: string; label: string; searchValue: string; aliases: string[] }> {
   return codes
     .map((code) => {
-      const label = googleFlightsCountryLabel(code);
+      const label = googleFlightsCountryLabel(code, language);
       return {
         code,
         label,
-        searchValue: `${label} (${code})`,
+        searchValue: googleFlightsCountrySearchValue(code, language),
+        aliases: googleFlightsCountryAliases(code, language),
       };
     })
     .sort((left, right) => {
@@ -431,20 +452,75 @@ function googleFlightsCountryOptionsForCodes(
     });
 }
 
-function googleFlightsCountryLabel(code: string): string {
+function googleFlightsCountrySearchValue(code: string, language: AppLanguage): string {
+  const label = googleFlightsCountryLabel(code, language);
+  const english = googleFlightsCountryEnglishLabel(code);
+  return label === english ? `${label} (${code})` : `${label} (${code}) - ${english}`;
+}
+
+function googleFlightsCountryAliases(code: string, language: AppLanguage): string[] {
+  const label = googleFlightsCountryLabel(code, language);
+  const english = googleFlightsCountryEnglishLabel(code);
+  return uniqueAliases([code, label, english, `${label} (${code})`, `${english} (${code})`]);
+}
+
+function countryAliases(country: { code: string; label: string; searchValue: string; aliases?: string[] }): string[] {
+  return country.aliases || [country.code, country.label, country.searchValue];
+}
+
+function googleFlightsCountryLabel(code: string, language: AppLanguage): string {
+  const display = countryDisplayNames(languageLocale(language));
   try {
-    return COUNTRY_DISPLAY?.of(code) || code;
+    return display?.of(code) || googleFlightsCountryEnglishLabel(code);
+  } catch {
+    return googleFlightsCountryEnglishLabel(code);
+  }
+}
+
+function googleFlightsCountryEnglishLabel(code: string): string {
+  try {
+    return ENGLISH_COUNTRY_DISPLAY?.of(code) || code;
   } catch {
     return code;
   }
 }
 
-function createCountryDisplayNames(): Intl.DisplayNames | undefined {
+function languageLocale(language: AppLanguage): string {
+  if (language === "zh-Hans") return "zh-Hans";
+  if (language === "zh-Hant") return "zh-Hant";
+  return language;
+}
+
+function normalizeSearch(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function uniqueAliases(values: string[]): string[] {
+  const seen = new Set<string>();
+  return values
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .filter((value) => {
+      const normalized = normalizeSearch(value);
+      if (seen.has(normalized)) return false;
+      seen.add(normalized);
+      return true;
+    });
+}
+
+function createCountryDisplayNames(locale: string): Intl.DisplayNames | undefined {
   if (typeof Intl === "undefined" || typeof Intl.DisplayNames !== "function") return undefined;
 
   try {
-    return new Intl.DisplayNames(["en"], { type: "region" });
+    return new Intl.DisplayNames([locale], { type: "region" });
   } catch {
     return undefined;
   }
+}
+
+function countryDisplayNames(locale: string): Intl.DisplayNames | undefined {
+  if (!COUNTRY_DISPLAY_BY_LOCALE.has(locale)) {
+    COUNTRY_DISPLAY_BY_LOCALE.set(locale, createCountryDisplayNames(locale));
+  }
+  return COUNTRY_DISPLAY_BY_LOCALE.get(locale);
 }
