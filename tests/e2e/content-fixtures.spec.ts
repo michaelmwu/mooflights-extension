@@ -198,25 +198,20 @@ test("preserves filters after a silent Google Flights booking-to-search URL chan
   expect(preservedTfs).toContain("\x12\x0a2027-04-21\x32\x02FJ");
 });
 
-test("fills missing Google Flights multicity filters only after the source leg", async ({ context, page }) => {
+test("does not preserve filters while editing the top-level Google Flights multicity search", async ({
+  context,
+  page,
+}) => {
   await routeGoogleFlightsBookingFixtures(context);
-  const pageUrl = `https://www.google.com/travel/flights/search?tfs=${encodeTfsText([
-    tfsSearchSlice("2026-06-03", "HKG", "TPE"),
-    tfsSearchSlice("2026-06-05", "TPE", "HKG", "\x32\x02BR"),
-    tfsSearchSlice("2026-06-07", "HKG", "NRT"),
-  ])}`;
+  const pageUrl =
+    "https://www.google.com/travel/flights/search?tfs=CBwQAhonEgoyMDI2LTA4LTI3MgJGSmoHCAESA0FLTHIMCAMSCC9tLzA3ZGZrGjUSCjIwMjctMDQtMjFqDAgDEggvbS8wN2Rma3IHCAESA01FTHIHCAESA1NZRHIHCAESA0FLTEABSANwAYIBCwj___________8BmAED&tfu=EgYIACACKAEiAA&curr=USD";
 
   await page.goto(pageUrl);
 
   const panel = page.locator("#mooflights-google-flights-panel");
   await expect(panel).toBeAttached();
   await expect(panel.getByText("Preserve stops and airline filters")).toBeVisible();
-  await expect(page).not.toHaveURL(pageUrl);
-
-  const preservedTfs = decodeTfsText(new URL(page.url()).searchParams.get("tfs") || "");
-  expect(countOccurrences(preservedTfs, "\x32\x02BR")).toBe(2);
-  expect(preservedTfs.indexOf("\x32\x02BR")).toBeGreaterThan(preservedTfs.indexOf("2026-06-05"));
-  expect(preservedTfs.indexOf("\x32\x02BR")).toBeLessThan(preservedTfs.indexOf("2026-06-07"));
+  await expect(page).toHaveURL(pageUrl);
 });
 
 async function routeOptionalExtensionNetwork(context: BrowserContext): Promise<void> {

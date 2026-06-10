@@ -1265,6 +1265,7 @@ function hasMultipleGoogleFlightsLegs(
 function preserveCurrentMulticityFilters(): void {
   if (currentGoogleFlightsPanelMode() !== "search") return;
   if (!state.preserveMulticityFilters || !hasMultipleGoogleFlightsLegs()) return;
+  if (!shouldRefreshCurrentMulticityFilters()) return;
   const nextUrl = googleFlightsPreserveMulticityFiltersUrl(window.location.href);
   if (!nextUrl) return;
   if (nextUrl === window.location.href) {
