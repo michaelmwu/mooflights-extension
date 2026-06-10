@@ -8,7 +8,7 @@ import {
 } from "../shared/airports";
 import { fetchRemoteProviderMetadata } from "../shared/backendClient";
 import { runtimeUrl, safeChromeCall, sendRuntimeMessage } from "../shared/chromeRuntime";
-import { createContentTranslator } from "../shared/contentI18n";
+import { type ContentTranslationKey, createContentTranslator } from "../shared/contentI18n";
 import { loadUsdCurrencyRates, type UsdCurrencyRates } from "../shared/currencyRates";
 import { flagEmoji } from "../shared/flags";
 import { flattenSegments, parseItaBookingDetails, parseItineraryJson } from "../shared/itinerary";
@@ -41,7 +41,8 @@ type PanelState = {
   settings: ExtensionSettings | null;
   itinerary: NormalizedItinerary | null;
   links: RankedProviderLink[];
-  status: string;
+  statusKey: PanelStatusKey;
+  statusMessage: string;
   error: string;
   airportPreview: string[];
   autoCaptureAttempted: boolean;
@@ -79,6 +80,18 @@ type MileageFormula = {
 };
 
 type MileageSortMode = "miles" | "name";
+type PanelStatusKey = Extract<
+  ContentTranslationKey,
+  | "ready"
+  | "loadingItaItinerary"
+  | "lookingForItaJson"
+  | "autoLoadDidNotFindJson"
+  | "itineraryCaptured"
+  | "waitingForItaData"
+  | "copiedAirportCodes"
+  | "searchingPrefilledMatrixForm"
+  | "openingFirstMatrixResult"
+>;
 
 const PANEL_ID = "mooflights-panel";
 const BRIDGE_ID = "mooflights-page-bridge";
@@ -129,7 +142,8 @@ const state: PanelState = {
   settings: null,
   itinerary: null,
   links: [],
-  status: "Ready",
+  statusKey: "ready",
+  statusMessage: "",
   error: "",
   airportPreview: [],
   autoCaptureAttempted: false,
@@ -238,14 +252,11 @@ function render(): void {
 
 function renderStatusMessage(): string {
   if (state.error) return `<p class="message error">${escapeHtml(state.error)}</p>`;
-  if (isSearchPage() && state.status === "Ready") return "";
-  if (
-    isItineraryPage() &&
-    state.itinerary &&
-    (state.status === "Itinerary captured." || state.status === t()("itineraryCaptured"))
-  )
+  if (!state.statusMessage && isSearchPage() && state.statusKey === "ready") return "";
+  if (!state.statusMessage && isItineraryPage() && state.itinerary && state.statusKey === "itineraryCaptured")
     return "";
-  return `<p class="message">${escapeHtml(state.status)}</p>`;
+  const message = state.statusMessage || t()(state.statusKey);
+  return `<p class="message">${escapeHtml(message)}</p>`;
 }
 
 function renderItineraryPanel(): string {
@@ -311,7 +322,7 @@ function bind(root: ShadowRoot): void {
     if (input?.value) void parseAndSetItinerary(input.value);
   });
   root.querySelector('[data-action="copy-airports"]')?.addEventListener("click", () => {
-    void copyAirportPreview(t()("copiedAirportCodes"));
+    void copyAirportPreview("copiedAirportCodes");
   });
   root.querySelector('[data-action="options"]')?.addEventListener("click", () => {
     sendRuntimeMessage({ command: "openOptionsPage" });
@@ -612,7 +623,7 @@ async function captureItinerary(isAutomatic: boolean): Promise<void> {
   state.activeCaptureId = captureId;
   state.error = "";
   const captureLocationKey = state.locationKey;
-  setStatus(isAutomatic ? t()("loadingItaItinerary") : t()("lookingForItaJson"));
+  setStatus(isAutomatic ? "loadingItaItinerary" : "lookingForItaJson");
 
   try {
     const text = await captureViaPageBridge();
@@ -621,7 +632,7 @@ async function captureItinerary(isAutomatic: boolean): Promise<void> {
   } catch (error) {
     if (!isActiveCapture(captureId, captureLocationKey)) return;
     if (isAutomatic) {
-      state.status = t()("autoLoadDidNotFindJson");
+      setStatusKey("autoLoadDidNotFindJson");
       render();
       return;
     }
@@ -676,7 +687,7 @@ async function setCapturedItinerary(
   state.error = "";
   state.autoCaptureAttempted = true;
   if (bookingSignature) state.bookingDetailsSignature = bookingSignature;
-  setStatus(t()("itineraryCaptured"));
+  setStatus("itineraryCaptured");
 }
 
 function bookingDetailsSignature(value: unknown): string {
@@ -831,7 +842,7 @@ function captureViaPageBridge(): Promise<string> {
 function onBridgeMessage(event: MessageEvent): void {
   if (event.source !== window || event.data?.source !== MESSAGE_SOURCE) return;
   if (event.data.type === "capture-ita-json-result" && !event.data.ok && state.captureInFlight) {
-    state.status = event.data.error || state.status;
+    state.statusMessage = event.data.error || state.statusMessage;
   }
   if (event.data.type === "alkali-booking-details") {
     if (isItineraryPage()) {
@@ -964,7 +975,7 @@ function maybeAutoSubmitMatrixSearch(): void {
   if (button && !isDisabledButton(button)) {
     autoSearchDone = true;
     if (shouldAutoOpenMatrixResultAfterSearch()) rememberAutoOpenRequest();
-    setStatus(t()("searchingPrefilledMatrixForm"));
+    setStatus("searchingPrefilledMatrixForm");
     button.click();
     return;
   }
@@ -1019,7 +1030,7 @@ function maybeAutoOpenMatrixResult(): void {
       autoOpenClickedPrimaryResult = true;
       autoOpenPrimaryResultRow = primaryRow;
     }
-    setStatus(t()("openingFirstMatrixResult"));
+    setStatus("openingFirstMatrixResult");
     if (clickedExpandedControl) {
       autoOpenDone = true;
       forgetAutoOpenRequest();
@@ -1781,7 +1792,7 @@ function maybeAutoCapture(shouldResetLocation = true): void {
   if (state.itinerary || state.captureInFlight || state.autoCaptureAttempted) return;
   if (!isItineraryPage()) return;
   state.autoCaptureAttempted = true;
-  setStatus(t()("waitingForItaData"));
+  setStatus("waitingForItaData");
 }
 
 function resetForLocationChange(): void {
@@ -1791,7 +1802,7 @@ function resetForLocationChange(): void {
   state.itinerary = null;
   state.links = [];
   state.error = "";
-  state.status = "Ready";
+  setStatusKey("ready");
   state.showAllMileagePrograms = false;
   state.autoCaptureAttempted = false;
   state.captureInFlight = false;
@@ -2577,8 +2588,13 @@ function creditSegmentKey(
     .join(":");
 }
 
-function setStatus(message: string): void {
-  state.status = message;
+function setStatusKey(statusKey: PanelStatusKey): void {
+  state.statusKey = statusKey;
+  state.statusMessage = "";
+}
+
+function setStatus(statusKey: PanelStatusKey): void {
+  setStatusKey(statusKey);
   state.error = "";
   render();
 }
@@ -2588,10 +2604,10 @@ function setError(message: string): void {
   render();
 }
 
-async function copyAirportPreview(successMessage: string): Promise<void> {
+async function copyAirportPreview(successStatusKey: PanelStatusKey): Promise<void> {
   try {
     await navigator.clipboard.writeText(state.airportPreview.join(" "));
-    setStatus(successMessage);
+    setStatus(successStatusKey);
   } catch (error) {
     setError(t()("couldNotCopyAirportCodes", { message: error instanceof Error ? error.message : String(error) }));
   }

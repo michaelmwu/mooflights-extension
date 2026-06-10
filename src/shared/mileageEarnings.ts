@@ -689,27 +689,45 @@ function uniqueAliases(values: string[]): string[] {
 
 const MILEAGE_PROGRAM_NAME_TRANSLATIONS: Partial<Record<AppLanguage, Record<string, string>>> = {
   es: {
-    "Air Canada Aeroplan": "Programa Aeroplan de Air Canada",
-    "American Airlines AAdvantage": "Programa AAdvantage",
-    "Delta SkyMiles": "Programa de lealtad SkyMiles de Delta",
+    "Aerolíneas Argentinas AerolíneasPlus": "Aerolíneas Plus",
+    "Aeromexico Club Premier": "Aeroméxico Rewards",
+    "Air Canada Aeroplan": "Aeroplan",
+    "Air Europa Suma": "Air Europa SUMA",
+    "American Airlines AAdvantage": "AAdvantage",
+    "Delta SkyMiles": "SkyMiles",
+    "Iberia Plus": "Iberia Club",
+    "JetBlue TrueBlue": "TrueBlue",
+    "United MileagePlus": "MileagePlus",
   },
   "zh-Hans": {
     "Air China PhoenixMiles": "凤凰知音",
+    "Cathay Marco Polo Club / Asia Miles": "国泰会员计划 / 亚洲万里通",
     "China Airlines Dynasty Flyer": "华夏会员",
     "Eva Air Infinity MileageLands": "无限万哩游",
+    "Hainan Fortune Wings Club": "金鹏俱乐部",
+    "United MileagePlus": "前程万里 (MileagePlus)",
+    "Xiamen Airlines Egret Club": "白鹭俱乐部",
   },
   "zh-Hant": {
     "Air China PhoenixMiles": "鳳凰知音",
+    "Cathay Marco Polo Club / Asia Miles": "國泰會員計劃 / 亞洲萬里通",
     "China Airlines Dynasty Flyer": "華夏會員",
     "Eva Air Infinity MileageLands": "無限萬哩遊",
+    "Hainan Fortune Wings Club": "金鵬俱樂部",
+    "United MileagePlus": "前程萬里飛行計劃 (MileagePlus)",
+    "Xiamen Airlines Egret Club": "白鷺俱樂部",
   },
   ja: {
-    "Air China PhoenixMiles": "エアチャイナ フェニックスマイル",
+    "Air China PhoenixMiles": "フェニックスマイル",
     "ANA Mileage Club": "ANAマイレージクラブ",
+    "Hainan Fortune Wings Club": "金鵬倶楽部",
     "Japan Airlines Mileage Bank": "JALマイレージバンク",
+    "United MileagePlus": "マイレージプラス",
   },
   ko: {
+    "Asiana Club": "아시아나클럽",
     "Korean Air Skypass": "스카이패스",
+    "United MileagePlus": "마일리지플러스",
   },
 };
 
