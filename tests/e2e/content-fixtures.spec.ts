@@ -161,15 +161,14 @@ test("detects silent Google Flights multicity SPA URL changes before preserving 
   const panel = page.locator("#mooflights-google-flights-panel");
   await expect(panel).toBeAttached();
   await expect(panel.getByText("Preserve stops and airline filters")).toBeVisible();
-  await page.evaluate(() => {
-    Reflect.set(window, "__mooFlightsSpaMarker", "same-document");
-  });
 
   await page.evaluate((nextUrl) => {
     history.pushState(history.state, "", nextUrl);
   }, selectedLegUrl);
+  await expect
+    .poll(() => decodedGoogleFlightsFilterState(page.url()))
+    .toMatchObject({ fjFilters: 2, firstLegSelected: true, secondLegHasFjFilter: true });
   expect(page.url()).not.toBe(selectedLegUrl);
-  await expect.poll(() => page.evaluate(() => Reflect.get(window, "__mooFlightsSpaMarker"))).toBe("same-document");
 
   const preservedTfs = decodeTfsText(new URL(page.url()).searchParams.get("tfs") || "");
   expect(countOccurrences(preservedTfs, "\x32\x02FJ")).toBe(2);
@@ -188,15 +187,14 @@ test("preserves filters after a silent Google Flights booking-to-search URL chan
   const panel = page.locator("#mooflights-google-flights-panel");
   await expect(panel).toBeAttached();
   await expect(panel.getByText("Preserve stops and airline filters")).toHaveCount(0);
-  await page.evaluate(() => {
-    Reflect.set(window, "__mooFlightsSpaMarker", "same-document");
-  });
 
   await page.evaluate((nextUrl) => {
     history.pushState(history.state, "", nextUrl);
   }, searchUrl);
+  await expect
+    .poll(() => decodedGoogleFlightsFilterState(page.url()))
+    .toMatchObject({ fjFilters: 2, firstLegSelected: true, secondLegHasFjFilter: true });
   expect(page.url()).not.toBe(searchUrl);
-  await expect.poll(() => page.evaluate(() => Reflect.get(window, "__mooFlightsSpaMarker"))).toBe("same-document");
   await expect(panel.getByText("Preserve stops and airline filters")).toBeVisible();
 
   const preservedTfs = decodeTfsText(new URL(page.url()).searchParams.get("tfs") || "");
@@ -401,6 +399,19 @@ function encodeTfsText(parts: string[]): string {
 function decodeTfsText(value: string): string {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
   return Buffer.from(`${normalized}${"=".repeat((4 - (normalized.length % 4)) % 4)}`, "base64").toString("binary");
+}
+
+function decodedGoogleFlightsFilterState(url: string): {
+  fjFilters: number;
+  firstLegSelected: boolean;
+  secondLegHasFjFilter: boolean;
+} {
+  const preservedTfs = decodeTfsText(new URL(url).searchParams.get("tfs") || "");
+  return {
+    fjFilters: countOccurrences(preservedTfs, "\x32\x02FJ"),
+    firstLegSelected: preservedTfs.includes("\x2a\x02FJ\x32\x03410"),
+    secondLegHasFjFilter: preservedTfs.includes("\x12\x0a2027-04-21\x32\x02FJ"),
+  };
 }
 
 function countOccurrences(value: string, pattern: string): number {

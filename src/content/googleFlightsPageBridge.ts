@@ -23,22 +23,35 @@ function installGoogleFlightsHistoryBridge(): void {
   const originalReplaceState = history.replaceState;
 
   history.pushState = function pushState(state: unknown, title: string, url?: string | URL | null): void {
-    originalPushState.call(this, state, title, rewrittenHistoryUrl(url));
+    const preservedUrl = preservedHistoryUrl(url);
+    if (preservedUrl) {
+      navigateToPreservedUrl(preservedUrl);
+      return;
+    }
+    originalPushState.call(this, state, title, url);
   };
 
   history.replaceState = function replaceState(state: unknown, title: string, url?: string | URL | null): void {
-    originalReplaceState.call(this, state, title, rewrittenHistoryUrl(url));
+    const preservedUrl = preservedHistoryUrl(url);
+    if (preservedUrl) {
+      navigateToPreservedUrl(preservedUrl);
+      return;
+    }
+    originalReplaceState.call(this, state, title, url);
   };
 }
 
-function rewrittenHistoryUrl(url: string | URL | null | undefined): string | URL | null | undefined {
-  if (url == null || !isPreservationEnabled()) return url;
+function preservedHistoryUrl(url: string | URL | null | undefined): string {
+  if (url == null || !isPreservationEnabled()) return "";
   const absoluteUrl = absoluteHistoryUrl(url);
-  if (!absoluteUrl || !isPartialSelectedMulticitySearchUrl(absoluteUrl)) return url;
+  if (!absoluteUrl || !isPartialSelectedMulticitySearchUrl(absoluteUrl)) return "";
   const preservedUrl = googleFlightsPreserveMulticityFiltersUrl(absoluteUrl);
-  if (preservedUrl === absoluteUrl) return url;
-  writeMainWorldRewriteHref(preservedUrl);
-  return preservedUrl;
+  return preservedUrl === absoluteUrl ? "" : preservedUrl;
+}
+
+function navigateToPreservedUrl(url: string): void {
+  writeMainWorldRewriteHref(url);
+  window.location.replace(url);
 }
 
 function absoluteHistoryUrl(url: string | URL): string {

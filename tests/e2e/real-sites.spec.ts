@@ -55,9 +55,6 @@ test.describe("local real-site smoke tests", () => {
     await expect(panel.locator('[data-action="toggle-preserve-multicity-filters"]')).toBeChecked();
     await expect(page).toHaveURL(topSearchUrl);
 
-    await page.evaluate(() => {
-      Reflect.set(window, "__mooFlightsSpaMarker", "same-document");
-    });
     await page.evaluate((nextUrl) => {
       history.pushState(history.state, "", nextUrl);
     }, searchUrl);
@@ -65,7 +62,7 @@ test.describe("local real-site smoke tests", () => {
     await expect
       .poll(() => decodedTfsMarkerCounts(page.url()), { timeout: 20_000 })
       .toMatchObject({ fjFilters: 2, secondLegHasFjFilter: true });
-    await expect.poll(() => page.evaluate(() => Reflect.get(window, "__mooFlightsSpaMarker"))).toBe("same-document");
+    expect(page.url()).not.toBe(searchUrl);
   });
 
   test("runs the Google Flights country compare tab flow", async ({ context, extensionServiceWorker, page }) => {
