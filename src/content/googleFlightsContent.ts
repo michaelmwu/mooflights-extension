@@ -127,6 +127,7 @@ let countryCodeByDisplayName: Map<string, string> | null | undefined;
 let suppressPanelRestoreClick = false;
 let inferredCurrencyCache: { href: string; currency: string; cachedAt: number } | null = null;
 let highlightedSearchDeepLink = "";
+let refreshedMulticityFiltersHref = "";
 const panelUi = loadPanelUiState();
 
 const state: CompareState = {
@@ -1258,8 +1259,32 @@ function hasMultipleGoogleFlightsLegs(
 function preserveCurrentMulticityFilters(): void {
   if (!state.preserveMulticityFilters || !hasMultipleGoogleFlightsLegs()) return;
   const nextUrl = googleFlightsPreserveMulticityFiltersUrl(window.location.href);
-  if (!nextUrl || nextUrl === window.location.href) return;
+  if (!nextUrl) return;
+  if (nextUrl === window.location.href) {
+    refreshCurrentMulticityFilters();
+    return;
+  }
   history.replaceState(history.state, "", nextUrl);
+  refreshedMulticityFiltersHref = nextUrl;
+  dispatchMulticityFilterRefresh();
+}
+
+function refreshCurrentMulticityFilters(): void {
+  if (!shouldRefreshCurrentMulticityFilters()) return;
+  if (refreshedMulticityFiltersHref === window.location.href) return;
+  refreshedMulticityFiltersHref = window.location.href;
+  dispatchMulticityFilterRefresh();
+}
+
+function shouldRefreshCurrentMulticityFilters(): boolean {
+  const searchSliceCount = googleFlightsSearchSliceCount(window.location.href);
+  if (searchSliceCount < 2) return false;
+  const matrixSearch = parseGoogleFlightsMatrixSearch(window.location.href, currentComparableCurrencyCode());
+  return Boolean(matrixSearch && matrixSearch.slices.length > 0 && matrixSearch.slices.length < searchSliceCount);
+}
+
+function dispatchMulticityFilterRefresh(): void {
+  window.dispatchEvent(new PopStateEvent("popstate", { state: history.state }));
 }
 
 function readSessionMulticityFilterPreservation(): boolean {

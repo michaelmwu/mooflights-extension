@@ -418,7 +418,35 @@ function googleFlightsSliceWithFilters(value: string, filterFields: string[]): s
     .filter((field): field is { fieldNumber: number; value: string } => Boolean(field))
     .filter((field) => !existingFilterFieldNumbers.has(field.fieldNumber))
     .map((field) => field.value);
-  return sourceFilterFields.length > 0 ? value + sourceFilterFields.join("") : value;
+  const nextFilterFields = [...googleFlightsSliceFilterFields(value), ...sourceFilterFields];
+  if (nextFilterFields.length === 0) return value;
+  return googleFlightsSliceWithFilterFieldsAfterDate(value, nextFilterFields);
+}
+
+function googleFlightsSliceWithFilterFieldsAfterDate(value: string, filterFields: string[]): string {
+  let result = "";
+  let inserted = false;
+  for (let index = 0; index < value.length; ) {
+    const tag = readProtobufTag(value, index);
+    if (!tag) {
+      result += value.slice(index);
+      break;
+    }
+    const nextIndex = skipProtobufField(value, tag, value.length);
+    if (nextIndex <= index) {
+      result += value.slice(index);
+      break;
+    }
+    const isFilterField =
+      (tag.fieldNumber === 5 && tag.wireType === 0) || (tag.fieldNumber === 6 && tag.wireType === 2);
+    if (!isFilterField) result += value.slice(index, nextIndex);
+    if (!inserted && tag.fieldNumber === 2) {
+      result += filterFields.join("");
+      inserted = true;
+    }
+    index = nextIndex;
+  }
+  return inserted ? result : result + filterFields.join("");
 }
 
 function encodeVarint(value: number): string {

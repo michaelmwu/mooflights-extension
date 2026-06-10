@@ -457,6 +457,19 @@ describe("Google Flights booking option parser", () => {
     expect(countOccurrences(decodeTfsText(preservedTfs), "\x28\x00\x32\x02KE")).toBe(2);
   });
 
+  it("normalizes trailing filters on the next active multicity leg", () => {
+    const url =
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhprEgoyMDI2LTA4LTI3Ih8KA0FLTBIKMjAyNi0wOC0yNxoDTkFOKgJGSjIDNDEwIh8KA05BThIKMjAyNi0wOC0yOBoDTlJUKgJGSjIDMzUxKAEyAkZKagcIARIDQUtMcgwIAxIIL20vMDdkZmsaOxIKMjAyNy0wNC0yMWoMCAMSCC9tLzA3ZGZrcgcIARIDTUVMcgcIARIDU1lEcgcIARIDQUtMKAEyAkZKQAFIA3ABggELCP///////////wGYAQM%3D&tfu=CnRDalJJU25kUGJrOTFPVU5FTFhOQlFqQTBTbEZDUnkwdExTMHRMUzB0TFhSc2FuY3hNa0ZCUVVGQlIyOXZMWFJuUkU5blptVkJFZ3RHU2pReE1IeEdTak0xTVJvTENNeWpFQkFDR2dOVlUwUTRISERNb3hBPRIGCAAgAigBIgA&curr=USD";
+
+    const preservedUrl = googleFlightsPreserveMulticityFiltersUrl(url);
+    const preservedTfs = decodeTfsText(new URL(preservedUrl).searchParams.get("tfs") || "");
+
+    expect(preservedUrl).not.toBe(url);
+    expect(countOccurrences(preservedTfs, "\x28\x01")).toBe(2);
+    expect(countOccurrences(preservedTfs, "\x32\x02FJ")).toBe(2);
+    expect(preservedTfs).toContain("\x12\x0a2027-04-21\x28\x01\x32\x02FJ");
+  });
+
   it("preserves later multicity slice filters instead of overwriting them", () => {
     const url = `https://www.google.com/travel/flights/search?tfs=${encodeTfsText([
       tfsSearchSlice("2026-06-03", "HKG", "TPE", "\x28\x00", "\x32\x02CI"),
@@ -473,13 +486,21 @@ describe("Google Flights booking option parser", () => {
     expect(preservedTfs).toContain("\x32\x02BR\x28\x00");
   });
 
-  it("leaves later multicity slices unchanged when they already have stop and airline filters", () => {
+  it("preserves existing later multicity filters while normalizing their position", () => {
     const url = `https://www.google.com/travel/flights/search?tfs=${encodeTfsText([
       tfsSearchSlice("2026-06-03", "HKG", "TPE", "\x28\x00", "\x32\x02CI"),
       tfsSearchSlice("2026-06-05", "TPE", "HKG", "\x28\x01", "\x32\x02BR"),
     ])}`;
 
-    expect(googleFlightsPreserveMulticityFiltersUrl(url)).toBe(url);
+    const preservedUrl = googleFlightsPreserveMulticityFiltersUrl(url);
+    const preservedTfs = decodeTfsText(new URL(preservedUrl).searchParams.get("tfs") || "");
+
+    expect(preservedUrl).not.toBe(url);
+    expect(countOccurrences(preservedTfs, "\x32\x02CI")).toBe(1);
+    expect(countOccurrences(preservedTfs, "\x32\x02BR")).toBe(1);
+    expect(countOccurrences(preservedTfs, "\x28\x00")).toBe(1);
+    expect(countOccurrences(preservedTfs, "\x28\x01")).toBe(1);
+    expect(preservedTfs).toContain("\x12\x0a2026-06-05\x28\x01\x32\x02BR");
   });
 
   it("does not backfill filters from a later multicity slice into earlier slices", () => {
