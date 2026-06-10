@@ -1,8 +1,8 @@
 import {
+  countryComparisonUrl,
   type GoogleFlightsCountryResult,
   type GoogleFlightsSearchCountryResult,
-  googleFlightsCountryUrl,
-} from "../shared/googleFlightsBooking";
+} from "../shared/countryComparison";
 import type { RemoteProviderMetadata } from "../shared/types";
 
 type RuntimeMessage = {
@@ -310,7 +310,7 @@ async function compareGoogleFlightsCountry(
   country: string,
   baselineOptionCount: number,
 ): Promise<GoogleFlightsCountryResult> {
-  const url = googleFlightsCountryUrl(baseUrl, country);
+  const url = countryComparisonUrl(baseUrl, country);
   let tabId: number | undefined;
   try {
     const tab = await createInactiveTabPaced(url);
@@ -345,7 +345,7 @@ async function compareGoogleFlightsSearchCountry(
   baselineResultCount: number,
   onProgress?: (result: GoogleFlightsSearchCountryResult) => void,
 ): Promise<GoogleFlightsSearchCountryResult> {
-  const url = googleFlightsCountryUrl(baseUrl, country);
+  const url = countryComparisonUrl(baseUrl, country);
   let tabId: number | undefined;
   let sentProgress = false;
   try {

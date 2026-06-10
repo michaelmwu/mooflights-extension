@@ -78,6 +78,152 @@ test("opens Google Flights country comparison tabs from a routed US booking page
   ]);
 });
 
+test("opens Skyscanner country comparison tabs from a routed final compare page", async ({
+  context,
+  extensionServiceWorker,
+  page,
+}) => {
+  const pageUrl =
+    "https://www.skyscanner.com/transport/flights/cju/tyoa/260624/config/10562-2606241255--32128-0-14788-2606241525?adultsv2=1&cabinclass=economy";
+  await setGoogleFlightsCountries(extensionServiceWorker, ["US", "KR"]);
+  await routeSkyscannerPricingFixtures(context);
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel).toBeAttached();
+  await expect(panel.getByText("Compare country pricing")).toBeVisible();
+  await expect(panel.getByRole("button", { name: "Compare (2)" })).toBeEnabled();
+
+  const comparisonTabPromise = waitForSkyscannerComparisonTab(context, "KR");
+  await panel.getByRole("button", { name: "Compare (2)" }).click();
+
+  const comparisonTab = await comparisonTabPromise;
+  const comparisonUrl = skyscannerTargetUrl(new URL(comparisonTab.url()));
+  expect(comparisonUrl.hostname).toBe("www.skyscanner.co.kr");
+  expect(comparisonUrl.searchParams.get("currency")).toBe("USD");
+});
+
+test("shows Skyscanner country comparison on routed multi-city final compare pages", async ({
+  context,
+  extensionServiceWorker,
+  page,
+}) => {
+  const pageUrl =
+    "https://www.skyscanner.com/transport/d/cju/2026-06-24/tyoa/tyoa/2026-06-27/sela/config/10562-2606241255--32128-0-14788-2606241525%7C14788-2606271400--32128-0-12409-2606271630?adultsv2=1&cabinclass=economy&childrenv2=";
+  await setGoogleFlightsCountries(extensionServiceWorker, ["US", "KR"]);
+  await routeSkyscannerPricingFixtures(context);
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel).toBeAttached();
+  await expect(panel.getByText("Compare country pricing")).toBeVisible();
+  await expect(panel.getByRole("button", { name: "Compare (2)" })).toBeEnabled();
+});
+
+test("carries localized Skyscanner display currency into country comparison tabs", async ({
+  context,
+  extensionServiceWorker,
+  page,
+}) => {
+  const pageUrl =
+    "https://www.skyscanner.com/transport/flights/cju/tyoa/260624/config/10562-2606241255--32128-0-14788-2606241525?adultsv2=1&cabinclass=economy&locale=ja-JP";
+  await setGoogleFlightsCountries(extensionServiceWorker, ["US", "KR"]);
+  await routeSkyscannerPricingFixtures(context);
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel).toBeAttached();
+  await expect(panel.getByText("Compare country pricing")).toBeVisible();
+
+  const comparisonTabPromise = waitForSkyscannerComparisonTab(context, "KR");
+  await panel.getByRole("button", { name: "Compare (2)" }).click();
+
+  const comparisonUrl = skyscannerTargetUrl(new URL((await comparisonTabPromise).url()));
+  expect(comparisonUrl.searchParams.get("currency")).toBe("JPY");
+  expect(comparisonUrl.searchParams.get("locale")).toBe("ja-JP");
+});
+
+test("keeps the current Skyscanner price visible when comparing other countries", async ({
+  context,
+  extensionServiceWorker,
+  page,
+}) => {
+  const pageUrl =
+    "https://www.skyscanner.com/transport/flights/cju/tyoa/260624/config/10562-2606241255--32128-0-14788-2606241525?adultsv2=1&cabinclass=economy";
+  await setGoogleFlightsCountries(extensionServiceWorker, ["KR"]);
+  await routeSkyscannerPricingFixtures(context);
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel).toBeAttached();
+  await expect(panel.getByRole("button", { name: "Compare (1)" })).toBeEnabled();
+
+  await panel.getByRole("button", { name: "Compare (1)" }).click();
+
+  await expect(panel.getByText("United States")).toBeVisible();
+  await expect(panel.getByText("current", { exact: true })).toBeVisible();
+  await expect(panel.getByText("$210")).toBeVisible();
+  await expect(panel.getByText("South Korea", { exact: true })).toBeVisible({ timeout: 25_000 });
+});
+
+test("renders Skyscanner search row comparison badges from captured API responses", async ({
+  context,
+  extensionServiceWorker,
+  page,
+}) => {
+  const pageUrl =
+    "https://www.skyscanner.co.za/transport/flights/cju/nrt/260624/?adultsv2=1&cabinclass=economy&childrenv2=&rtn=0&outboundaltsenabled=false&inboundaltsenabled=false&currency=USD&locale=en-US&market=ZA&userSessionDataId=37a758a6-28c6-4733-ab8d-4501a8b360e8&preferdirects=false";
+  await setGoogleFlightsCountries(extensionServiceWorker, ["US", "KR"]);
+  await routeSkyscannerSearchFixtures(context);
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel).toBeAttached();
+  await expect(panel.getByText("Compare visible flight rows")).toBeVisible();
+  await panel.getByRole("button", { name: "Clear" }).click();
+  const countrySearch = panel.locator('[data-role="country-search"]');
+  await countrySearch.fill("US");
+  await countrySearch.press("Enter");
+  await countrySearch.fill("KR");
+  await countrySearch.press("Enter");
+  await expect(panel.getByRole("button", { name: "Compare rows (2)" })).toBeEnabled();
+
+  await panel.getByRole("button", { name: "Compare rows (2)" }).click();
+  await expect(page.locator("[data-moo-flights-search-badge]", { hasText: "South Korea $180" })).toBeVisible();
+});
+
+test("renders Skyscanner row comparison on routed multi-city search pages", async ({
+  context,
+  extensionServiceWorker,
+  page,
+}) => {
+  const pageUrl =
+    "https://www.skyscanner.com/transport/d/cju/2026-06-24/tyoa/tyoa/2026-06-27/sela/?adultsv2=1&cabinclass=economy&childrenv2=";
+  await setGoogleFlightsCountries(extensionServiceWorker, ["US", "KR"]);
+  await routeSkyscannerSearchFixtures(context);
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel).toBeAttached();
+  await expect(panel.getByText("Compare visible flight rows")).toBeVisible();
+  await panel.getByRole("button", { name: "Clear" }).click();
+  const countrySearch = panel.locator('[data-role="country-search"]');
+  await countrySearch.fill("US");
+  await countrySearch.press("Enter");
+  await countrySearch.fill("KR");
+  await countrySearch.press("Enter");
+  await expect(panel.getByRole("button", { name: "Compare rows (2)" })).toBeEnabled();
+
+  await panel.getByRole("button", { name: "Compare rows (2)" }).click();
+  await expect(page.locator("[data-moo-flights-search-badge]", { hasText: "South Korea $180" })).toBeVisible();
+});
+
 test("renders Google Flights cached country comparison prices on routed booking pages", async ({
   context,
   extensionServiceWorker,
@@ -132,6 +278,40 @@ async function routeGoogleFlightsBookingFixtures(context: BrowserContext): Promi
     await route.fulfill({
       contentType: "text/html",
       body: googleFlightsBookingFixture(route.request().url()),
+    });
+  });
+}
+
+async function routeSkyscannerPricingFixtures(context: BrowserContext): Promise<void> {
+  await context.route(/https:\/\/(?:[^/]+\.)?skyscanner\.[^/]+(?:\.[^/]+)?\/.*/, async (route) => {
+    const url = new URL(route.request().url());
+    if (!isSkyscannerTransportPath(url.pathname)) {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({ contentType: "text/html", body: skyscannerPricingFixture(url.toString()) });
+  });
+}
+
+async function routeSkyscannerSearchFixtures(context: BrowserContext): Promise<void> {
+  await context.route(/https:\/\/(?:[^/]+\.)?skyscanner\.[^/]+(?:\.[^/]+)?\/.*/, async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/g/radar/api/v2/web-unified-search/") {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(
+          skyscannerSearchApiFixture(url.toString(), route.request().headers()["x-skyscanner-market"]),
+        ),
+      });
+      return;
+    }
+    if (!isSkyscannerTransportPath(url.pathname)) {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      contentType: "text/html",
+      body: skyscannerSearchFixture(url.toString()),
     });
   });
 }
@@ -248,6 +428,237 @@ function googleFlightsCountryFixture(country: string): { cheapest: number; direc
   if (country === "CA") return { cheapest: 900, direct: 1120, provider: "Canada Deals" };
   if (country === "ZA") return { cheapest: 870, direct: 1300, provider: "South Africa Deals" };
   return { cheapest: 950, direct: 1050, provider: "Example Travel" };
+}
+
+function isSkyscannerTransportPath(pathname: string): boolean {
+  return pathname.startsWith("/transport/flights") || pathname.startsWith("/transport/d/");
+}
+
+function skyscannerPricingFixture(url: string): string {
+  const parsedUrl = new URL(url);
+  const country =
+    parsedUrl.hostname === "www.skyscanner.co.kr" || parsedUrl.searchParams.get("market") === "KR" ? "KR" : "US";
+  const displayCurrency = skyscannerFixtureDisplayCurrency(parsedUrl);
+  const cheapest = country === "KR" ? 180 : 210;
+  const second = cheapest + 12;
+  const currency = country === "KR" ? "Korean won" : "US dollars";
+  const symbol = country === "KR" ? "KRW " : "$";
+  return htmlFixture(`
+    <main>
+      <h1>Skyscanner pricing fixture</h1>
+      <div class="ProviderListTitle_header__N2IzY">
+        <span class="ProviderListTitle_visuallyHidden__Mzg5M">${skyscannerFixtureCurrencyLabel(displayCurrency, parsedUrl)}</span>
+        <p class="ProviderListTitle_subHeaderContainer__OGY4N">
+          <span class="ProviderListTitle_subHeaderText__MmM2O">${skyscannerFixtureCurrencyLabel(displayCurrency, parsedUrl)}</span>
+        </p>
+      </div>
+      <ol role="list" class="PricingOptions_list__YTlkY">
+        <li>
+          <div data-testid="PricingItem" class="PricingItem_pricingItemContainer__Y2YwO">
+            <div class="AgentDetails_agentDetails__MGEyM">
+              <p class="BpkText_bpk-text__ZWFlO">Flightnetwork ${country}</p>
+              <h3 class="AgentDetails_visuallyHidden__MmJhM">Option 1: Flightnetwork ${country}</h3>
+            </div>
+            <div data-testid="CtaSection">
+              <div class="TotalPrice_totalPrice__ZGMwZ">
+                <p class="TotalPrice_visuallyHidden__NmEzM">${cheapest} ${currency} total.</p>
+                <div class="Price_pricingItemPrice__ZjBkZ" aria-hidden="true">
+                  <span>${symbol}${cheapest.toLocaleString()}</span>
+                </div>
+              </div>
+              <a href="/transport_deeplink/${country.toLowerCase()}/cheap" aria-label="Select Flightnetwork ${country}." data-testid="pricing-item-redirect-button">Select</a>
+            </div>
+          </div>
+        </li>
+        <li>
+          <div data-testid="PricingItem" class="PricingItem_pricingItemContainer__Y2YwO">
+            <div class="AgentDetails_agentDetails__MGEyM">
+              <p>Booking.com ${country}</p>
+              <h3>Option 2: Booking.com ${country}</h3>
+            </div>
+            <div data-testid="CtaSection">
+              <p class="TotalPrice_visuallyHidden__NmEzM">${second} ${currency} total.</p>
+              <a href="/transport_deeplink/${country.toLowerCase()}/booking" aria-label="Select Booking.com ${country}." data-testid="pricing-item-redirect-button">Select</a>
+            </div>
+          </div>
+        </li>
+      </ol>
+    </main>
+  `);
+}
+
+function skyscannerFixtureDisplayCurrency(url: URL): string {
+  return url.searchParams.get("currency") || (url.searchParams.get("locale") === "ja-JP" ? "JPY" : "USD");
+}
+
+function skyscannerFixtureCurrencyLabel(currency: string, url: URL): string {
+  return url.searchParams.get("locale") === "ja-JP" ? `${currency}での価格` : `Prices in ${currency}`;
+}
+
+function skyscannerSearchFixture(url: string): string {
+  const parsedUrl = new URL(url);
+  const country =
+    parsedUrl.hostname === "www.skyscanner.co.kr" || parsedUrl.searchParams.get("market") === "KR" ? "KR" : "US";
+  const price = country === "KR" ? 180 : 210;
+  return htmlFixture(`
+    <main>
+      <h1>Skyscanner search fixture</h1>
+      <section>
+        <div data-testid="itinerary-card" class="ItineraryCard">
+          <h2>Korean Air</h2>
+          <p>12:55 - 15:25</p>
+          <p>Nonstop · 2 hr 30 min</p>
+          <div class="PriceSection"><span>$${price}</span></div>
+          <a href="/transport/flights/cju/tyoa/260624/config/10562-2606241255--32128-0-14788-2606241525">Select</a>
+        </div>
+      </section>
+      <script>
+        fetch("/g/radar/api/v2/web-unified-search/", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ fixture: true })
+        }).catch(() => {});
+      </script>
+    </main>
+  `);
+}
+
+function skyscannerSearchApiFixture(url: string, marketHeader = ""): unknown {
+  const parsedUrl = new URL(url);
+  const country =
+    marketHeader === "KR" ||
+    parsedUrl.hostname === "www.skyscanner.co.kr" ||
+    parsedUrl.searchParams.get("market") === "KR"
+      ? "KR"
+      : "US";
+  const price = country === "KR" ? 180 : 210;
+  return {
+    itineraries: {
+      context: {
+        status: "complete",
+        totalResults: 1,
+      },
+      results: [
+        {
+          id: "10562-2606241255--32128-0-14788-2606241525",
+          price: {
+            raw: price,
+            formatted: `$${price}`,
+          },
+          legs: [
+            {
+              id: "10562-2606241255--32128-0-14788-2606241525",
+              durationInMinutes: 150,
+              stopCount: 0,
+              departure: "2026-06-24T12:55:00",
+              arrival: "2026-06-24T15:25:00",
+              carriers: {
+                marketing: [{ name: "Korean Air", alternateId: "KE" }],
+              },
+              segments: [
+                {
+                  origin: { displayCode: "CJU" },
+                  destination: { displayCode: "NRT" },
+                  departure: "2026-06-24T12:55:00",
+                  flightNumber: "2125",
+                  marketingCarrier: {
+                    name: "Korean Air",
+                    alternateId: "KE",
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  };
+}
+
+async function waitForSkyscannerComparisonTab(
+  context: BrowserContext,
+  country: string,
+  timeout = 15_000,
+): Promise<Page> {
+  const deadline = Date.now() + timeout;
+  const expectedMarket = skyscannerMarketForCountry(country);
+
+  return new Promise<Page>((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(
+      () => fail(new Error(`Timed out waiting for ${country} Skyscanner comparison tab.`)),
+      timeout,
+    );
+
+    function resolveOnce(page: Page): void {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      context.off("page", onPage);
+      resolve(page);
+    }
+
+    function fail(error: Error): void {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      context.off("page", onPage);
+      reject(error);
+    }
+
+    function watchPage(page: Page): void {
+      const remaining = Math.max(1, deadline - Date.now());
+      void page
+        .waitForURL(
+          (candidateUrl) => {
+            return skyscannerMarketFromUrl(candidateUrl) === expectedMarket;
+          },
+          { timeout: remaining },
+        )
+        .then(() => resolveOnce(page))
+        .catch(() => {});
+    }
+
+    function onPage(page: Page): void {
+      watchPage(page);
+    }
+
+    context.on("page", onPage);
+    for (const page of context.pages()) watchPage(page);
+  });
+}
+
+function skyscannerMarketForCountry(country: string): string {
+  const normalizedCountry = country.trim().toUpperCase();
+  return normalizedCountry === "GB" ? "UK" : normalizedCountry;
+}
+
+function skyscannerMarketFromUrl(url: URL): string {
+  const targetUrl = skyscannerTargetUrl(url);
+  if (targetUrl !== url) return skyscannerMarketFromUrl(targetUrl);
+  const market = url.searchParams.get("market");
+  if (market) return skyscannerMarketForCountry(market);
+  const hostname = url.hostname.toLowerCase();
+  if (hostname === "www.skyscanner.com") return "US";
+  if (hostname === "www.skyscanner.net" || hostname === "www.skyscanner.co.uk") return "UK";
+  if (hostname === "cn.skyscanner.com") return "CN";
+  if (hostname === "gr.skyscanner.com") return "GR";
+  if (hostname === "ro.skyscanner.com") return "RO";
+  const countryHostMatch = hostname.match(/^www\.skyscanner\.(?:co|com)\.([a-z]{2})$/);
+  if (countryHostMatch) return skyscannerMarketForCountry(countryHostMatch[1]);
+  const tldHostMatch = hostname.match(/^www\.skyscanner\.([a-z]{2})$/);
+  return tldHostMatch ? skyscannerMarketForCountry(tldHostMatch[1]) : "";
+}
+
+function skyscannerTargetUrl(url: URL): URL {
+  if (!url.pathname.startsWith("/sttc/px/captcha-v2/")) return url;
+  const encodedUrl = url.searchParams.get("url");
+  if (!encodedUrl) return url;
+  try {
+    return new URL(Buffer.from(encodedUrl, "base64").toString("utf8"), url.origin);
+  } catch {
+    return url;
+  }
 }
 
 function htmlFixture(body: string): string {

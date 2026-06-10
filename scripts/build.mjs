@@ -35,6 +35,11 @@ const entries = [
     format: "iife",
   },
   {
+    entryPoints: ["src/content/skyscannerSearchPageHook.ts"],
+    outfile: "content/skyscannerSearchPageHook.js",
+    format: "iife",
+  },
+  {
     entryPoints: ["src/background/serviceWorker.ts"],
     outfile: "background/serviceWorker.js",
     format: "esm",
@@ -78,6 +83,57 @@ const staticFiles = [
   ["src/options/index.html", "options/index.html"],
 ];
 
+const skyscannerWebAccessibleMatches = [
+  "https://www.skyscanner.ae/*",
+  "https://www.skyscanner.at/*",
+  "https://www.skyscanner.be/*",
+  "https://www.skyscanner.ca/*",
+  "https://www.skyscanner.ch/*",
+  "https://www.skyscanner.cl/*",
+  "https://cn.skyscanner.com/*",
+  "https://www.skyscanner.co.id/*",
+  "https://www.skyscanner.co.il/*",
+  "https://www.skyscanner.co.in/*",
+  "https://www.skyscanner.co.kr/*",
+  "https://www.skyscanner.co.nz/*",
+  "https://www.skyscanner.co.th/*",
+  "https://www.skyscanner.co.uk/*",
+  "https://www.skyscanner.co.za/*",
+  "https://www.skyscanner.com/*",
+  "https://www.skyscanner.com.ar/*",
+  "https://www.skyscanner.com.au/*",
+  "https://www.skyscanner.com.br/*",
+  "https://www.skyscanner.com.co/*",
+  "https://www.skyscanner.com.eg/*",
+  "https://www.skyscanner.com.hk/*",
+  "https://www.skyscanner.com.mx/*",
+  "https://www.skyscanner.com.my/*",
+  "https://www.skyscanner.com.pe/*",
+  "https://www.skyscanner.com.ph/*",
+  "https://www.skyscanner.com.sg/*",
+  "https://www.skyscanner.com.tr/*",
+  "https://www.skyscanner.com.tw/*",
+  "https://www.skyscanner.com.ua/*",
+  "https://www.skyscanner.com.vn/*",
+  "https://www.skyscanner.de/*",
+  "https://www.skyscanner.dk/*",
+  "https://www.skyscanner.es/*",
+  "https://www.skyscanner.fi/*",
+  "https://www.skyscanner.fr/*",
+  "https://gr.skyscanner.com/*",
+  "https://www.skyscanner.ie/*",
+  "https://www.skyscanner.it/*",
+  "https://www.skyscanner.jp/*",
+  "https://www.skyscanner.net/*",
+  "https://www.skyscanner.nl/*",
+  "https://www.skyscanner.no/*",
+  "https://www.skyscanner.pl/*",
+  "https://www.skyscanner.pt/*",
+  "https://ro.skyscanner.com/*",
+  "https://www.skyscanner.ru/*",
+  "https://www.skyscanner.se/*",
+];
+
 async function copyStaticFiles() {
   const manifest = JSON.parse(await readFile(resolve(root, "src/manifest.json"), "utf8"));
   manifest.host_permissions = Array.from(
@@ -97,6 +153,14 @@ async function copyStaticFiles() {
       // Chrome MV3 web_accessible_resources matches are origin-scoped; path-scoped
       // Google Flights patterns are rejected as invalid match patterns.
       matches: ["https://www.google.com/*", "https://google.com/*"],
+      resources: [
+        "assets/extension-icons/icon-32.png",
+        "assets/extension-icons/icon-48.png",
+        "assets/extension-icons/icon-64.png",
+      ],
+    },
+    {
+      matches: skyscannerWebAccessibleMatches,
       resources: [
         "assets/extension-icons/icon-32.png",
         "assets/extension-icons/icon-48.png",

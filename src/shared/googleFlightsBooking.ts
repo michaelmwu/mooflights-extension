@@ -1,3 +1,10 @@
+import type {
+  GoogleFlightsBookingOption,
+  GoogleFlightsCountryResult,
+  GoogleFlightsSearchCountryResult,
+  GoogleFlightsSearchResult,
+} from "./countryComparison";
+
 export const DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES = [
   "US",
   "CA",
@@ -33,50 +40,6 @@ const GOOGLE_FLIGHTS_CURRENCIES = new Set(
     " ",
   ),
 );
-
-export type GoogleFlightsBookingOption = {
-  provider: string;
-  price: number;
-  currency: string;
-  priceText: string;
-  isDirect: boolean;
-  bookingUrl?: string;
-};
-
-export type GoogleFlightsCountryResult = {
-  country: string;
-  url: string;
-  options: GoogleFlightsBookingOption[];
-  cheapest?: GoogleFlightsBookingOption;
-  direct?: GoogleFlightsBookingOption;
-  status: "ready" | "sparse" | "empty" | "error";
-  refreshed?: boolean;
-  error?: string;
-};
-
-export type GoogleFlightsSearchResult = {
-  rowKey: string;
-  matchKey: string;
-  rowIndex: number;
-  price: number;
-  currency: string;
-  priceText: string;
-  summaryText: string;
-  carrierText?: string;
-  timeText?: string;
-  durationText?: string;
-  stopsText?: string;
-  itineraryKey?: string;
-  matchConfidence: "high" | "medium";
-};
-
-export type GoogleFlightsSearchCountryResult = {
-  country: string;
-  url: string;
-  results: GoogleFlightsSearchResult[];
-  status: "ready" | "empty" | "error";
-  error?: string;
-};
 
 export type GoogleFlightsFlightSegment = {
   origin: string;

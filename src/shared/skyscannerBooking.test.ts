@@ -1,0 +1,191 @@
+import { countryComparisonUrl } from "./countryComparison";
+import {
+  isSkyscannerFinalComparePageUrl,
+  isSkyscannerSearchPageUrl,
+  parseSkyscannerPricingOptions,
+  parseSkyscannerSearchApiResponse,
+  skyscannerCountryCodeFromUrl,
+  skyscannerCountryUrl,
+  skyscannerPanelPageKey,
+} from "./skyscannerBooking";
+
+describe("Skyscanner country comparison parser", () => {
+  it("recognizes final compare pages", () => {
+    const url =
+      "https://www.skyscanner.com/transport/flights/cju/tyoa/260624/config/10562-2606241255--32128-0-14788-2606241525?adultsv2=1&cabinclass=economy";
+
+    expect(isSkyscannerFinalComparePageUrl(url)).toBe(true);
+    expect(skyscannerPanelPageKey(url, "KR", true)).toBe(
+      "/transport/flights/cju/tyoa/260624/config/10562-2606241255--32128-0-14788-2606241525?adultsv2=1&cabinclass=economy&market=KR",
+    );
+    expect(skyscannerPanelPageKey(url, "KR", false)).toBe(
+      "/transport/flights/cju/tyoa/260624/config/10562-2606241255--32128-0-14788-2606241525?adultsv2=1&cabinclass=economy",
+    );
+  });
+
+  it("recognizes multi-city search and final compare pages", () => {
+    const searchUrl =
+      "https://www.skyscanner.com/transport/d/cju/2026-06-24/tyoa/tyoa/2026-06-27/sela/?adultsv2=1&cabinclass=economy&childrenv2=";
+    const finalUrl =
+      "https://www.skyscanner.com/transport/d/cju/2026-06-24/tyoa/tyoa/2026-06-27/sela/config/10562-2606241255--32128-0-14788-2606241525%7C14788-2606271400--32128-0-12409-2606271630?adultsv2=1&cabinclass=economy&childrenv2=";
+
+    expect(isSkyscannerSearchPageUrl(searchUrl)).toBe(true);
+    expect(isSkyscannerFinalComparePageUrl(finalUrl)).toBe(true);
+    expect(skyscannerCountryUrl(finalUrl, "KR")).toContain("https://www.skyscanner.co.kr/transport/d/");
+    expect(skyscannerCountryUrl(finalUrl, "KR")).toContain("market=KR");
+    expect(skyscannerCountryUrl(finalUrl, "KR")).toContain("currency=USD");
+  });
+
+  it("builds Korea country URLs by switching hostnames and carrying currency", () => {
+    const url =
+      "https://www.skyscanner.com/transport/flights/cju/tyoa/260624/config/10562-2606241255--32128-0-14788-2606241525?adultsv2=1&cabinclass=economy";
+
+    expect(skyscannerCountryUrl(url, "KR")).toBe(
+      "https://www.skyscanner.co.kr/transport/flights/cju/tyoa/260624/config/10562-2606241255--32128-0-14788-2606241525?adultsv2=1&cabinclass=economy&currency=USD&market=KR",
+    );
+    expect(countryComparisonUrl(url, "KR")).toContain("https://www.skyscanner.co.kr/");
+    expect(
+      skyscannerCountryCodeFromUrl("https://www.skyscanner.co.kr/transport/flights/cju/tyoa/260624/config/abc"),
+    ).toBe("KR");
+  });
+
+  it("builds Japan country URLs using the jp hostname", () => {
+    const url =
+      "https://www.skyscanner.com/transport/flights/cju/tyoa/260624/config/10562-2606241255--32128-0-14788-2606241525?adultsv2=1&cabinclass=economy&locale=en-US&currency=USD";
+
+    const japanUrl = skyscannerCountryUrl(url, "JP");
+
+    expect(japanUrl).toBe(
+      "https://www.skyscanner.jp/transport/flights/cju/tyoa/260624/config/10562-2606241255--32128-0-14788-2606241525?adultsv2=1&cabinclass=economy&locale=en-US&currency=USD&market=JP",
+    );
+    expect(skyscannerCountryCodeFromUrl(japanUrl)).toBe("JP");
+  });
+
+  it("preserves Skyscanner locale while switching market and keeping USD currency", () => {
+    const url =
+      "https://www.skyscanner.com/transport/flights/cju/nrt/260624/config/10562-2606241255--32128-0-14788-2606241525?adultsv2=1&cabinclass=economy&childrenv2=&ref=home&rtn=0&outboundaltsenabled=false&inboundaltsenabled=false&currency=USD&locale=en-US&market=US&preferdirects=false";
+
+    expect(skyscannerCountryUrl(url, "ZA", "USD")).toBe(
+      "https://www.skyscanner.co.za/transport/flights/cju/nrt/260624/config/10562-2606241255--32128-0-14788-2606241525?adultsv2=1&cabinclass=economy&childrenv2=&ref=home&rtn=0&outboundaltsenabled=false&inboundaltsenabled=false&currency=USD&locale=en-US&market=ZA&preferdirects=false",
+    );
+  });
+
+  it("parses final compare pricing rows", () => {
+    document.body.innerHTML = `
+      <ol role="list" class="PricingOptions_list__YTlkY">
+        <li>
+          <div data-testid="PricingItem" class="PricingItem_pricingItemContainer__Y2YwO">
+            <div class="AgentDetails_agentDetails__MGEyM">
+              <p class="BpkText_bpk-text__ZWFlO">Flightnetwork</p>
+              <h3 class="AgentDetails_visuallyHidden__MmJhM">Option 1: Flightnetwork</h3>
+            </div>
+            <div data-testid="CtaSection">
+              <div class="TotalPrice_totalPrice__ZGMwZ">
+                <p class="TotalPrice_visuallyHidden__NmEzM">$210 total.</p>
+                <div class="Price_pricingItemPrice__ZjBkZ" aria-hidden="true">
+                  <span>$210</span>
+                </div>
+              </div>
+              <a
+                href="/transport_deeplink/4.0/JP/en-US/USD/fnjp/1/10562.14788.2026-06-24/air/trava/flights"
+                aria-label="Select Flightnetwork."
+                data-testid="pricing-item-redirect-button"
+              >Select</a>
+            </div>
+          </div>
+        </li>
+        <li>
+          <div data-testid="PricingItem" class="PricingItem_pricingItemContainer__Y2YwO">
+            <div class="AgentDetails_agentDetails__MGEyM">
+              <p>Booking.com</p>
+              <h3>Option 2: Booking.com</h3>
+            </div>
+            <div data-testid="CtaSection">
+              <p class="TotalPrice_visuallyHidden__NmEzM">$211 total.</p>
+              <a href="/transport_deeplink/booking" aria-label="Select Booking.com." data-testid="pricing-item-redirect-button">Select</a>
+            </div>
+          </div>
+        </li>
+      </ol>
+    `;
+
+    const result = parseSkyscannerPricingOptions(
+      document,
+      "JP",
+      "https://www.skyscanner.com/transport/flights/cju/tyoa/260624/config/example",
+    );
+
+    expect(result.status).toBe("ready");
+    expect(result.options.map((option) => `${option.provider}:${option.price}`)).toEqual([
+      "Flightnetwork:210",
+      "Booking.com:211",
+    ]);
+    expect(result.cheapest).toMatchObject({
+      provider: "Flightnetwork",
+      priceText: "$210",
+      bookingUrl:
+        "https://www.skyscanner.com/transport_deeplink/4.0/JP/en-US/USD/fnjp/1/10562.14788.2026-06-24/air/trava/flights",
+    });
+  });
+
+  it("parses unified-search API itinerary rows", () => {
+    const payload = {
+      itineraries: {
+        context: { status: "complete", totalResults: 1 },
+        results: [
+          {
+            id: "10562-2606241255--32128-0-14788-2606241525",
+            price: {
+              raw: 212,
+              formatted: "$212",
+            },
+            legs: [
+              {
+                id: "10562-2606241255--32128-0-14788-2606241525",
+                durationInMinutes: 150,
+                stopCount: 0,
+                departure: "2026-06-24T12:55:00",
+                arrival: "2026-06-24T15:25:00",
+                carriers: {
+                  marketing: [{ name: "Korean Air", alternateId: "KE" }],
+                },
+                segments: [
+                  {
+                    origin: { displayCode: "CJU" },
+                    destination: { displayCode: "NRT" },
+                    departure: "2026-06-24T12:55:00",
+                    flightNumber: "2125",
+                    marketingCarrier: {
+                      name: "Korean Air",
+                      alternateId: "KE",
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = parseSkyscannerSearchApiResponse(
+      payload,
+      "US",
+      "https://www.skyscanner.com/transport/flights/cju/tyoa/260624/",
+    );
+
+    expect(result.status).toBe("ready");
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0]).toMatchObject({
+      price: 212,
+      priceText: "$212",
+      currency: "USD",
+      carrierText: "Korean Air, KE",
+      timeText: "12:55-15:25",
+      durationText: "2 hr 30 min",
+      stopsText: "Nonstop",
+      itineraryKey: "10562-2606241255--32128-0-14788-2606241525",
+      matchConfidence: "high",
+    });
+  });
+});
