@@ -102,6 +102,20 @@ test("renders Google Flights cached country comparison prices on routed booking 
   await expect(panel.getByText(/2 option\(s\)/)).toHaveCount(3);
 });
 
+test("does not show multicity filter preservation on Google Flights booking pages", async ({ context, page }) => {
+  await routeGoogleFlightsBookingFixtures(context);
+  const pageUrl =
+    "https://www.google.com/travel/flights/booking?tfs=CBwQAhppEgoyMDI2LTA4LTI3Ih8KA0FLTBIKMjAyNi0wOC0yNxoDTkFOKgJGSjIDNDEwIh8KA05BThIKMjAyNi0wOC0yOBoDTlJUKgJGSjIDMzUxMgJGSmoHCAESA0FLTHIMCAMSCC9tLzA3ZGZrGncSCjIwMjctMDQtMjEiHwoDTlJUEgoyMDI3LTA0LTIxGgNOQU4qAkZKMgMzNTAiHwoDTkFOEgoyMDI3LTA0LTIyGgNBS0wqAkZKMgM0MTFqDAgDEggvbS8wN2Rma3IHCAESA01FTHIHCAESA1NZRHIHCAESA0FLTEABSANwAYIBCwj___________8BmAED&tfu=CnhDalJJVkZZeWFWZHBaMkpTUVZsQlExVnVVa0ZDUnkwdExTMHRMUzB0TFhSaVlucDFPRUZCUVVGQlIyOXdRWEpyUWs5SVdUaEJFZzFHU2pNMU1IeEdTalF4TVNNeUdnc0l6Y2dSRUFJYUExVlRSRGdjY00zSUVRPT0SBggAIAIoASIDCgEw&curr=USD";
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel).toBeAttached();
+  await expect(panel.getByText("Compare country pricing")).toBeVisible();
+  await expect(panel.getByText("Preserve stops and airline filters")).toHaveCount(0);
+  await expect(page).toHaveURL(pageUrl);
+});
+
 test("does not backfill later Google Flights multicity filters into earlier legs", async ({ context, page }) => {
   await routeGoogleFlightsBookingFixtures(context);
   const pageUrl = `https://www.google.com/travel/flights/search?tfs=${encodeTfsText([
@@ -153,6 +167,31 @@ test("detects silent Google Flights multicity SPA URL changes before preserving 
   }, selectedLegUrl);
   expect(page.url()).toBe(selectedLegUrl);
   await expect.poll(() => page.url()).not.toBe(selectedLegUrl);
+
+  const preservedTfs = decodeTfsText(new URL(page.url()).searchParams.get("tfs") || "");
+  expect(countOccurrences(preservedTfs, "\x32\x02FJ")).toBe(2);
+  expect(preservedTfs).toContain("\x12\x0a2027-04-21\x32\x02FJ");
+});
+
+test("preserves filters after a silent Google Flights booking-to-search URL change", async ({ context, page }) => {
+  await routeGoogleFlightsBookingFixtures(context);
+  const bookingUrl =
+    "https://www.google.com/travel/flights/booking?tfs=CBwQAhppEgoyMDI2LTA4LTI3Ih8KA0FLTBIKMjAyNi0wOC0yNxoDTkFOKgJGSjIDNDEwIh8KA05BThIKMjAyNi0wOC0yOBoDTlJUKgJGSjIDMzUxMgJGSmoHCAESA0FLTHIMCAMSCC9tLzA3ZGZrGncSCjIwMjctMDQtMjEiHwoDTlJUEgoyMDI3LTA0LTIxGgNOQU4qAkZKMgMzNTAiHwoDTkFOEgoyMDI3LTA0LTIyGgNBS0wqAkZKMgM0MTFqDAgDEggvbS8wN2Rma3IHCAESA01FTHIHCAESA1NZRHIHCAESA0FLTEABSANwAYIBCwj___________8BmAED&tfu=CnhDalJJVkZZeWFWZHBaMkpTUVZsQlExVnVVa0ZDUnkwdExTMHRMUzB0TFhSaVlucDFPRUZCUVVGQlIyOXdRWEpyUWs5SVdUaEJFZzFHU2pNMU1IeEdTalF4TVNNeUdnc0l6Y2dSRUFJYUExVlRSRGdjY00zSUVRPT0SBggAIAIoASIDCgEw&curr=USD";
+  const searchUrl =
+    "https://www.google.com/travel/flights/search?tfs=CBwQAhppEgoyMDI2LTA4LTI3Ih8KA0FLTBIKMjAyNi0wOC0yNxoDTkFOKgJGSjIDNDEwIh8KA05BThIKMjAyNi0wOC0yOBoDTlJUKgJGSjIDMzUxMgJGSmoHCAESA0FLTHIMCAMSCC9tLzA3ZGZrGjUSCjIwMjctMDQtMjFqDAgDEggvbS8wN2Rma3IHCAESA01FTHIHCAESA1NZRHIHCAESA0FLTEABSANwAYIBCwj___________8BmAED&tfu=CnRDalJJVW1wVlpVeDZjM0ZHTjAxQlEzYzBOVkZDUnkwdExTMHRMUzB0ZEdKaWEySXlOa0ZCUVVGQlIyOXdRWFJqUlZwMk0wVkJFZ3RHU2pReE1IeEdTak0xTVJvTENKU2xFQkFDR2dOVlUwUTRISENVcFJBPRIGCAAgAigBIgMKATA&curr=USD";
+
+  await page.goto(bookingUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel).toBeAttached();
+  await expect(panel.getByText("Preserve stops and airline filters")).toHaveCount(0);
+
+  await page.evaluate((nextUrl) => {
+    history.pushState(history.state, "", nextUrl);
+  }, searchUrl);
+  expect(page.url()).toBe(searchUrl);
+  await expect.poll(() => page.url()).not.toBe(searchUrl);
+  await expect(panel.getByText("Preserve stops and airline filters")).toBeVisible();
 
   const preservedTfs = decodeTfsText(new URL(page.url()).searchParams.get("tfs") || "");
   expect(countOccurrences(preservedTfs, "\x32\x02FJ")).toBe(2);

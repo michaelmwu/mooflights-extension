@@ -1032,7 +1032,6 @@ function render(): void {
               mode === "search"
                 ? renderSearchComparisonPanel(selectedCodes)
                 : `${renderMilesEstimatePrompt(matrixSearch)}
-                  ${renderMulticityFilterPreservation(matrixSearch)}
                   <div class="section-heading">Compare country pricing</div>
                   ${renderCountrySelect(selectedCodes)}
                   <div class="actions">
@@ -1264,6 +1263,7 @@ function hasMultipleGoogleFlightsLegs(
 }
 
 function preserveCurrentMulticityFilters(): void {
+  if (currentGoogleFlightsPanelMode() !== "search") return;
   if (!state.preserveMulticityFilters || !hasMultipleGoogleFlightsLegs()) return;
   const nextUrl = googleFlightsPreserveMulticityFiltersUrl(window.location.href);
   if (!nextUrl) return;
