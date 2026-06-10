@@ -29,7 +29,8 @@
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:real": "node scripts/run-real-e2e.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "webstore:submit": "node scripts/submit-chrome-webstore.mjs"
   },
   "dependencies": {
     "react": "^19.2.3",

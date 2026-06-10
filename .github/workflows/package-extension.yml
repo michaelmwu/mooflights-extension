@@ -84,17 +84,17 @@ jobs:
       - name: Package extension
         env:
           CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
-          MU_TRAVEL_CRX_KEY_B64: ${{ secrets.MU_TRAVEL_CRX_KEY_B64 }}
-          MU_TRAVEL_REQUIRE_CRX_KEY: ${{ env.RELEASE_TAG != '' && '1' || '' }}
+          MOOFLIGHTS_CRX_KEY_B64: ${{ secrets.MOOFLIGHTS_CRX_KEY_B64 }}
+          MOOFLIGHTS_REQUIRE_CRX_KEY: ${{ env.RELEASE_TAG != '' && '1' || '' }}
         run: bun run package
 
       - name: Upload package artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: mu-travel-flights-extension
+          name: mooflights-extension
           path: |
-            artifacts/mu-travel-flights-*.zip
-            artifacts/mu-travel-flights-*.crx
+            artifacts/mooflights-*.zip
+            artifacts/mooflights-*.crx
           if-no-files-found: error
 
       - name: Attach package to GitHub release
@@ -126,14 +126,14 @@ jobs:
               edit_args+=(--prerelease=false)
             fi
             gh release edit "${edit_args[@]}"
-            gh release upload "${RELEASE_TAG}" artifacts/mu-travel-flights-*.zip artifacts/mu-travel-flights-*.crx \
+            gh release upload "${RELEASE_TAG}" artifacts/mooflights-*.zip artifacts/mooflights-*.crx \
               --repo "${GITHUB_REPOSITORY}" \
               --clobber
           else
             args=(
               "${RELEASE_TAG}"
-              artifacts/mu-travel-flights-*.zip
-              artifacts/mu-travel-flights-*.crx
+              artifacts/mooflights-*.zip
+              artifacts/mooflights-*.crx
               --repo "${GITHUB_REPOSITORY}"
               --title "${RELEASE_TAG}"
               --notes "${release_notes}"
