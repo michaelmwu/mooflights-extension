@@ -135,6 +135,30 @@ test("normalizes preserved filters on a clicked Google Flights multicity leg", a
   expect(preservedTfs).toContain("\x12\x0a2027-04-21\x28\x01\x32\x02FJ");
 });
 
+test("detects silent Google Flights multicity SPA URL changes before preserving filters", async ({ context, page }) => {
+  await routeGoogleFlightsBookingFixtures(context);
+  const startUrl =
+    "https://www.google.com/travel/flights/search?tfs=CBwQAhonEgoyMDI2LTA4LTI3MgJGSmoHCAESA0FLTHIMCAMSCC9tLzA3ZGZrGjUSCjIwMjctMDQtMjFqDAgDEggvbS8wN2Rma3IHCAESA01FTHIHCAESA1NZRHIHCAESA0FLTEABSANwAYIBCwj___________8BmAED&tfu=EgYIACACKAEiAA&curr=USD";
+  const selectedLegUrl =
+    "https://www.google.com/travel/flights/search?tfs=CBwQAhppEgoyMDI2LTA4LTI3Ih8KA0FLTBIKMjAyNi0wOC0yNxoDTkFOKgJGSjIDNDEwIh8KA05BThIKMjAyNi0wOC0yOBoDTlJUKgJGSjIDMzUxMgJGSmoHCAESA0FLTHIMCAMSCC9tLzA3ZGZrGjUSCjIwMjctMDQtMjFqDAgDEggvbS8wN2Rma3IHCAESA01FTHIHCAESA1NZRHIHCAESA0FLTEABSANwAYIBCwj___________8BmAED&tfu=CnRDalJJZFhFNFJtRjNOakIyWWpCQlFtOUxRVUZDUnkwdExTMHRMUzB0TFhSc2NtNHhNMEZCUVVGQlIyOXdRVUZqUzA5UmNtdEJFZ3RHU2pReE1IeEdTak0xTVJvTENNeWpFQkFDR2dOVlUwUTRISERNb3hBPRIGCAAgAigBIgMKATA&curr=USD";
+
+  await page.goto(startUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel).toBeAttached();
+  await expect(panel.getByText("Preserve stops and airline filters")).toBeVisible();
+
+  await page.evaluate((nextUrl) => {
+    history.pushState(history.state, "", nextUrl);
+  }, selectedLegUrl);
+  expect(page.url()).toBe(selectedLegUrl);
+  await expect.poll(() => page.url()).not.toBe(selectedLegUrl);
+
+  const preservedTfs = decodeTfsText(new URL(page.url()).searchParams.get("tfs") || "");
+  expect(countOccurrences(preservedTfs, "\x32\x02FJ")).toBe(2);
+  expect(preservedTfs).toContain("\x12\x0a2027-04-21\x32\x02FJ");
+});
+
 test("fills missing Google Flights multicity filters only after the source leg", async ({ context, page }) => {
   await routeGoogleFlightsBookingFixtures(context);
   const pageUrl = `https://www.google.com/travel/flights/search?tfs=${encodeTfsText([

@@ -791,20 +791,27 @@ function isOwnSearchAnnotationNode(node: Node): boolean {
 }
 
 function installNavigationObserver(schedule: () => void): void {
-  window.addEventListener("popstate", schedule);
-  window.addEventListener("hashchange", schedule);
+  let lastHref = window.location.href;
+  const scheduleIfHrefChanged = () => {
+    if (window.location.href === lastHref) return;
+    lastHref = window.location.href;
+    schedule();
+  };
+  window.addEventListener("popstate", scheduleIfHrefChanged);
+  window.addEventListener("hashchange", scheduleIfHrefChanged);
   const originalPushState = history.pushState;
   const originalReplaceState = history.replaceState;
   history.pushState = function pushState(...args) {
     const result = originalPushState.apply(this, args);
-    schedule();
+    scheduleIfHrefChanged();
     return result;
   };
   history.replaceState = function replaceState(...args) {
     const result = originalReplaceState.apply(this, args);
-    schedule();
+    scheduleIfHrefChanged();
     return result;
   };
+  window.setInterval(scheduleIfHrefChanged, 250);
 }
 
 function scheduleRender(): void {
