@@ -35,6 +35,11 @@ const entries = [
     format: "iife",
   },
   {
+    entryPoints: ["src/content/googleFlightsPageBridge.ts"],
+    outfile: "content/googleFlightsPageBridge.js",
+    format: "iife",
+  },
+  {
     entryPoints: ["src/background/serviceWorker.ts"],
     outfile: "background/serviceWorker.js",
     format: "esm",

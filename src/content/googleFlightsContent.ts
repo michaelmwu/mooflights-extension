@@ -99,6 +99,7 @@ const SEARCH_COMPARISON_CACHE_STORAGE_KEY = "mooFlightsGoogleFlightsSearchCompar
 const SEARCH_COUNTRY_SELECTION_SESSION_KEY = "mooFlightsGoogleFlightsCountrySelection";
 const SEARCH_DEBUG_LOG_SESSION_KEY = "mooFlightsGoogleFlightsDebugLog";
 const MULTICITY_FILTER_PRESERVATION_SESSION_KEY = "mooFlightsGoogleFlightsPreserveMulticityFilters";
+const MAIN_WORLD_MULTICITY_FILTER_REWRITE_SESSION_KEY = "mooFlightsGoogleFlightsMainWorldPreservedHref";
 const SEARCH_BADGE_SELECTOR = "[data-moo-flights-search-badge]";
 const SEARCH_BADGE_TARGET_SELECTOR = "[data-moo-flights-search-badge-target]";
 const SEARCH_HIGHLIGHT_SELECTOR = "[data-moo-flights-search-highlight]";
@@ -1279,6 +1280,10 @@ function preserveCurrentMulticityFilters(): void {
 function refreshCurrentMulticityFilters(): void {
   if (!shouldRefreshCurrentMulticityFilters()) return;
   if (refreshedMulticityFiltersHref === window.location.href) return;
+  if (readMainWorldMulticityFilterRewriteHref() === window.location.href) {
+    refreshedMulticityFiltersHref = window.location.href;
+    return;
+  }
   refreshedMulticityFiltersHref = window.location.href;
   dispatchMulticityFilterRefresh();
 }
@@ -1308,6 +1313,14 @@ function writeSessionMulticityFilterPreservation(enabled: boolean): void {
     sessionStorage.setItem(MULTICITY_FILTER_PRESERVATION_SESSION_KEY, enabled ? "1" : "0");
   } catch {
     // Session storage is an enhancement; the current page state still tracks the checkbox.
+  }
+}
+
+function readMainWorldMulticityFilterRewriteHref(): string {
+  try {
+    return sessionStorage.getItem(MAIN_WORLD_MULTICITY_FILTER_REWRITE_SESSION_KEY) || "";
+  } catch {
+    return "";
   }
 }
 

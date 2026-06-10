@@ -161,12 +161,15 @@ test("detects silent Google Flights multicity SPA URL changes before preserving 
   const panel = page.locator("#mooflights-google-flights-panel");
   await expect(panel).toBeAttached();
   await expect(panel.getByText("Preserve stops and airline filters")).toBeVisible();
+  await page.evaluate(() => {
+    Reflect.set(window, "__mooFlightsSpaMarker", "same-document");
+  });
 
   await page.evaluate((nextUrl) => {
     history.pushState(history.state, "", nextUrl);
   }, selectedLegUrl);
-  expect(page.url()).toBe(selectedLegUrl);
-  await expect.poll(() => page.url()).not.toBe(selectedLegUrl);
+  expect(page.url()).not.toBe(selectedLegUrl);
+  await expect.poll(() => page.evaluate(() => Reflect.get(window, "__mooFlightsSpaMarker"))).toBe("same-document");
 
   const preservedTfs = decodeTfsText(new URL(page.url()).searchParams.get("tfs") || "");
   expect(countOccurrences(preservedTfs, "\x32\x02FJ")).toBe(2);
@@ -185,12 +188,15 @@ test("preserves filters after a silent Google Flights booking-to-search URL chan
   const panel = page.locator("#mooflights-google-flights-panel");
   await expect(panel).toBeAttached();
   await expect(panel.getByText("Preserve stops and airline filters")).toHaveCount(0);
+  await page.evaluate(() => {
+    Reflect.set(window, "__mooFlightsSpaMarker", "same-document");
+  });
 
   await page.evaluate((nextUrl) => {
     history.pushState(history.state, "", nextUrl);
   }, searchUrl);
-  expect(page.url()).toBe(searchUrl);
-  await expect.poll(() => page.url()).not.toBe(searchUrl);
+  expect(page.url()).not.toBe(searchUrl);
+  await expect.poll(() => page.evaluate(() => Reflect.get(window, "__mooFlightsSpaMarker"))).toBe("same-document");
   await expect(panel.getByText("Preserve stops and airline filters")).toBeVisible();
 
   const preservedTfs = decodeTfsText(new URL(page.url()).searchParams.get("tfs") || "");

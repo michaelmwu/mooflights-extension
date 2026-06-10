@@ -5,6 +5,8 @@ const DEFAULT_GOOGLE_FLIGHTS_BOOKING_URL =
   "https://www.google.com/travel/flights/booking?tfs=CBwQAho_EgoyMDI2LTA2LTI0Ih8KA1RQRRIKMjAyNi0wNi0yNBoDTlJUKgJCUjIDMTk2agcIARIDVFBFcgcIARIDTlJUQAFIAXABggELCP___________wGYAQI&tfu=CmxDalJJY0ZsYVRVRkdVRFJsUld0QlJFUktZVUZDUnkwdExTMHRMUzB0TFhSc2FuY3hOVUZCUVVGQlIyOXVNbFZqUWtNMGQzZEJFZ1ZDVWpFNU5ob0tDSkZMRUFBYUExUlhSRGdjY09ydEFRPT0SAggAIgMKATA&curr=USD";
 const DEFAULT_GOOGLE_FLIGHTS_MULTICITY_BOOKING_URL =
   "https://www.google.com/travel/flights/booking?tfs=CBwQAhppEgoyMDI2LTA4LTI3Ih8KA0FLTBIKMjAyNi0wOC0yNxoDTkFOKgJGSjIDNDEwIh8KA05BThIKMjAyNi0wOC0yOBoDTlJUKgJGSjIDMzUxMgJGSmoHCAESA0FLTHIMCAMSCC9tLzA3ZGZrGncSCjIwMjctMDQtMjEiHwoDTlJUEgoyMDI3LTA0LTIxGgNOQU4qAkZKMgMzNTAiHwoDTkFOEgoyMDI3LTA0LTIyGgNBS0wqAkZKMgM0MTFqDAgDEggvbS8wN2Rma3IHCAESA01FTHIHCAESA1NZRHIHCAESA0FLTEABSANwAYIBCwj___________8BmAED&tfu=CnhDalJJVkZZeWFWZHBaMkpTUVZsQlExVnVVa0ZDUnkwdExTMHRMUzB0TFhSaVlucDFPRUZCUVVGQlIyOXdRWEpyUWs5SVdUaEJFZzFHU2pNMU1IeEdTalF4TVNNeUdnc0l6Y2dSRUFJYUExVlRSRGdjY00zSUVRPT0SBggAIAIoASIDCgEw&curr=USD";
+const DEFAULT_GOOGLE_FLIGHTS_MULTICITY_TOP_SEARCH_URL =
+  "https://www.google.com/travel/flights/search?tfs=CBwQAhonEgoyMDI2LTA4LTI3MgJGSmoHCAESA0FLTHIMCAMSCC9tLzA3ZGZrGjUSCjIwMjctMDQtMjFqDAgDEggvbS8wN2Rma3IHCAESA01FTHIHCAESA1NZRHIHCAESA0FLTEABSANwAYIBCwj___________8BmAED&tfu=EgYIACACKAEiAA&curr=USD";
 const DEFAULT_GOOGLE_FLIGHTS_MULTICITY_SEARCH_URL =
   "https://www.google.com/travel/flights/search?tfs=CBwQAhppEgoyMDI2LTA4LTI3Ih8KA0FLTBIKMjAyNi0wOC0yNxoDTkFOKgJGSjIDNDEwIh8KA05BThIKMjAyNi0wOC0yOBoDTlJUKgJGSjIDMzUxMgJGSmoHCAESA0FLTHIMCAMSCC9tLzA3ZGZrGjUSCjIwMjctMDQtMjFqDAgDEggvbS8wN2Rma3IHCAESA01FTHIHCAESA1NZRHIHCAESA0FLTEABSANwAYIBCwj___________8BmAED&tfu=CnRDalJJVW1wVlpVeDZjM0ZHTjAxQlEzYzBOVkZDUnkwdExTMHRMUzB0ZEdKaWEySXlOa0ZCUVVGQlIyOXdRWFJqUlZwMk0wVkJFZ3RHU2pReE1IeEdTak0xTVJvTENKU2xFQkFDR2dOVlUwUTRISENVcFJBPRIGCAAgAigBIgMKATA&curr=USD";
 
@@ -36,6 +38,9 @@ test.describe("local real-site smoke tests", () => {
   test("preserves multicity airline filters on a real Google Flights selected-leg search URL", async ({ page }) => {
     const bookingUrl =
       process.env.MOOFLIGHTS_REAL_GOOGLE_FLIGHTS_MULTICITY_BOOKING_URL || DEFAULT_GOOGLE_FLIGHTS_MULTICITY_BOOKING_URL;
+    const topSearchUrl =
+      process.env.MOOFLIGHTS_REAL_GOOGLE_FLIGHTS_MULTICITY_TOP_SEARCH_URL ||
+      DEFAULT_GOOGLE_FLIGHTS_MULTICITY_TOP_SEARCH_URL;
     const searchUrl =
       process.env.MOOFLIGHTS_REAL_GOOGLE_FLIGHTS_MULTICITY_SEARCH_URL || DEFAULT_GOOGLE_FLIGHTS_MULTICITY_SEARCH_URL;
 
@@ -45,12 +50,22 @@ test.describe("local real-site smoke tests", () => {
     await expect(panel).toBeAttached({ timeout: 30_000 });
     await expect(panel.getByText("Preserve stops and airline filters")).toHaveCount(0);
 
-    await page.goto(searchUrl, { waitUntil: "domcontentloaded" });
+    await page.goto(topSearchUrl, { waitUntil: "domcontentloaded" });
     await expect(panel.getByText("Preserve stops and airline filters")).toBeVisible({ timeout: 30_000 });
     await expect(panel.locator('[data-action="toggle-preserve-multicity-filters"]')).toBeChecked();
+    await expect(page).toHaveURL(topSearchUrl);
+
+    await page.evaluate(() => {
+      Reflect.set(window, "__mooFlightsSpaMarker", "same-document");
+    });
+    await page.evaluate((nextUrl) => {
+      history.pushState(history.state, "", nextUrl);
+    }, searchUrl);
+
     await expect
       .poll(() => decodedTfsMarkerCounts(page.url()), { timeout: 20_000 })
       .toMatchObject({ fjFilters: 2, secondLegHasFjFilter: true });
+    await expect.poll(() => page.evaluate(() => Reflect.get(window, "__mooFlightsSpaMarker"))).toBe("same-document");
   });
 
   test("runs the Google Flights country compare tab flow", async ({ context, extensionServiceWorker, page }) => {
