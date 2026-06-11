@@ -234,6 +234,27 @@ test("renders Skyscanner search row comparison badges from captured API response
 
   await panel.getByRole("button", { name: "Compare rows (2)" }).click();
   await expect(page.locator("[data-moo-flights-search-badge]", { hasText: "South Korea $180" })).toBeVisible();
+
+  const koreanAirCard = page.locator('[data-testid="itinerary-card"]', { hasText: "Korean Air" });
+  const twayCard = page.locator('[data-testid="itinerary-card"]', { hasText: "Tway" });
+  await expect(koreanAirCard.locator("[data-moo-flights-search-badge]", { hasText: "South Korea $180" })).toBeVisible();
+  await expect(twayCard.locator("[data-moo-flights-search-badge]", { hasText: "Cheapest" })).toBeVisible();
+
+  await page.locator('[data-action="sort-cheapest"]').click();
+  await expect(page.locator('[data-testid="itinerary-card"]').first()).toContainText("Tway");
+  await expect(koreanAirCard.locator("[data-moo-flights-search-badge]", { hasText: "South Korea $180" })).toBeVisible();
+  await expect(twayCard.locator("[data-moo-flights-search-badge]", { hasText: "Cheapest" })).toBeVisible();
+
+  const directPagePromise = context.waitForEvent("page");
+  await koreanAirCard.locator("button[data-moo-flights-search-badge]").click();
+  const directPage = await directPagePromise;
+  await directPage.waitForURL(/\/transport\/flights\/cju\/nrt\/260624\/config\//);
+  const directUrl = skyscannerTargetUrl(new URL(directPage.url()));
+  expect(directUrl.hostname).toBe("www.skyscanner.co.kr");
+  expect(directUrl.pathname).toBe(
+    "/transport/flights/cju/nrt/260624/config/10562-2606241255--32128-0-14788-2606241525",
+  );
+  await directPage.close();
 });
 
 test("shows the Skyscanner search panel before an API response is captured", async ({ context, page }) => {
@@ -563,20 +584,49 @@ function skyscannerSearchFixture(url: string, options: { includeApiFetch?: boole
   const parsedUrl = new URL(url);
   const country =
     parsedUrl.hostname === "www.skyscanner.co.kr" || parsedUrl.searchParams.get("market") === "KR" ? "KR" : "US";
-  const price = country === "KR" ? 180 : 210;
+  const firstPrice = country === "KR" ? 180 : 210;
+  const secondPrice = country === "KR" ? 220 : 170;
   const includeApiFetch = options.includeApiFetch !== false;
   return htmlFixture(`
     <main>
       <h1>Skyscanner search fixture</h1>
+      <nav aria-label="Sort results">
+        <button type="button" data-action="sort-best">Best</button>
+        <button type="button" data-action="sort-cheapest">Cheapest</button>
+        <button type="button" data-action="sort-fastest">Fastest</button>
+      </nav>
       <section>
-        <div data-testid="itinerary-card" class="ItineraryCard">
+        <div data-testid="itinerary-card" class="ItineraryCard" data-sort-price="${firstPrice}" data-sort-best="1">
           <h2>Korean Air</h2>
           <p>12:55 - 15:25</p>
           <p>Nonstop · 2 hr 30 min</p>
-          <div class="PriceSection"><span>$${price}</span></div>
+          <div class="PriceSection"><span>$${firstPrice}</span></div>
           <a href="/transport/flights/cju/tyoa/260624/config/10562-2606241255--32128-0-14788-2606241525">Select</a>
         </div>
+        <div data-testid="itinerary-card" class="ItineraryCard" data-sort-price="${secondPrice}" data-sort-best="2">
+          <h2>Tway</h2>
+          <p>8:30 - 11:10</p>
+          <p>Nonstop · 2 hr 40 min</p>
+          <div class="PriceSection"><span>$${secondPrice}</span></div>
+          <a href="/transport/flights/cju/tyoa/260624/config/10562-2606240830--12345-0-14788-2606241110">Select</a>
+        </div>
       </section>
+      <script>
+        const resultSection = document.querySelector("section");
+        function sortCards(compare) {
+          const cards = Array.from(document.querySelectorAll('[data-testid="itinerary-card"]'));
+          cards.sort(compare).forEach((card) => resultSection.append(card));
+        }
+        document.querySelector('[data-action="sort-best"]').addEventListener("click", () => {
+          sortCards((left, right) => Number(left.dataset.sortBest) - Number(right.dataset.sortBest));
+        });
+        document.querySelector('[data-action="sort-cheapest"]').addEventListener("click", () => {
+          sortCards((left, right) => Number(left.dataset.sortPrice) - Number(right.dataset.sortPrice));
+        });
+        document.querySelector('[data-action="sort-fastest"]').addEventListener("click", () => {
+          sortCards((left, right) => Number(left.dataset.sortBest) - Number(right.dataset.sortBest));
+        });
+      </script>
       ${
         includeApiFetch
           ? `<script>
@@ -613,7 +663,8 @@ function skyscannerSearchApiFixture(url: string, marketHeader = "", requestBodyT
     parsedUrl.hostname === "www.skyscanner.co.kr" ||
     parsedUrl.searchParams.get("market") === "KR";
   const country = requestedKrMarket && hasSafeMarketBody ? "KR" : "US";
-  const price = country === "KR" ? 180 : 210;
+  const firstPrice = country === "KR" ? 180 : 210;
+  const secondPrice = country === "KR" ? 220 : 170;
   return {
     itineraries: {
       context: {
@@ -624,8 +675,8 @@ function skyscannerSearchApiFixture(url: string, marketHeader = "", requestBodyT
         {
           id: "10562-2606241255--32128-0-14788-2606241525",
           price: {
-            raw: price,
-            formatted: `$${price}`,
+            raw: firstPrice,
+            formatted: `$${firstPrice}`,
           },
           legs: [
             {
@@ -646,6 +697,37 @@ function skyscannerSearchApiFixture(url: string, marketHeader = "", requestBodyT
                   marketingCarrier: {
                     name: "Korean Air",
                     alternateId: "KE",
+                  },
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: "10562-2606240830--12345-0-14788-2606241110",
+          price: {
+            raw: secondPrice,
+            formatted: `$${secondPrice}`,
+          },
+          legs: [
+            {
+              id: "10562-2606240830--12345-0-14788-2606241110",
+              durationInMinutes: 160,
+              stopCount: 0,
+              departure: "2026-06-24T08:30:00",
+              arrival: "2026-06-24T11:10:00",
+              carriers: {
+                marketing: [{ name: "Tway", alternateId: "TW" }],
+              },
+              segments: [
+                {
+                  origin: { displayCode: "CJU" },
+                  destination: { displayCode: "NRT" },
+                  departure: "2026-06-24T08:30:00",
+                  flightNumber: "123",
+                  marketingCarrier: {
+                    name: "Tway",
+                    alternateId: "TW",
                   },
                 },
               ],

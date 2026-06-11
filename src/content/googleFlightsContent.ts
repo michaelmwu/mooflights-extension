@@ -75,6 +75,7 @@ type CompareState = {
 type SearchBestPrice = {
   rowKey: string;
   targetMatchKey: string;
+  targetItineraryKey?: string;
   country: string;
   url: string;
   price: number;
@@ -2407,11 +2408,12 @@ function applySearchBadges(): void {
   const existingBadges = existingSearchBadgesByRowKey();
   const rows = currentSearchResultRows();
   const currentRows = parseCurrentSearchPage().results;
-  const currentRowsByIndex = new Map(currentRows.map((result) => [result.rowIndex, result]));
+  const usedCurrentRowKeys = new Set<string>();
   let created = 0;
   let missingBest = 0;
   rows.forEach((row, index) => {
-    const currentParsed = currentRowsByIndex.get(index);
+    const currentParsed = currentSearchResultForVisibleRow(row, index, currentRows, usedCurrentRowKeys);
+    if (currentParsed) usedCurrentRowKeys.add(currentParsed.rowKey);
     const baselineParsed = currentParsed
       ? bestSearchResultMatch(currentParsed, state.searchBaseline?.results || [], 0.58)
       : null;
@@ -2441,6 +2443,70 @@ function applySearchBadges(): void {
     missingBest,
   });
   ensureSearchBadgeStyles();
+}
+
+function currentSearchResultForVisibleRow(
+  row: Element,
+  index: number,
+  currentRows: SearchResult[],
+  usedRowKeys: Set<string>,
+): SearchResult | null {
+  const unusedRows = currentRows.filter((result) => !usedRowKeys.has(result.rowKey));
+  if (!isCurrentSkyscannerSearchPage()) return unusedRows.find((result) => result.rowIndex === index) || null;
+
+  const itineraryKey = skyscannerVisibleRowItineraryKey(row);
+  if (itineraryKey) {
+    const exact = unusedRows.find((result) => result.itineraryKey === itineraryKey);
+    if (exact) return exact;
+  }
+
+  return (
+    unusedRows
+      .map((result) => ({ result, score: skyscannerVisibleRowMatchScore(row, result) }))
+      .filter((entry) => entry.score >= 0.62)
+      .sort((left, right) => right.score - left.score)[0]?.result || null
+  );
+}
+
+function skyscannerVisibleRowItineraryKey(row: Element): string {
+  for (const anchor of Array.from(row.querySelectorAll<HTMLAnchorElement>('a[href*="/config/"]'))) {
+    const href = anchor.getAttribute("href") || anchor.href || "";
+    try {
+      const url = new URL(href, window.location.href);
+      const match = url.pathname.match(/\/config\/([^/?#]+)/);
+      if (match?.[1]) return decodeURIComponent(match[1]);
+    } catch {
+      const match = href.match(/\/config\/([^/?#]+)/);
+      if (match?.[1]) return decodeURIComponent(match[1]);
+    }
+  }
+  return "";
+}
+
+function skyscannerVisibleRowMatchScore(row: Element, result: SearchResult): number {
+  const rowText = normalizeText(textContentWithoutSearchBadges(row));
+  const normalizedRowText = normalizeCountryName(rowText);
+  const compactRowText = compactSearchText(rowText);
+  let score = 0;
+  if (result.priceText && rowText.includes(result.priceText)) score += 0.35;
+  if (result.carrierText && tokenSimilarity(normalizedRowText, result.carrierText) >= 0.6) score += 0.2;
+  if (result.timeText && compactRowText.includes(compactSearchText(result.timeText))) score += 0.18;
+  if (result.durationText && rowContainsAllTokens(normalizedRowText, result.durationText)) score += 0.12;
+  if (result.stopsText && rowContainsAllTokens(normalizedRowText, result.stopsText)) score += 0.08;
+  return Math.min(score, 1);
+}
+
+function compactSearchText(value: string): string {
+  return normalizeCountryName(value).replace(/[^a-z0-9]/g, "");
+}
+
+function rowContainsAllTokens(rowText: string, value: string): boolean {
+  const tokens = searchMatchTokens(value);
+  if (tokens.size === 0) return false;
+  for (const token of tokens) {
+    if (!rowText.includes(token)) return false;
+  }
+  return true;
 }
 
 function existingSearchBadgesByRowKey(): Map<string, HTMLElement> {
@@ -2500,12 +2566,37 @@ function pruneInactiveSearchBadges(activeBadges: Set<HTMLElement>, activeTargets
 
 function searchResultDeepLink(best: SearchBestPrice): string {
   try {
+    const skyscannerDirectUrl = skyscannerSearchResultDeepLink(best);
+    if (skyscannerDirectUrl) return skyscannerDirectUrl;
     const url = new URL(best.url);
     url.hash = `mooFlightsFlight=${encodeURIComponent(best.targetMatchKey)}`;
     return url.toString();
   } catch {
     return best.url;
   }
+}
+
+function skyscannerSearchResultDeepLink(best: SearchBestPrice): string {
+  if (!best.targetItineraryKey || !isSkyscannerFlightsPageUrl(best.url)) return "";
+  try {
+    const url = new URL(best.url);
+    const configPath = skyscannerConfigPath(url.pathname, best.targetItineraryKey);
+    if (!configPath) return "";
+    url.pathname = configPath;
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
+function skyscannerConfigPath(pathname: string, itineraryKey: string): string {
+  const encodedItineraryKey = encodeURIComponent(itineraryKey);
+  const existingConfigIndex = pathname.indexOf("/config/");
+  if (existingConfigIndex >= 0) return `${pathname.slice(0, existingConfigIndex)}/config/${encodedItineraryKey}`;
+  const normalizedPath = pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+  if (!normalizedPath || !/^\/transport\/(?:flights|d)\//.test(normalizedPath)) return "";
+  return `${normalizedPath}/config/${encodedItineraryKey}`;
 }
 
 async function openSearchResultDeepLink(best: SearchBestPrice): Promise<void> {
@@ -2804,6 +2895,7 @@ function bestPricesBySearchRow(
     let best: SearchBestPrice = {
       rowKey: row.rowKey,
       targetMatchKey: row.matchKey,
+      ...(row.itineraryKey ? { targetItineraryKey: row.itineraryKey } : {}),
       country: baseline.country,
       url: baseline.url,
       price: row.price,
@@ -2821,6 +2913,7 @@ function bestPricesBySearchRow(
         best = {
           rowKey: row.rowKey,
           targetMatchKey: match.matchKey,
+          ...(match.itineraryKey ? { targetItineraryKey: match.itineraryKey } : {}),
           country: result.country,
           url: result.url,
           price: match.price,
