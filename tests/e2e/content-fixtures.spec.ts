@@ -125,7 +125,7 @@ test("does not show the Google Flights comparison panel on unresolved top-level 
   await expect(page.locator("#mooflights-google-flights-panel")).not.toBeAttached();
 });
 
-test("hides Search Skyscanner when Google Flights tfs lacks IATA endpoints", async ({ context, page }) => {
+test("explains when Search Skyscanner cannot open a Google city search", async ({ context, page }) => {
   const pageUrl =
     "https://www.google.com/travel/flights/search?tfs=CBwQAhojEgoyMDI2LTA3LTA4agwIAhIIL20vMGZ0a3hyBwgBEgNOUlRAAUgBcAGCAQsI____________AZgBAg&tfu=EgoIABAAGAAgAigB";
   await routeGoogleFlightsBookingFixtures(context);
@@ -135,6 +135,7 @@ test("hides Search Skyscanner when Google Flights tfs lacks IATA endpoints", asy
   const panel = page.locator("#mooflights-google-flights-panel");
   await expect(panel).toBeAttached();
   await expect(panel.getByRole("link", { name: "Search Skyscanner" })).not.toBeVisible();
+  await expect(panel.getByText("Search Skyscanner needs a single airport origin and destination.")).toBeVisible();
 });
 
 test("opens Skyscanner country comparison tabs from a routed final compare page", async ({

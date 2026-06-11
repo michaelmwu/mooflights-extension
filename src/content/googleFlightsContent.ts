@@ -1427,8 +1427,18 @@ function renderCountrySelect(selectedCodes: string[]): string {
 function renderCrossProviderSearchAction(): string {
   const translate = t();
   const url = routeSpecificCrossProviderSearchUrl(window.location.href, currentComparableCurrencyCode());
-  if (!url) return "";
-  const label = isCurrentSkyscannerPage() ? translate("searchGoogleFlights") : translate("searchSkyscanner");
+  const isSkyscanner = isCurrentSkyscannerPage();
+  const label = isSkyscanner ? translate("searchGoogleFlights") : translate("searchSkyscanner");
+  if (!url) {
+    const unavailableMessage = isSkyscanner
+      ? translate("searchGoogleFlightsUnavailable")
+      : translate("searchSkyscannerUnavailable");
+    return `
+      <div class="cross-search unavailable" aria-label="${escapeHtml(label)}">
+        <span>${escapeHtml(unavailableMessage)}</span>
+      </div>
+    `;
+  }
   return `
     <div class="cross-search">
       <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>
@@ -3240,6 +3250,15 @@ function styles(): string {
     .cross-search a:hover {
       background: #f8fafc;
       border-color: #94a3b8;
+    }
+    .cross-search.unavailable {
+      color: #64748b;
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    .cross-search.unavailable span {
+      display: block;
+      padding: 2px 0;
     }
     .mileage-prompt {
       display: grid;
