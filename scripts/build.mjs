@@ -90,6 +90,7 @@ const skyscannerWebAccessibleMatches = [
   "https://www.skyscanner.ca/*",
   "https://www.skyscanner.ch/*",
   "https://www.skyscanner.cl/*",
+  "https://skyscanner.com/*",
   "https://cn.skyscanner.com/*",
   "https://www.skyscanner.co.id/*",
   "https://www.skyscanner.co.il/*",

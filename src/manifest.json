@@ -34,6 +34,7 @@
       "matches": [
         "https://www.skyscanner.ae/transport/*",
         "https://www.skyscanner.at/transport/*",
+        "https://skyscanner.com/transport/*",
         "https://www.skyscanner.com/transport/*",
         "https://www.skyscanner.co.kr/transport/*",
         "https://www.skyscanner.net/transport/*",
@@ -91,6 +92,7 @@
         "https://google.com/travel/flights*",
         "https://www.skyscanner.ae/transport/*",
         "https://www.skyscanner.at/transport/*",
+        "https://skyscanner.com/transport/*",
         "https://www.skyscanner.com/transport/*",
         "https://www.skyscanner.co.kr/transport/*",
         "https://www.skyscanner.net/transport/*",
@@ -148,6 +150,7 @@
     "https://google.com/travel/flights*",
     "https://www.skyscanner.ae/transport/*",
     "https://www.skyscanner.at/transport/*",
+    "https://skyscanner.com/transport/*",
     "https://www.skyscanner.com/transport/*",
     "https://www.skyscanner.co.kr/transport/*",
     "https://www.skyscanner.net/transport/*",

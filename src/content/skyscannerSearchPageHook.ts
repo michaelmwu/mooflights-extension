@@ -54,12 +54,9 @@ function installXhrHook(): void {
   const originalSetRequestHeader = OriginalXhr.prototype.setRequestHeader;
   const originalSend = OriginalXhr.prototype.send;
   OriginalXhr.prototype.open = function hookedOpen(
-    method: string,
-    url: string | URL,
-    async?: boolean,
-    username?: string | null,
-    password?: string | null,
+    ...args: [method: string, url: string | URL, async?: boolean, username?: string | null, password?: string | null]
   ) {
+    const [method, url] = args;
     const request = captureXhrRequest(method, String(url));
     xhrRequests.set(this, request);
     if (!xhrLoadListeners.has(this)) {
@@ -74,7 +71,7 @@ function installXhrHook(): void {
         }
       });
     }
-    return originalOpen.call(this, method, url, async ?? true, username ?? null, password ?? null);
+    return Reflect.apply(originalOpen, this, args);
   };
   OriginalXhr.prototype.setRequestHeader = function hookedSetRequestHeader(header: string, value: string): void {
     const request = xhrRequests.get(this);
