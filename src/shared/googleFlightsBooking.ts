@@ -143,6 +143,123 @@ export function googleFlightsPanelPageKey(
   return `${parsedUrl.pathname}?${params.toString()}`;
 }
 
+export function googleFlightsPreserveMulticityFiltersUrl(url: string): string {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return url;
+  }
+  const tfs = parsedUrl.searchParams.get("tfs");
+  if (!tfs) return url;
+  const preservedTfs = preserveGoogleFlightsTfsSliceFilters(tfs);
+  if (!preservedTfs || preservedTfs === tfs) return url;
+  parsedUrl.searchParams.set("tfs", preservedTfs);
+  return parsedUrl.toString();
+}
+
+export function googleFlightsSearchSliceCount(url: string): number {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return 0;
+  }
+  const tfs = parsedUrl.searchParams.get("tfs");
+  const decoded = tfs ? decodeBase64UrlText(tfs) : "";
+  return decoded ? googleFlightsTfsTopLevelSliceBlocks(decoded).length : 0;
+}
+
+export interface GoogleFlightsMulticityLegFilterPlan {
+  /** 0-based index of the leg the user is currently choosing (== selected leg count). */
+  currentLegIndex: number;
+  /** Total leg/slice blocks in the search. */
+  legCount: number;
+  /** Airline IATA codes copied from the leg that the user filtered. */
+  airlineCodes: string[];
+  /** Google Flights stop filter value copied from the leg that the user filtered. */
+  stopFilterValue: number | null;
+  /** True when the source filter contains only airline fields (no stops/other). */
+  airlinesOnly: boolean;
+  /** True when nothing needs to be applied to the current leg (already filtered or out of range). */
+  currentLegHasFilter: boolean;
+}
+
+/**
+ * Describes what airline filter (if any) should be carried onto the leg the user is
+ * currently choosing in a partially-selected multicity search. Used to drive Google's
+ * own airline filter UI so the leg re-filters without a full page reload.
+ */
+export function googleFlightsMulticityLegFilterPlan(
+  url: string,
+  selectedLegCount: number,
+): GoogleFlightsMulticityLegFilterPlan | null {
+  let tfs = "";
+  try {
+    tfs = new URL(url).searchParams.get("tfs") || "";
+  } catch {
+    return null;
+  }
+  if (!tfs) return null;
+  const decoded = decodeBase64UrlText(tfs);
+  if (!decoded) return null;
+  const slices = googleFlightsTfsTopLevelSliceBlocks(decoded);
+  if (slices.length < 2) return null;
+
+  const sourceFilterIndex = slices.findIndex((slice) => googleFlightsSliceFilterFieldEntries(slice.value).length > 0);
+  if (sourceFilterIndex < 0) return null;
+
+  const sourceEntries = googleFlightsSliceFilterFieldEntries(slices[sourceFilterIndex]?.value || "");
+  const airlineCodes = Array.from(
+    new Set(
+      sourceEntries
+        .filter((entry) => entry.fieldNumber === 6)
+        .map((entry) => googleFlightsAirlineCodeFromFilterField(entry.value))
+        .filter((code): code is string => Boolean(code)),
+    ),
+  );
+  const stopFilterValue =
+    sourceEntries
+      .filter((entry) => entry.fieldNumber === 5)
+      .map((entry) => googleFlightsStopValueFromFilterField(entry.value))
+      .find((value) => value !== null) ?? null;
+  const airlinesOnly = sourceEntries.length > 0 && sourceEntries.every((entry) => entry.fieldNumber === 6);
+
+  // The current leg is "done" only once it carries every filter field number the
+  // source leg has (stops = 5, airlines = 6) — matching how the URL-level preserve
+  // logic decides whether a leg still needs a field copied in.
+  const sourceFieldNumbers = Array.from(new Set(sourceEntries.map((entry) => entry.fieldNumber)));
+  const currentLegIndex = selectedLegCount;
+  const currentSlice = slices[currentLegIndex];
+  const currentLegHasFilter =
+    currentLegIndex <= sourceFilterIndex ||
+    currentLegIndex >= slices.length ||
+    !currentSlice ||
+    googleFlightsSliceHasFilterFields(currentSlice.value, sourceFieldNumbers);
+
+  return { currentLegIndex, legCount: slices.length, airlineCodes, stopFilterValue, airlinesOnly, currentLegHasFilter };
+}
+
+function googleFlightsSliceHasFilterFields(sliceValue: string, fieldNumbers: number[]): boolean {
+  if (fieldNumbers.length === 0) return true;
+  const present = new Set(googleFlightsSliceFilterFieldEntries(sliceValue).map((entry) => entry.fieldNumber));
+  return fieldNumbers.every((fieldNumber) => present.has(fieldNumber));
+}
+
+function googleFlightsAirlineCodeFromFilterField(entry: string): string {
+  const tag = readProtobufTag(entry, 0);
+  if (!tag) return "";
+  const length = readVarint(entry, tag.nextIndex);
+  if (!length) return "";
+  return entry.slice(length.nextIndex, length.nextIndex + length.value);
+}
+
+function googleFlightsStopValueFromFilterField(entry: string): number | null {
+  const tag = readProtobufTag(entry, 0);
+  if (!tag || tag.fieldNumber !== 5 || tag.wireType !== 0) return null;
+  return readVarint(entry, tag.nextIndex)?.value ?? null;
+}
+
 export function isGoogleFlightsPanelPageUrl(url: string): boolean {
   try {
     return isGoogleFlightsPanelPage(new URL(url));
@@ -298,6 +415,138 @@ function parseGoogleFlightsTfsSegments(tfs: string): GoogleFlightsFlightSegment[
   const parsedSlices = slices.length > 0 ? slices : [{ value: decoded, group: 0 }];
   const segments = parsedSlices.flatMap((slice) => parseGoogleFlightsTfsSliceSegments(slice.value, slice.group));
   return dedupeGoogleFlightsSegments(segments);
+}
+
+function preserveGoogleFlightsTfsSliceFilters(tfs: string): string {
+  const decoded = decodeBase64UrlText(tfs);
+  if (!decoded) return tfs;
+  const slices = googleFlightsTfsTopLevelSliceBlocks(decoded);
+  if (slices.length < 2) return tfs;
+
+  const sourceFilterIndex = slices.findIndex((slice) => googleFlightsSliceFilterFields(slice.value).length > 0);
+  const sourceFilters =
+    sourceFilterIndex >= 0 ? googleFlightsSliceFilterFields(slices[sourceFilterIndex]?.value || "") : [];
+  if (sourceFilters.length === 0) return tfs;
+
+  let result = "";
+  let cursor = 0;
+  let changed = false;
+  for (let index = 0; index < slices.length; index += 1) {
+    const slice = slices[index];
+    if (!slice) continue;
+    result += decoded.slice(cursor, slice.fieldStart);
+    const nextValue =
+      index > sourceFilterIndex ? googleFlightsSliceWithFilters(slice.value, sourceFilters) : slice.value;
+    result += decoded.slice(slice.fieldStart, slice.lengthStart);
+    result += encodeVarint(nextValue.length);
+    result += nextValue;
+    cursor = slice.valueEnd;
+    if (nextValue !== slice.value) changed = true;
+  }
+  result += decoded.slice(cursor);
+  return changed ? encodeBase64(result) : tfs;
+}
+
+function googleFlightsTfsTopLevelSliceBlocks(
+  value: string,
+): Array<{ value: string; fieldStart: number; lengthStart: number; valueStart: number; valueEnd: number }> {
+  const blocks: Array<{
+    value: string;
+    fieldStart: number;
+    lengthStart: number;
+    valueStart: number;
+    valueEnd: number;
+  }> = [];
+  for (let index = 0; index < value.length; ) {
+    const tag = readProtobufTag(value, index);
+    if (!tag) break;
+    if (tag.fieldNumber === 3 && tag.wireType === 2) {
+      const length = readVarint(value, tag.nextIndex);
+      if (!length) break;
+      const valueStart = length.nextIndex;
+      const valueEnd = valueStart + length.value;
+      if (valueEnd > value.length) break;
+      const block = value.slice(valueStart, valueEnd);
+      if (/\d{4}-\d{2}-\d{2}/.test(block) && /[A-Z]{3}/.test(block)) {
+        blocks.push({ value: block, fieldStart: index, lengthStart: tag.nextIndex, valueStart, valueEnd });
+      }
+      index = valueEnd;
+      continue;
+    }
+    const nextIndex = skipProtobufField(value, tag, value.length);
+    index = nextIndex > index ? nextIndex : index + 1;
+  }
+  return blocks;
+}
+
+function googleFlightsSliceFilterFields(value: string): string[] {
+  return googleFlightsSliceFilterFieldEntries(value).map((field) => field.value);
+}
+
+function googleFlightsSliceFilterFieldEntries(value: string): Array<{ fieldNumber: number; value: string }> {
+  const entries: Array<{ fieldNumber: number; value: string }> = [];
+  for (let index = 0; index < value.length; ) {
+    const tag = readProtobufTag(value, index);
+    if (!tag) break;
+    const nextIndex = skipProtobufField(value, tag, value.length);
+    if (nextIndex <= index) break;
+    if ((tag.fieldNumber === 5 && tag.wireType === 0) || (tag.fieldNumber === 6 && tag.wireType === 2)) {
+      entries.push({ fieldNumber: tag.fieldNumber, value: value.slice(index, nextIndex) });
+    }
+    index = nextIndex;
+  }
+  return entries;
+}
+
+function googleFlightsSliceWithFilters(value: string, filterFields: string[]): string {
+  if (filterFields.length === 0) return value;
+  const existingFilterFieldNumbers = new Set(
+    googleFlightsSliceFilterFieldEntries(value).map((field) => field.fieldNumber),
+  );
+  const sourceFilterFields = filterFields
+    .map((field) => googleFlightsSliceFilterFieldEntries(field)[0])
+    .filter((field): field is { fieldNumber: number; value: string } => Boolean(field))
+    .filter((field) => !existingFilterFieldNumbers.has(field.fieldNumber))
+    .map((field) => field.value);
+  const nextFilterFields = [...googleFlightsSliceFilterFields(value), ...sourceFilterFields];
+  if (nextFilterFields.length === 0) return value;
+  return googleFlightsSliceWithFilterFieldsAfterDate(value, nextFilterFields);
+}
+
+function googleFlightsSliceWithFilterFieldsAfterDate(value: string, filterFields: string[]): string {
+  let result = "";
+  let inserted = false;
+  for (let index = 0; index < value.length; ) {
+    const tag = readProtobufTag(value, index);
+    if (!tag) {
+      result += value.slice(index);
+      break;
+    }
+    const nextIndex = skipProtobufField(value, tag, value.length);
+    if (nextIndex <= index) {
+      result += value.slice(index);
+      break;
+    }
+    const isFilterField =
+      (tag.fieldNumber === 5 && tag.wireType === 0) || (tag.fieldNumber === 6 && tag.wireType === 2);
+    if (!isFilterField) result += value.slice(index, nextIndex);
+    if (!inserted && tag.fieldNumber === 2) {
+      result += filterFields.join("");
+      inserted = true;
+    }
+    index = nextIndex;
+  }
+  return inserted ? result : result + filterFields.join("");
+}
+
+function encodeVarint(value: number): string {
+  let remaining = value >>> 0;
+  let result = "";
+  while (remaining >= 0x80) {
+    result += String.fromCharCode((remaining & 0x7f) | 0x80);
+    remaining >>>= 7;
+  }
+  return result + String.fromCharCode(remaining);
 }
 
 function googleFlightsTfsSliceBlocks(value: string): Array<{ value: string; group: number }> {

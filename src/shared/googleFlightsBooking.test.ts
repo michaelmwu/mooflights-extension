@@ -1,7 +1,10 @@
 import {
   DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES,
   googleFlightsCountryUrl,
+  googleFlightsMulticityLegFilterPlan,
   googleFlightsPanelPageKey,
+  googleFlightsPreserveMulticityFiltersUrl,
+  googleFlightsSearchSliceCount,
   inferGoogleFlightsCurrency,
   normalizeGoogleFlightsCountryCodes,
   normalizeGoogleFlightsCurrency,
@@ -429,6 +432,122 @@ describe("Google Flights booking option parser", () => {
     const url = "https://www.google.com/travel/flights/booking?tfs=abc&curr=&gl=TW";
 
     expect(googleFlightsPanelPageKey(url, "TW", true, "HKD")).toBe("/travel/flights/booking?tfs=abc&curr=HKD&gl=TW");
+  });
+
+  it("copies Google Flights stop and airline filters to later multicity slices", () => {
+    const url =
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhpGEgoyMDI2LTA2LTI0IiAKA0NKVRIKMjAyNi0wNi0yNBoDTlJUKgJLRTIEMjEyNSgAMgJLRWoHCAESA0NKVXIHCAESA05SVBoeEgoyMDI2LTA3LTAxagcIARIDTlJUcgcIARIDQ0pVQAFIAXABggELCP___________wGYAQM&tfu=CmxDalJJZVRCNFFXZEdTRUZCVGtWQlEzUlZlbEZDUnkwdExTMHRMUzB0TFMxMFltc3lOVUZCUVVGQlIyOXVkelJ2UTFjd1YwRkJFZ1pMUlRJeE1qVWFDZ2ltWkJBQUdnTlVWMFE0SEhDSXZnST0SAggAIgA";
+
+    const preservedUrl = googleFlightsPreserveMulticityFiltersUrl(url);
+
+    expect(preservedUrl).not.toBe(url);
+    expect(googleFlightsSearchSliceCount(preservedUrl)).toBe(2);
+    const preserved = parseGoogleFlightsMatrixSearch(preservedUrl);
+    expect(preserved).toMatchObject({
+      tripType: "one-way",
+      carriers: ["KE"],
+      slices: [
+        {
+          origin: "CJU",
+          destination: "NRT",
+          departureDate: "2026-06-24",
+        },
+      ],
+    });
+    const preservedTfs = new URL(preservedUrl).searchParams.get("tfs") || "";
+    expect(countOccurrences(decodeTfsText(preservedTfs), "\x28\x00\x32\x02KE")).toBe(2);
+  });
+
+  it("normalizes trailing filters on the next active multicity leg", () => {
+    const url =
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhprEgoyMDI2LTA4LTI3Ih8KA0FLTBIKMjAyNi0wOC0yNxoDTkFOKgJGSjIDNDEwIh8KA05BThIKMjAyNi0wOC0yOBoDTlJUKgJGSjIDMzUxKAEyAkZKagcIARIDQUtMcgwIAxIIL20vMDdkZmsaOxIKMjAyNy0wNC0yMWoMCAMSCC9tLzA3ZGZrcgcIARIDTUVMcgcIARIDU1lEcgcIARIDQUtMKAEyAkZKQAFIA3ABggELCP///////////wGYAQM%3D&tfu=CnRDalJJU25kUGJrOTFPVU5FTFhOQlFqQTBTbEZDUnkwdExTMHRMUzB0TFhSc2FuY3hNa0ZCUVVGQlIyOXZMWFJuUkU5blptVkJFZ3RHU2pReE1IeEdTak0xTVJvTENNeWpFQkFDR2dOVlUwUTRISERNb3hBPRIGCAAgAigBIgA&curr=USD";
+
+    const preservedUrl = googleFlightsPreserveMulticityFiltersUrl(url);
+    const preservedTfs = decodeTfsText(new URL(preservedUrl).searchParams.get("tfs") || "");
+
+    expect(preservedUrl).not.toBe(url);
+    expect(countOccurrences(preservedTfs, "\x28\x01")).toBe(2);
+    expect(countOccurrences(preservedTfs, "\x32\x02FJ")).toBe(2);
+    expect(preservedTfs).toContain("\x12\x0a2027-04-21\x28\x01\x32\x02FJ");
+  });
+
+  it("fills filters on a selected Google Flights multicity leg when the search URL has no stop field", () => {
+    const url =
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhppEgoyMDI2LTA4LTI3Ih8KA0FLTBIKMjAyNi0wOC0yNxoDTkFOKgJGSjIDNDEwIh8KA05BThIKMjAyNi0wOC0yOBoDTlJUKgJGSjIDMzUxMgJGSmoHCAESA0FLTHIMCAMSCC9tLzA3ZGZrGjUSCjIwMjctMDQtMjFqDAgDEggvbS8wN2Rma3IHCAESA01FTHIHCAESA1NZRHIHCAESA0FLTEABSANwAYIBCwj___________8BmAED&tfu=CnRDalJJZFhFNFJtRjNOakIyWWpCQlFtOUxRVUZDUnkwdExTMHRMUzB0TFhSc2NtNHhNMEZCUVVGQlIyOXdRVUZqUzA5UmNtdEJFZ3RHU2pReE1IeEdTak0xTVJvTENNeWpFQkFDR2dOVlUwUTRISERNb3hBPRIGCAAgAigBIgMKATA&curr=USD";
+
+    const preservedUrl = googleFlightsPreserveMulticityFiltersUrl(url);
+    const preservedTfs = decodeTfsText(new URL(preservedUrl).searchParams.get("tfs") || "");
+
+    expect(preservedUrl).not.toBe(url);
+    expect(countOccurrences(preservedTfs, "\x32\x02FJ")).toBe(2);
+    expect(preservedTfs).toContain("\x12\x0a2027-04-21\x32\x02FJ");
+  });
+
+  it("preserves later multicity slice filters instead of overwriting them", () => {
+    const url = `https://www.google.com/travel/flights/search?tfs=${encodeTfsText([
+      tfsSearchSlice("2026-06-03", "HKG", "TPE", "\x28\x00", "\x32\x02CI"),
+      tfsSearchSlice("2026-06-05", "TPE", "HKG", "\x32\x02BR"),
+    ])}`;
+
+    const preservedUrl = googleFlightsPreserveMulticityFiltersUrl(url);
+    const preservedTfs = decodeTfsText(new URL(preservedUrl).searchParams.get("tfs") || "");
+
+    expect(preservedUrl).not.toBe(url);
+    expect(countOccurrences(preservedTfs, "\x32\x02CI")).toBe(1);
+    expect(countOccurrences(preservedTfs, "\x32\x02BR")).toBe(1);
+    expect(countOccurrences(preservedTfs, "\x28\x00")).toBe(2);
+    expect(preservedTfs).toContain("\x32\x02BR\x28\x00");
+  });
+
+  it("preserves existing later multicity filters while normalizing their position", () => {
+    const url = `https://www.google.com/travel/flights/search?tfs=${encodeTfsText([
+      tfsSearchSlice("2026-06-03", "HKG", "TPE", "\x28\x00", "\x32\x02CI"),
+      tfsSearchSlice("2026-06-05", "TPE", "HKG", "\x28\x01", "\x32\x02BR"),
+    ])}`;
+
+    const preservedUrl = googleFlightsPreserveMulticityFiltersUrl(url);
+    const preservedTfs = decodeTfsText(new URL(preservedUrl).searchParams.get("tfs") || "");
+
+    expect(preservedUrl).not.toBe(url);
+    expect(countOccurrences(preservedTfs, "\x32\x02CI")).toBe(1);
+    expect(countOccurrences(preservedTfs, "\x32\x02BR")).toBe(1);
+    expect(countOccurrences(preservedTfs, "\x28\x00")).toBe(1);
+    expect(countOccurrences(preservedTfs, "\x28\x01")).toBe(1);
+    expect(preservedTfs).toContain("\x12\x0a2026-06-05\x28\x01\x32\x02BR");
+  });
+
+  it("does not backfill filters from a later multicity slice into earlier slices", () => {
+    const url = `https://www.google.com/travel/flights/search?tfs=${encodeTfsText([
+      tfsSearchSlice("2026-06-03", "HKG", "TPE"),
+      tfsSearchSlice("2026-06-05", "TPE", "HKG", "\x32\x02BR"),
+    ])}`;
+
+    expect(googleFlightsPreserveMulticityFiltersUrl(url)).toBe(url);
+  });
+
+  it("fills only slices after the first filtered multicity slice", () => {
+    const url = `https://www.google.com/travel/flights/search?tfs=${encodeTfsText([
+      tfsSearchSlice("2026-06-03", "HKG", "TPE"),
+      tfsSearchSlice("2026-06-05", "TPE", "HKG", "\x32\x02BR"),
+      tfsSearchSlice("2026-06-07", "HKG", "NRT"),
+    ])}`;
+
+    const preservedUrl = googleFlightsPreserveMulticityFiltersUrl(url);
+    const preservedTfs = decodeTfsText(new URL(preservedUrl).searchParams.get("tfs") || "");
+
+    expect(preservedUrl).not.toBe(url);
+    expect(countOccurrences(preservedTfs, "\x32\x02BR")).toBe(2);
+    expect(preservedTfs.indexOf("\x32\x02BR")).toBeGreaterThan(preservedTfs.indexOf("2026-06-05"));
+    expect(preservedTfs.indexOf("\x32\x02BR")).toBeGreaterThan(preservedTfs.indexOf("2026-06-03"));
+    expect(preservedTfs.indexOf("\x32\x02BR")).toBeLessThan(preservedTfs.indexOf("2026-06-07"));
+  });
+
+  it("does not rewrite single-leg Google Flights searches when preserving filters", () => {
+    const url = `https://www.google.com/travel/flights/search?tfs=${encodeTfsText([
+      `${tfsSlice(tfsSegment("2026-06-03", "HKG", "TPE", "CI", "922"))}\x28\x00\x32\x02CI`,
+    ])}`;
+
+    expect(googleFlightsPreserveMulticityFiltersUrl(url)).toBe(url);
   });
 
   it("infers the visible Google Flights currency from price text", () => {
@@ -981,6 +1100,53 @@ describe("Google Flights booking option parser", () => {
   });
 });
 
+describe("Google Flights multicity leg filter plan", () => {
+  const threeLegUrl = (legOneFields: string[], legTwoFields: string[] = []) =>
+    `https://www.google.com/travel/flights/search?tfs=${encodeTfsText([
+      tfsSearchSlice("2026-06-03", "HKG", "TPE", ...legOneFields),
+      tfsSearchSlice("2026-06-05", "TPE", "HKG", ...legTwoFields),
+      tfsSearchSlice("2026-06-07", "HKG", "NRT"),
+    ])}`;
+
+  it("targets the current leg with the airline filter from the filtered leg", () => {
+    const plan = googleFlightsMulticityLegFilterPlan(threeLegUrl(["\x32\x02CI"]), 1);
+
+    expect(plan).toEqual({
+      currentLegIndex: 1,
+      legCount: 3,
+      airlineCodes: ["CI"],
+      stopFilterValue: null,
+      airlinesOnly: true,
+      currentLegHasFilter: false,
+    });
+  });
+
+  it("advances the target to the next leg as more legs are selected", () => {
+    const plan = googleFlightsMulticityLegFilterPlan(threeLegUrl(["\x32\x02CI"]), 2);
+
+    expect(plan?.currentLegIndex).toBe(2);
+    expect(plan?.currentLegHasFilter).toBe(false);
+  });
+
+  it("reports the current leg as already filtered when it carries the codes", () => {
+    const plan = googleFlightsMulticityLegFilterPlan(threeLegUrl(["\x32\x02CI"], ["\x32\x02CI"]), 1);
+
+    expect(plan?.currentLegHasFilter).toBe(true);
+  });
+
+  it("includes the stops filter value in plans with stops and airline filters", () => {
+    const plan = googleFlightsMulticityLegFilterPlan(threeLegUrl(["\x28\x01", "\x32\x02CI"]), 1);
+
+    expect(plan?.airlineCodes).toEqual(["CI"]);
+    expect(plan?.stopFilterValue).toBe(1);
+    expect(plan?.airlinesOnly).toBe(false);
+  });
+
+  it("returns null when no leg carries a filter", () => {
+    expect(googleFlightsMulticityLegFilterPlan(threeLegUrl([]), 1)).toBeNull();
+  });
+});
+
 function tfsSegment(
   departureDate: string,
   origin: string,
@@ -998,6 +1164,32 @@ function tfsSlice(...segments: string[]): string {
   return `\x1a${String.fromCharCode(value.length)}${value}`;
 }
 
+function tfsSearchSlice(departureDate: string, origin: string, destination: string, ...fields: string[]): string {
+  const value = `\x12\x0a${departureDate}${tfsAirportField(13, origin)}${tfsAirportField(14, destination)}${fields.join(
+    "",
+  )}`;
+  return `\x1a${String.fromCharCode(value.length)}${value}`;
+}
+
+function tfsAirportField(fieldNumber: number, airport: string): string {
+  return `${String.fromCharCode((fieldNumber << 3) | 2)}\x07\x08\x01\x12\x03${airport}`;
+}
+
 function encodeTfsText(parts: string[]): string {
   return btoa(parts.join("")).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function decodeTfsText(value: string): string {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  return atob(`${normalized}${"=".repeat((4 - (normalized.length % 4)) % 4)}`);
+}
+
+function countOccurrences(value: string, pattern: string): number {
+  let count = 0;
+  let index = value.indexOf(pattern);
+  while (index >= 0) {
+    count += 1;
+    index = value.indexOf(pattern, index + pattern.length);
+  }
+  return count;
 }

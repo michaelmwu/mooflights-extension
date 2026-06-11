@@ -1,0 +1,545 @@
+import { readFileSync } from "node:fs";
+import type { BrowserContext, Page, Worker } from "@playwright/test";
+import { expect, test } from "./fixtures";
+import {
+  MOOFLIGHTS_GOOGLE_FLIGHTS_RESULTS_STORAGE_KEY,
+  MOOFLIGHTS_SETTINGS_STORAGE_KEY,
+  setGoogleFlightsCountries,
+  waitForComparisonTab,
+} from "./helpers";
+
+const itaFixtureJson = readFileSync("src/shared/fixtures/itaRoundTrip.json", "utf8");
+
+test.beforeEach(async ({ context }) => {
+  await routeOptionalExtensionNetwork(context);
+});
+
+test("injects the ITA Matrix airport helper on routed search pages", async ({ page }) => {
+  await routeItaFixture(page, matrixSearchFixture());
+
+  await page.goto("https://matrix.itasoftware.com/search");
+
+  const panel = page.locator("#mooflights-panel");
+  await expect(panel).toBeAttached();
+  await expect(panel.getByText("Airport helper")).toBeVisible();
+  await expect(panel.getByLabel("Area")).toBeVisible();
+
+  await panel.locator("summary[aria-label='Panel actions']").click();
+  await panel.getByRole("button", { name: "Minimize" }).click();
+  await expect(panel.getByLabel("Expand MooFlights panel")).toBeVisible();
+
+  await panel.getByLabel("Expand MooFlights panel").click();
+  await expect(panel.getByText("Airport helper")).toBeVisible();
+});
+
+test("parses pasted ITA itinerary JSON on routed itinerary pages", async ({ page }) => {
+  await routeItaFixture(page, matrixItineraryFixture());
+
+  await page.goto("https://matrix.itasoftware.com/itinerary");
+
+  const panel = page.locator("#mooflights-panel");
+  await expect(panel.getByText("Itinerary", { exact: true })).toBeVisible();
+
+  await panel.getByText("Itinerary", { exact: true }).click();
+  await expect(panel.getByText("Advanced fallback")).toBeVisible();
+  await panel.getByText("Advanced fallback").click();
+  await panel.getByPlaceholder("Paste ITA Matrix Copy as JSON output here").fill(itaFixtureJson);
+  await panel.getByRole("button", { name: "Parse pasted JSON" }).click();
+
+  await expect(panel.getByText("JFK-LHR AA100 I // LHR-JFK BA117 R")).toBeVisible();
+  await expect(panel.getByText("round-trip")).toBeVisible();
+  await expect(panel.getByText("USD 1234.56")).toBeVisible();
+  await expect(panel.getByRole("link", { name: /Where to Credit/i })).toBeVisible();
+});
+
+test("opens Google Flights country comparison tabs from a routed US booking page", async ({
+  context,
+  extensionServiceWorker,
+  page,
+}) => {
+  const pageUrl = "https://www.google.com/travel/flights/booking?tfs=e2e-fixture&curr=USD&gl=US";
+  await setGoogleFlightsCountries(extensionServiceWorker, ["US", "CA", "ZA"]);
+  await routeGoogleFlightsBookingFixtures(context);
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel).toBeAttached();
+  await expect(panel.getByText("Compare country pricing")).toBeVisible();
+  await expect(panel.getByRole("button", { name: "Compare (3)" })).toBeEnabled();
+
+  const comparisonTabsPromise = Promise.all(["CA", "ZA"].map((country) => waitForComparisonTab(context, country)));
+  await panel.getByRole("button", { name: "Compare (3)" }).click();
+
+  const comparisonTabs = await comparisonTabsPromise;
+  expect(comparisonTabs.map((comparisonPage) => new URL(comparisonPage.url()).searchParams.get("gl")).sort()).toEqual([
+    "CA",
+    "ZA",
+  ]);
+});
+
+test("renders Google Flights cached country comparison prices on routed booking pages", async ({
+  context,
+  extensionServiceWorker,
+  page,
+}) => {
+  const pageUrl = "https://www.google.com/travel/flights/booking?tfs=e2e-fixture&curr=USD&gl=US";
+  await setGoogleFlightsCachedResults(extensionServiceWorker, pageUrl);
+  await routeGoogleFlightsBookingFixtures(context);
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel).toBeAttached();
+  await expect(panel.getByText("Compare country pricing")).toBeVisible();
+
+  await expect(panel.getByText("South Africa", { exact: true })).toBeVisible();
+  await expect(panel.getByText("$870")).toBeVisible();
+  await expect(panel.getByText("Canada", { exact: true })).toBeVisible();
+  await expect(panel.getByText("$900")).toBeVisible();
+  await expect(panel.getByText(/United States/)).toBeVisible();
+  await expect(panel.getByText("$950")).toBeVisible();
+  await expect(panel.getByText(/2 option\(s\)/)).toHaveCount(3);
+});
+
+test("does not show multicity filter preservation on Google Flights booking pages", async ({ context, page }) => {
+  await routeGoogleFlightsBookingFixtures(context);
+  const pageUrl =
+    "https://www.google.com/travel/flights/booking?tfs=CBwQAhppEgoyMDI2LTA4LTI3Ih8KA0FLTBIKMjAyNi0wOC0yNxoDTkFOKgJGSjIDNDEwIh8KA05BThIKMjAyNi0wOC0yOBoDTlJUKgJGSjIDMzUxMgJGSmoHCAESA0FLTHIMCAMSCC9tLzA3ZGZrGncSCjIwMjctMDQtMjEiHwoDTlJUEgoyMDI3LTA0LTIxGgNOQU4qAkZKMgMzNTAiHwoDTkFOEgoyMDI3LTA0LTIyGgNBS0wqAkZKMgM0MTFqDAgDEggvbS8wN2Rma3IHCAESA01FTHIHCAESA1NZRHIHCAESA0FLTEABSANwAYIBCwj___________8BmAED&tfu=CnhDalJJVkZZeWFWZHBaMkpTUVZsQlExVnVVa0ZDUnkwdExTMHRMUzB0TFhSaVlucDFPRUZCUVVGQlIyOXdRWEpyUWs5SVdUaEJFZzFHU2pNMU1IeEdTalF4TVNNeUdnc0l6Y2dSRUFJYUExVlRSRGdjY00zSUVRPT0SBggAIAIoASIDCgEw&curr=USD";
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel).toBeAttached();
+  await expect(panel.getByText("Compare country pricing")).toBeVisible();
+  await expect(panel.getByText("Preserve stops and airline filters")).toHaveCount(0);
+  await expect(page).toHaveURL(pageUrl);
+});
+
+test("does not backfill later Google Flights multicity filters into earlier legs", async ({ context, page }) => {
+  await routeGoogleFlightsBookingFixtures(context);
+  const pageUrl = `https://www.google.com/travel/flights/search?tfs=${encodeTfsText([
+    tfsSearchSlice("2026-06-03", "HKG", "TPE"),
+    tfsSearchSlice("2026-06-05", "TPE", "HKG", "\x32\x02BR"),
+  ])}`;
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel).toBeAttached();
+  await expect(panel.getByText("Preserve stops and airline filters")).toBeVisible();
+  await expect(panel.locator('[data-action="toggle-preserve-multicity-filters"]')).toBeChecked();
+  await expect(page).toHaveURL(pageUrl);
+});
+
+test("leaves an already-filtered Google Flights multicity leg untouched", async ({ context, page }) => {
+  await routeGoogleFlightsBookingFixtures(context);
+  // Leg 2 already carries both the stops and airline filters (Google emits these
+  // in normalized form), so there is nothing to apply and the URL must not change.
+  const pageUrl =
+    "https://www.google.com/travel/flights/search?tfs=CBwQAhprEgoyMDI2LTA4LTI3Ih8KA0FLTBIKMjAyNi0wOC0yNxoDTkFOKgJGSjIDNDEwIh8KA05BThIKMjAyNi0wOC0yOBoDTlJUKgJGSjIDMzUxKAEyAkZKagcIARIDQUtMcgwIAxIIL20vMDdkZmsaOxIKMjAyNy0wNC0yMWoMCAMSCC9tLzA3ZGZrcgcIARIDTUVMcgcIARIDU1lEcgcIARIDQUtMKAEyAkZKQAFIA3ABggELCP///////////wGYAQM%3D&tfu=CnRDalJJU25kUGJrOTFPVU5FTFhOQlFqQTBTbEZDUnkwdExTMHRMUzB0TFhSc2FuY3hNa0ZCUVVGQlIyOXZMWFJuUkU5blptVkJFZ3RHU2pReE1IeEdTak0xTVJvTENNeWpFQkFDR2dOVlUwUTRISERNb3hBPRIGCAAgAigBIgA&curr=USD";
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel).toBeAttached();
+  await expect(panel.getByText("Preserve stops and airline filters")).toBeVisible();
+  await expect(page).toHaveURL(pageUrl);
+});
+
+test("applies Google Flights multicity stop and airline filters through the filter UI", async ({ context, page }) => {
+  const firstLeg = tfsSelectedSearchSlice(
+    "2026-08-27",
+    "AKL",
+    "NRT",
+    [tfsSegment("2026-08-27", "AKL", "NAN", "FJ", "410"), tfsSegment("2026-08-28", "NAN", "NRT", "FJ", "351")],
+    "\x28\x01",
+    "\x32\x02FJ",
+  );
+  const selectedLegUrl = `https://www.google.com/travel/flights/search?tfs=${encodeTfsText([
+    firstLeg,
+    tfsSearchSlice("2027-04-14", "NRT", "MEL"),
+  ])}&curr=USD`;
+  const airlineOnlyUrl = `https://www.google.com/travel/flights/search?tfs=${encodeTfsText([
+    firstLeg,
+    tfsSearchSlice("2027-04-14", "NRT", "MEL", "\x32\x02FJ"),
+  ])}&curr=USD`;
+  const finalUrl = `https://www.google.com/travel/flights/search?tfs=${encodeTfsText([
+    firstLeg,
+    tfsSearchSlice("2027-04-14", "NRT", "MEL", "\x28\x01", "\x32\x02FJ"),
+  ])}&curr=USD`;
+
+  await routeGoogleFlightsFilterUiFixture(context, { airlineOnlyUrl, finalUrl });
+  await page.goto(selectedLegUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel).toBeAttached();
+  await expect(panel.getByText("Preserve stops and airline filters")).toBeVisible();
+  await expect(page).toHaveURL(finalUrl);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const fixture = window.__mooFlightsGoogleFilterFixture;
+        return Boolean(fixture && fixture.airlineOnlyClicks === 1 && fixture.stopClicks >= 1);
+      }),
+    )
+    .toBe(true);
+});
+
+test("detects silent Google Flights multicity SPA URL changes before preserving filters", async ({ context, page }) => {
+  await routeGoogleFlightsBookingFixtures(context);
+  const startUrl =
+    "https://www.google.com/travel/flights/search?tfs=CBwQAhonEgoyMDI2LTA4LTI3MgJGSmoHCAESA0FLTHIMCAMSCC9tLzA3ZGZrGjUSCjIwMjctMDQtMjFqDAgDEggvbS8wN2Rma3IHCAESA01FTHIHCAESA1NZRHIHCAESA0FLTEABSANwAYIBCwj___________8BmAED&tfu=EgYIACACKAEiAA&curr=USD";
+  const selectedLegUrl =
+    "https://www.google.com/travel/flights/search?tfs=CBwQAhppEgoyMDI2LTA4LTI3Ih8KA0FLTBIKMjAyNi0wOC0yNxoDTkFOKgJGSjIDNDEwIh8KA05BThIKMjAyNi0wOC0yOBoDTlJUKgJGSjIDMzUxMgJGSmoHCAESA0FLTHIMCAMSCC9tLzA3ZGZrGjUSCjIwMjctMDQtMjFqDAgDEggvbS8wN2Rma3IHCAESA01FTHIHCAESA1NZRHIHCAESA0FLTEABSANwAYIBCwj___________8BmAED&tfu=CnRDalJJZFhFNFJtRjNOakIyWWpCQlFtOUxRVUZDUnkwdExTMHRMUzB0TFhSc2NtNHhNMEZCUVVGQlIyOXdRVUZqUzA5UmNtdEJFZ3RHU2pReE1IeEdTak0xTVJvTENNeWpFQkFDR2dOVlUwUTRISERNb3hBPRIGCAAgAigBIgMKATA&curr=USD";
+
+  await page.goto(startUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel).toBeAttached();
+  await expect(panel.getByText("Preserve stops and airline filters")).toBeVisible();
+
+  await page.evaluate((nextUrl) => {
+    history.pushState(history.state, "", nextUrl);
+  }, selectedLegUrl);
+  // Without a live Google filter UI (no rendered results in fixtures), the click
+  // agent times out and the extension falls back to a direct navigation that
+  // preserves the filter through the URL. Allow for the agent's button timeout.
+  await expect
+    .poll(() => decodedGoogleFlightsFilterState(page.url()), { timeout: 15000 })
+    .toMatchObject({ fjFilters: 2, firstLegSelected: true, secondLegHasFjFilter: true });
+  expect(page.url()).not.toBe(selectedLegUrl);
+
+  const preservedTfs = decodeTfsText(new URL(page.url()).searchParams.get("tfs") || "");
+  expect(countOccurrences(preservedTfs, "\x32\x02FJ")).toBe(2);
+  expect(preservedTfs).toContain("\x12\x0a2027-04-21\x32\x02FJ");
+});
+
+test("preserves filters after a silent Google Flights booking-to-search URL change", async ({ context, page }) => {
+  await routeGoogleFlightsBookingFixtures(context);
+  const bookingUrl =
+    "https://www.google.com/travel/flights/booking?tfs=CBwQAhppEgoyMDI2LTA4LTI3Ih8KA0FLTBIKMjAyNi0wOC0yNxoDTkFOKgJGSjIDNDEwIh8KA05BThIKMjAyNi0wOC0yOBoDTlJUKgJGSjIDMzUxMgJGSmoHCAESA0FLTHIMCAMSCC9tLzA3ZGZrGncSCjIwMjctMDQtMjEiHwoDTlJUEgoyMDI3LTA0LTIxGgNOQU4qAkZKMgMzNTAiHwoDTkFOEgoyMDI3LTA0LTIyGgNBS0wqAkZKMgM0MTFqDAgDEggvbS8wN2Rma3IHCAESA01FTHIHCAESA1NZRHIHCAESA0FLTEABSANwAYIBCwj___________8BmAED&tfu=CnhDalJJVkZZeWFWZHBaMkpTUVZsQlExVnVVa0ZDUnkwdExTMHRMUzB0TFhSaVlucDFPRUZCUVVGQlIyOXdRWEpyUWs5SVdUaEJFZzFHU2pNMU1IeEdTalF4TVNNeUdnc0l6Y2dSRUFJYUExVlRSRGdjY00zSUVRPT0SBggAIAIoASIDCgEw&curr=USD";
+  const searchUrl =
+    "https://www.google.com/travel/flights/search?tfs=CBwQAhppEgoyMDI2LTA4LTI3Ih8KA0FLTBIKMjAyNi0wOC0yNxoDTkFOKgJGSjIDNDEwIh8KA05BThIKMjAyNi0wOC0yOBoDTlJUKgJGSjIDMzUxMgJGSmoHCAESA0FLTHIMCAMSCC9tLzA3ZGZrGjUSCjIwMjctMDQtMjFqDAgDEggvbS8wN2Rma3IHCAESA01FTHIHCAESA1NZRHIHCAESA0FLTEABSANwAYIBCwj___________8BmAED&tfu=CnRDalJJVW1wVlpVeDZjM0ZHTjAxQlEzYzBOVkZDUnkwdExTMHRMUzB0ZEdKaWEySXlOa0ZCUVVGQlIyOXdRWFJqUlZwMk0wVkJFZ3RHU2pReE1IeEdTak0xTVJvTENKU2xFQkFDR2dOVlUwUTRISENVcFJBPRIGCAAgAigBIgMKATA&curr=USD";
+
+  await page.goto(bookingUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel).toBeAttached();
+  await expect(panel.getByText("Preserve stops and airline filters")).toHaveCount(0);
+
+  await page.evaluate((nextUrl) => {
+    history.pushState(history.state, "", nextUrl);
+  }, searchUrl);
+  // No live filter UI in fixtures, so the click agent times out and the extension
+  // falls back to a URL-level navigation. Allow for the agent's button timeout.
+  await expect
+    .poll(() => decodedGoogleFlightsFilterState(page.url()), { timeout: 15000 })
+    .toMatchObject({ fjFilters: 2, firstLegSelected: true, secondLegHasFjFilter: true });
+  expect(page.url()).not.toBe(searchUrl);
+  await expect(panel.getByText("Preserve stops and airline filters")).toBeVisible();
+
+  const preservedTfs = decodeTfsText(new URL(page.url()).searchParams.get("tfs") || "");
+  expect(countOccurrences(preservedTfs, "\x32\x02FJ")).toBe(2);
+  expect(preservedTfs).toContain("\x12\x0a2027-04-21\x32\x02FJ");
+});
+
+test("does not preserve filters while editing the top-level Google Flights multicity search", async ({
+  context,
+  page,
+}) => {
+  await routeGoogleFlightsBookingFixtures(context);
+  const pageUrl =
+    "https://www.google.com/travel/flights/search?tfs=CBwQAhonEgoyMDI2LTA4LTI3MgJGSmoHCAESA0FLTHIMCAMSCC9tLzA3ZGZrGjUSCjIwMjctMDQtMjFqDAgDEggvbS8wN2Rma3IHCAESA01FTHIHCAESA1NZRHIHCAESA0FLTEABSANwAYIBCwj___________8BmAED&tfu=EgYIACACKAEiAA&curr=USD";
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel).toBeAttached();
+  await expect(panel.getByText("Preserve stops and airline filters")).toBeVisible();
+  await expect(page).toHaveURL(pageUrl);
+});
+
+async function routeOptionalExtensionNetwork(context: BrowserContext): Promise<void> {
+  const fixtureDate = new Date().toISOString().slice(0, 10);
+  await context.route("https://cdn.jsdelivr.net/**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ date: fixtureDate, usd: { eur: 0.92, gbp: 0.78, jpy: 156, usd: 1 } }),
+    });
+  });
+  await context.route("https://api.fxratesapi.com/**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ date: fixtureDate, rates: { EUR: 0.92, GBP: 0.78, JPY: 156, USD: 1 } }),
+    });
+  });
+}
+
+async function routeItaFixture(page: Page, body: string): Promise<void> {
+  await page.route("https://matrix.itasoftware.com/**", async (route) => {
+    await route.fulfill({
+      contentType: "text/html",
+      body,
+    });
+  });
+}
+
+async function routeGoogleFlightsBookingFixtures(context: BrowserContext): Promise<void> {
+  await context.route("https://www.google.com/travel/flights**", async (route) => {
+    await route.fulfill({
+      contentType: "text/html",
+      body: googleFlightsBookingFixture(route.request().url()),
+    });
+  });
+}
+
+async function routeGoogleFlightsFilterUiFixture(
+  context: BrowserContext,
+  urls: { airlineOnlyUrl: string; finalUrl: string },
+): Promise<void> {
+  await context.route("https://www.google.com/travel/flights**", async (route) => {
+    await route.fulfill({
+      contentType: "text/html",
+      body: googleFlightsFilterUiFixture(urls),
+    });
+  });
+}
+
+async function setGoogleFlightsCachedResults(extensionServiceWorker: Worker, pageUrl: string): Promise<void> {
+  const cacheKey = "/travel/flights/booking?tfs=e2e-fixture&curr=USD";
+  await extensionServiceWorker.evaluate(
+    async (fixtureState) => {
+      await chrome.storage.local.set({
+        [fixtureState.settingsStorageKey]: {
+          googleFlights: {
+            countryCodes: ["US", "CA", "ZA"],
+          },
+        },
+        [fixtureState.googleFlightsResultsStorageKey]: {
+          [fixtureState.cacheKey]: {
+            cachedAt: Date.now(),
+            results: ["US", "CA", "ZA"].map((country) => {
+              const countryFixture = fixtureState.fixtures[country];
+              return {
+                country,
+                url: fixtureState.urls[country],
+                status: "ready",
+                options: [
+                  {
+                    provider: countryFixture.provider,
+                    price: countryFixture.cheapest,
+                    currency: "USD",
+                    priceText: `$${countryFixture.cheapest.toLocaleString()}`,
+                    isDirect: false,
+                    bookingUrl: `https://book.example/${country.toLowerCase()}/cheap`,
+                  },
+                  {
+                    provider: "American",
+                    price: countryFixture.direct,
+                    currency: "USD",
+                    priceText: `$${countryFixture.direct.toLocaleString()}`,
+                    isDirect: true,
+                    bookingUrl: `https://airline.example/${country.toLowerCase()}`,
+                  },
+                ],
+              };
+            }),
+          },
+        },
+      });
+    },
+    {
+      cacheKey,
+      googleFlightsResultsStorageKey: MOOFLIGHTS_GOOGLE_FLIGHTS_RESULTS_STORAGE_KEY,
+      settingsStorageKey: MOOFLIGHTS_SETTINGS_STORAGE_KEY,
+      fixtures: {
+        US: googleFlightsCountryFixture("US"),
+        CA: googleFlightsCountryFixture("CA"),
+        ZA: googleFlightsCountryFixture("ZA"),
+      },
+      urls: {
+        US: countryUrl(pageUrl, "US"),
+        CA: countryUrl(pageUrl, "CA"),
+        ZA: countryUrl(pageUrl, "ZA"),
+      },
+    },
+  );
+}
+
+function countryUrl(pageUrl: string, country: string): string {
+  const url = new URL(pageUrl);
+  url.searchParams.set("gl", country);
+  return url.toString();
+}
+
+function matrixSearchFixture(): string {
+  return htmlFixture(`
+    <main>
+      <h1>ITA Matrix search</h1>
+      <form aria-label="Search flights">
+        <input aria-label="Origin" value="">
+        <input aria-label="Destination" value="">
+      </form>
+    </main>
+  `);
+}
+
+function matrixItineraryFixture(): string {
+  return htmlFixture(`
+    <main>
+      <h1>ITA Matrix itinerary</h1>
+      <button type="button">Share & Export</button>
+    </main>
+  `);
+}
+
+function googleFlightsBookingFixture(url: string): string {
+  const country = new URL(url).searchParams.get("gl") || "US";
+  const countryFixture = googleFlightsCountryFixture(country);
+
+  return htmlFixture(`
+    <main>
+      <h1>Google Flights booking fixture</h1>
+      <a class="gN1nAc" href="https://book.example/${country.toLowerCase()}/cheap">
+        <span class="ogfYpf">Book with ${countryFixture.provider}</span>
+        <span aria-label="${countryFixture.cheapest} US dollars">$${countryFixture.cheapest.toLocaleString()}</span>
+      </a>
+      <a class="gN1nAc" href="https://airline.example/${country.toLowerCase()}">
+        <span class="ogfYpf">Book with American</span>
+        <span class="EA71Tc">Direct</span>
+        <span role="text">$${countryFixture.direct.toLocaleString()}</span>
+      </a>
+    </main>
+  `);
+}
+
+function googleFlightsFilterUiFixture(urls: { airlineOnlyUrl: string; finalUrl: string }): string {
+  return htmlFixture(`
+    <main>
+      <h1>Google Flights search fixture</h1>
+      <button type="button" aria-label="Airlines" data-action="open-airlines">Airlines</button>
+      <button type="button" aria-label="Stops" data-action="open-stops">Stops</button>
+      <div id="google-filter-popup"></div>
+      <script>
+        window.__mooFlightsGoogleFilterFixture = { airlineOnlyClicks: 0, stopClicks: 0 };
+        const popup = document.getElementById("google-filter-popup");
+        document.addEventListener("click", (event) => {
+          const target = event.target.closest("[data-action]");
+          if (!target) return;
+          const action = target.getAttribute("data-action");
+          if (action === "open-airlines") {
+            popup.innerHTML = '<label><input type="checkbox" value="Fiji Airways" checked> Fiji Airways</label><button type="button" aria-label="Fiji Airways only" data-action="fiji-only">Only</button>';
+          }
+          if (action === "open-stops") {
+            const checked = location.href === ${JSON.stringify(urls.finalUrl)} ? " checked" : "";
+            popup.innerHTML = '<label data-action="one-stop"><input type="radio" name="stops" data-value="1"' + checked + '> 1 stop or fewer</label>';
+          }
+          if (action === "fiji-only") {
+            window.__mooFlightsGoogleFilterFixture.airlineOnlyClicks += 1;
+            history.pushState(history.state, "", ${JSON.stringify(urls.airlineOnlyUrl)});
+          }
+          if (action === "one-stop") {
+            window.__mooFlightsGoogleFilterFixture.stopClicks += 1;
+            history.pushState(history.state, "", ${JSON.stringify(urls.finalUrl)});
+          }
+        });
+      </script>
+    </main>
+  `);
+}
+
+function googleFlightsCountryFixture(country: string): { cheapest: number; direct: number; provider: string } {
+  if (country === "CA") return { cheapest: 900, direct: 1120, provider: "Canada Deals" };
+  if (country === "ZA") return { cheapest: 870, direct: 1300, provider: "South Africa Deals" };
+  return { cheapest: 950, direct: 1050, provider: "Example Travel" };
+}
+
+function htmlFixture(body: string): string {
+  return `<!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8">
+        <title>MooFlights E2E fixture</title>
+      </head>
+      <body>${body}</body>
+    </html>`;
+}
+
+function tfsSearchSlice(departureDate: string, origin: string, destination: string, ...fields: string[]): string {
+  const value = `\x12\x0a${departureDate}${tfsAirportField(13, origin)}${tfsAirportField(14, destination)}${fields.join(
+    "",
+  )}`;
+  return `\x1a${String.fromCharCode(value.length)}${value}`;
+}
+
+function tfsSelectedSearchSlice(
+  departureDate: string,
+  origin: string,
+  destination: string,
+  segments: string[],
+  ...fields: string[]
+): string {
+  const selectedSegments = segments.map((segment) => tfsLengthDelimitedField(4, segment)).join("");
+  const value = `\x12\x0a${departureDate}${selectedSegments}${fields.join("")}${tfsAirportField(
+    13,
+    origin,
+  )}${tfsAirportField(14, destination)}`;
+  return `\x1a${String.fromCharCode(value.length)}${value}`;
+}
+
+function tfsSegment(
+  departureDate: string,
+  origin: string,
+  destination: string,
+  carrier: string,
+  flightNumber: string,
+): string {
+  return `\x0a\x03${origin}\x12\x0a${departureDate}\x1a\x03${destination}\x2a\x02${carrier}\x32${String.fromCharCode(
+    flightNumber.length,
+  )}${flightNumber}`;
+}
+
+function tfsLengthDelimitedField(fieldNumber: number, value: string): string {
+  return `${String.fromCharCode((fieldNumber << 3) | 2)}${String.fromCharCode(value.length)}${value}`;
+}
+
+function tfsAirportField(fieldNumber: number, airport: string): string {
+  return `${String.fromCharCode((fieldNumber << 3) | 2)}\x07\x08\x01\x12\x03${airport}`;
+}
+
+function encodeTfsText(parts: string[]): string {
+  return Buffer.from(parts.join(""), "binary")
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+function decodeTfsText(value: string): string {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  return Buffer.from(`${normalized}${"=".repeat((4 - (normalized.length % 4)) % 4)}`, "base64").toString("binary");
+}
+
+function decodedGoogleFlightsFilterState(url: string): {
+  fjFilters: number;
+  firstLegSelected: boolean;
+  secondLegHasFjFilter: boolean;
+} {
+  const preservedTfs = decodeTfsText(new URL(url).searchParams.get("tfs") || "");
+  return {
+    fjFilters: countOccurrences(preservedTfs, "\x32\x02FJ"),
+    firstLegSelected: preservedTfs.includes("\x2a\x02FJ\x32\x03410"),
+    secondLegHasFjFilter: preservedTfs.includes("\x12\x0a2027-04-21\x32\x02FJ"),
+  };
+}
+
+function countOccurrences(value: string, pattern: string): number {
+  let count = 0;
+  let index = value.indexOf(pattern);
+  while (index >= 0) {
+    count += 1;
+    index = value.indexOf(pattern, index + pattern.length);
+  }
+  return count;
+}
