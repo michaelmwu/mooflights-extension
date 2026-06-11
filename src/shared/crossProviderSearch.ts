@@ -54,6 +54,12 @@ const GOOGLE_LOCATION_TO_SKYSCANNER_CODE: Record<string, string> = {
   "/m/0ftkxr": "TPET",
 };
 
+const GOOGLE_LOCATION_TO_SKYSCANNER_AIRPORT_FALLBACK: Record<string, string> = {
+  "/m/0156q": "BER",
+  "/m/01f62": "BCN",
+  "/m/056_y": "MAD",
+};
+
 const SKYSCANNER_LOCATION_TO_GOOGLE_CODE: Record<string, string> = {
   BJSA: "BJS",
   BKKT: "BKK",
@@ -447,6 +453,8 @@ function normalizeSkyscannerGoogleLocation(value: string): string {
   const location = value.trim();
   const mapped = GOOGLE_LOCATION_TO_SKYSCANNER_CODE[location];
   if (mapped) return mapped;
+  const fallback = GOOGLE_LOCATION_TO_SKYSCANNER_AIRPORT_FALLBACK[location];
+  if (fallback) return fallback;
   const code = location.toUpperCase();
   return /^[A-Z0-9]{3,4}$/.test(code) ? code : "";
 }

@@ -334,11 +334,18 @@ describe("crossProviderSearch", () => {
     expect(new URL(jakartaMelbourneUrl).pathname).toBe("/transport/flights/cgki/mela/260624/");
   });
 
-  it("omits route-specific cross-provider links when one Google city endpoint is unmapped", () => {
+  it("falls back to obvious Skyscanner airport routes when city routes are unavailable", () => {
     const berlinSeoulUrl =
       "https://www.google.com/travel/flights/search?tfs=CBwQAhoxEgoyMDI2LTA2LTI0MgdTS1lURUFNagwIAxIIL20vMDE1NnFyDAgDEggvbS8waHNxZkABSAFwAYIBCwj___________8BmAEC&tfu=EgIIACIA&hl=en-US&gl=KR&curr=USD";
+    expect(new URL(routeSpecificCrossProviderSearchUrl(berlinSeoulUrl)).pathname).toBe(
+      "/transport/flights/ber/sela/260624/",
+    );
 
-    expect(routeSpecificCrossProviderSearchUrl(berlinSeoulUrl)).toBe("");
+    const barcelonaMadridUrl =
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhoxEgoyMDI2LTA2LTI0MgdTS1lURUFNagwIAxIIL20vMDFmNjJyDAgDEggvbS8wNTZfeUABSAFwAYIBCwj___________8BmAEC&tfu=EgIIACIA&hl=en-US&gl=KR&curr=USD";
+    expect(new URL(routeSpecificCrossProviderSearchUrl(barcelonaMadridUrl)).pathname).toBe(
+      "/transport/flights/bcn/mad/260624/",
+    );
   });
 
   it("omits route-specific cross-provider links when Google tfs has unmapped city endpoints", () => {
