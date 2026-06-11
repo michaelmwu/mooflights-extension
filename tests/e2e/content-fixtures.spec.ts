@@ -223,9 +223,7 @@ test("renders Skyscanner search row comparison badges from captured API response
   expect(googleFlightsSearchUrl.searchParams.get("curr")).toBe("USD");
   expect(googleFlightsSearchUrl.searchParams.get("gl")).toBe("ZA");
   expect(googleFlightsSearchUrl.searchParams.get("hl")).toBe("en-US");
-  expect(googleFlightsSearchUrl.searchParams.get("origin")).toBe("CJU");
-  expect(googleFlightsSearchUrl.searchParams.get("destination")).toBe("NRT");
-  expect(googleFlightsSearchUrl.searchParams.get("depart")).toBe("2026-06-24");
+  expect(googleFlightsSearchUrl.searchParams.get("q")).toBe("Flights from CJU to NRT on 2026-06-24 one way");
   await panel.getByRole("button", { name: "Clear" }).click();
   const countrySearch = panel.locator('[data-role="country-search"]');
   await countrySearch.fill("US");

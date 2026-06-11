@@ -40,9 +40,16 @@ describe("crossProviderSearch", () => {
     expect(parsed.searchParams.get("curr")).toBe("USD");
     expect(parsed.searchParams.get("gl")).toBe("ZA");
     expect(parsed.searchParams.get("hl")).toBe("en-US");
-    expect(parsed.searchParams.get("origin")).toBe("CJU");
-    expect(parsed.searchParams.get("destination")).toBe("NRT");
-    expect(parsed.searchParams.get("depart")).toBe("2026-06-24");
+    expect(parsed.searchParams.get("q")).toBe("Flights from CJU to NRT on 2026-06-24 one way");
+  });
+
+  it("normalizes Skyscanner all-airport codes before building Google Flights searches", () => {
+    const url = googleFlightsSearchUrlFromSkyscanner(
+      "https://www.skyscanner.co.kr/transport/flights/cju/tyoa/260624/?adultsv2=1&cabinclass=economy&currency=USD&locale=en-US&market=KR",
+    );
+
+    const parsed = new URL(url);
+    expect(parsed.searchParams.get("q")).toBe("Flights from CJU to TYO on 2026-06-24 one way");
   });
 
   it("derives the Google Flights country from localized Skyscanner hosts and UK market aliases", () => {
@@ -63,10 +70,21 @@ describe("crossProviderSearch", () => {
     );
 
     const parsed = new URL(url);
-    expect(parsed.searchParams.get("origin")).toBe("CJU");
-    expect(parsed.searchParams.get("destination")).toBe("NRT");
-    expect(parsed.searchParams.get("depart")).toBe("2026-06-24");
-    expect(parsed.searchParams.get("return")).toBe("2026-06-28");
+    expect(parsed.searchParams.get("q")).toBe("Flights from CJU to NRT on 2026-06-24 returning 2026-06-28");
+  });
+
+  it("falls back to a normal Google Flights page for true Skyscanner multi-city routes", () => {
+    const url = googleFlightsSearchUrlFromSkyscanner(
+      "https://www.skyscanner.co.kr/transport/d/cju/2026-06-24/tyoa/tyoa/2026-06-27/sela/?currency=USD&locale=en-US&market=KR",
+    );
+
+    const parsed = new URL(url);
+    expect(parsed.hostname).toBe("www.google.com");
+    expect(parsed.pathname).toBe("/travel/flights");
+    expect(parsed.searchParams.get("curr")).toBe("USD");
+    expect(parsed.searchParams.get("gl")).toBe("KR");
+    expect(parsed.searchParams.get("hl")).toBe("en-US");
+    expect(parsed.searchParams.has("q")).toBe(false);
   });
 
   it("falls back to a normal Skyscanner search page when Google route data is unavailable", () => {

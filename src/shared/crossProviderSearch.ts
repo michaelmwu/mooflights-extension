@@ -23,7 +23,8 @@ export function crossProviderSearchUrl(currentUrl: string, fallbackCurrency = DE
 export function skyscannerSearchUrlFromGoogleFlights(currentUrl: string, fallbackCurrency = DEFAULT_CURRENCY): string {
   const context = googleFlightsUrlContext(currentUrl, fallbackCurrency);
   const search = parseGoogleFlightsMatrixSearch(currentUrl, context.currency);
-  const path = skyscannerRoutePath(search?.slices || googleFlightsRouteSlices(currentUrl));
+  const routeSlices = search?.slices || googleFlightsRouteSlices(currentUrl);
+  const path = skyscannerRoutePath(routeSlices);
   if (!path) return skyscannerFallbackSearchUrl(context);
 
   const params = new URLSearchParams();
@@ -34,7 +35,7 @@ export function skyscannerSearchUrlFromGoogleFlights(currentUrl: string, fallbac
   params.set("locale", context.locale);
   params.set("market", context.country);
   params.set("preferdirects", "false");
-  if (!search || search.tripType === "one-way") params.set("rtn", "0");
+  if (search ? search.tripType === "one-way" : routeSlices.length === 1) params.set("rtn", "0");
 
   return skyscannerCountryUrl(
     `https://www.skyscanner.com${path}?${params.toString()}`,
@@ -50,12 +51,8 @@ export function googleFlightsSearchUrlFromSkyscanner(currentUrl: string, fallbac
   params.set("curr", context.currency);
   params.set("gl", context.country);
   params.set("hl", context.locale);
-  if (slices.length > 0) {
-    params.set("origin", slices[0].origin);
-    params.set("destination", slices[0].destination);
-    params.set("depart", slices[0].date);
-    if (slices[1]?.date) params.set("return", slices[1].date);
-  }
+  const query = googleFlightsSearchQuery(slices, context.cabin);
+  if (query) params.set("q", query);
   return `https://www.google.com/travel/flights?${params.toString()}`;
 }
 
@@ -129,6 +126,21 @@ function skyscannerRoutePath(
     return `/transport/flights/${first.origin.toLowerCase()}/${first.destination.toLowerCase()}/${skyscannerCompactDate(
       firstDate,
     )}/`;
+  }
+  const second = slices[1];
+  const secondDate = second?.departureDate || second?.date || "";
+  if (
+    slices.length === 2 &&
+    first?.origin &&
+    first.destination &&
+    firstDate &&
+    second?.origin === first.destination &&
+    second.destination === first.origin &&
+    secondDate
+  ) {
+    return `/transport/flights/${first.origin.toLowerCase()}/${first.destination.toLowerCase()}/${skyscannerCompactDate(
+      firstDate,
+    )}/${skyscannerCompactDate(secondDate)}/`;
   }
 
   const route = slices
@@ -224,6 +236,19 @@ function skyscannerRouteSlices(currentUrl: string): RouteSlice[] {
   }
 }
 
+function googleFlightsSearchQuery(slices: RouteSlice[], cabin: string): string {
+  const [first, second] = slices;
+  if (!first) return "";
+  const cabinSuffix = cabin && cabin !== "economy" ? ` ${cabin.replaceAll("-", " ")}` : "";
+  if (!second) {
+    return `Flights from ${first.origin} to ${first.destination} on ${first.date} one way${cabinSuffix}`;
+  }
+  if (slices.length === 2 && second.origin === first.destination && second.destination === first.origin) {
+    return `Flights from ${first.origin} to ${first.destination} on ${first.date} returning ${second.date}${cabinSuffix}`;
+  }
+  return "";
+}
+
 function parseSkyscannerDate(value: string): string {
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   if (/^\d{6}$/.test(value)) return `20${value.slice(0, 2)}-${value.slice(2, 4)}-${value.slice(4, 6)}`;
@@ -255,7 +280,8 @@ function normalizeSkyscannerCabin(value: unknown): string {
 
 function normalizeAirportCode(value: string | undefined): string {
   const code = value?.trim().toUpperCase() || "";
-  return /^[A-Z0-9]{3,4}$/.test(code) ? code : "";
+  if (!/^[A-Z0-9]{3,4}$/.test(code)) return "";
+  return /^[A-Z]{4}$/.test(code) && code.endsWith("A") ? code.slice(0, 3) : code;
 }
 
 function normalizeCountry(value: string | null): string {

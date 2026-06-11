@@ -1668,7 +1668,7 @@ function renderResults(results: CountryResult[]): string {
 function compareCountryResultDisplayOrder(left: CountryResult, right: CountryResult): number {
   const priceDifference =
     (left.cheapest?.price ?? Number.POSITIVE_INFINITY) - (right.cheapest?.price ?? Number.POSITIVE_INFINITY);
-  if (priceDifference !== 0) return priceDifference;
+  if (Number.isFinite(priceDifference) && priceDifference !== 0) return priceDifference;
 
   const baselineCountry = state.baseline?.country;
   const currentDifference = (left.country === baselineCountry ? 0 : 1) - (right.country === baselineCountry ? 0 : 1);
@@ -2241,7 +2241,7 @@ async function compareCountries(): Promise<void> {
 async function compareSearchRows(): Promise<void> {
   const selectedCountries = selectedGoogleFlightsCountries();
   if (selectedCountries.length === 0) {
-    state.error = "Enter at least one country code.";
+    state.error = t()("enterAtLeastOneCountryCode");
     render();
     return;
   }
@@ -2249,8 +2249,8 @@ async function compareSearchRows(): Promise<void> {
   const baseline = parseCurrentSearchPage();
   if (baseline.results.length === 0) {
     state.error = isCurrentSkyscannerSearchPage()
-      ? "No Skyscanner search API response captured yet. Reload the page and try again."
-      : "No visible Google Flights result rows found yet.";
+      ? t()("noSkyscannerSearchApiResponse")
+      : t()("noVisibleGoogleFlightsRows");
     render();
     return;
   }
