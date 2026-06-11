@@ -179,6 +179,11 @@ describe("crossProviderSearch", () => {
       "https://www.skyscanner.co.id/transport/flights/cgki/mela/260624/?adultsv2=1&cabinclass=economy&currency=USD&locale=en-US&market=ID",
     );
     expect(new URL(jakartaMelbourneUrl).searchParams.get("q")).toBe("Flights from CGK to MEL on 2026-06-24 one way");
+
+    const brusselsFrankfurtUrl = googleFlightsSearchUrlFromSkyscanner(
+      "https://www.skyscanner.co.id/transport/flights/brus/fran/260624/?adultsv2=1&cabinclass=economy&currency=USD&locale=en-US&market=ID",
+    );
+    expect(new URL(brusselsFrankfurtUrl).searchParams.get("q")).toBe("Flights from BRU to FRA on 2026-06-24 one way");
   });
 
   it("preserves broader BCP 47 locale tags in cross-provider links", () => {
@@ -332,6 +337,11 @@ describe("crossProviderSearch", () => {
       "https://www.google.com/travel/flights/search?tfs=CBwQAhopEgoyMDI2LTA2LTI0agwIAxIIL20vMDQ0cnZyDQgDEgkvbS8wY2hnem1AAUgBcAGCAQsI____________AZgBAg&tfu=EgIIACIA&hl=en-US&gl=KR&curr=USD",
     );
     expect(new URL(jakartaMelbourneUrl).pathname).toBe("/transport/flights/cgki/mela/260624/");
+
+    const brusselsFrankfurtUrl = routeSpecificCrossProviderSearchUrl(
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhooEgoyMDI2LTA2LTI0agwIAxIIL20vMDE3N3pyDAgDEggvbS8wMnowakABSAFwAYIBCwj___________8BmAEC&tfu=EgIIACIA&hl=en-US&gl=KR&curr=USD",
+    );
+    expect(new URL(brusselsFrankfurtUrl).pathname).toBe("/transport/flights/brus/fran/260624/");
   });
 
   it("falls back to obvious Skyscanner airport routes when city routes are unavailable", () => {

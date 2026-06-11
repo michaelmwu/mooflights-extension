@@ -781,6 +781,10 @@ function currentCountryCode(): string {
   return countryCodeFromDisplayName(visibleCountry) || visibleCountry || "CURRENT";
 }
 
+function isRealCountryCode(country: string): boolean {
+  return /^[A-Z]{2}$/.test(country.toUpperCase());
+}
+
 function currentComparableCountryCode(): string {
   if (isCurrentSkyscannerPage()) return currentSkyscannerCountryCode() || "US";
   return (
@@ -2240,7 +2244,7 @@ async function compareCountries(): Promise<void> {
   const comparePageKey = state.pageKey;
   const baseUrl = countryComparisonUrl(window.location.href, currentComparableCountryCode(), comparableCurrency);
   const baselineCandidate = hasComparableCurrency ? parseCurrentBookingPage() : null;
-  const baseline = baselineCandidate;
+  const baseline = baselineCandidate && isRealCountryCode(baselineCandidate.country) ? baselineCandidate : null;
   state.baseline = baseline;
   const countries = selectedCountries.filter((country) => country !== baseline?.country);
   state.progressTotal = countries.length;

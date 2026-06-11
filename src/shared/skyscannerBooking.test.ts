@@ -135,6 +135,35 @@ describe("Skyscanner country comparison parser", () => {
     });
   });
 
+  it("prefers Skyscanner URL currency over ambiguous dollar price text", () => {
+    document.body.innerHTML = `
+      <ol>
+        <li>
+          <div data-testid="PricingItem">
+            <div class="AgentDetails_agentDetails__MGEyM"><p>Trip.com</p></div>
+            <div data-testid="CtaSection">
+              <p class="TotalPrice_visuallyHidden__NmEzM">$210 total.</p>
+              <a href="/transport_deeplink/booking" aria-label="Select Trip.com." data-testid="pricing-item-redirect-button">Select</a>
+            </div>
+          </div>
+        </li>
+      </ol>
+    `;
+
+    const result = parseSkyscannerPricingOptions(
+      document,
+      "SG",
+      "https://www.skyscanner.com.sg/transport/flights/cju/nrt/260624/config/example?currency=SGD",
+    );
+
+    expect(result.cheapest).toMatchObject({
+      provider: "Trip.com",
+      price: 210,
+      currency: "SGD",
+      priceText: "$210 total.",
+    });
+  });
+
   it("parses unified-search API itinerary rows", () => {
     const payload = {
       itineraries: {
@@ -178,7 +207,7 @@ describe("Skyscanner country comparison parser", () => {
     const result = parseSkyscannerSearchApiResponse(
       payload,
       "US",
-      "https://www.skyscanner.com/transport/flights/cju/tyoa/260624/",
+      "https://www.skyscanner.com/transport/flights/cju/tyoa/260624/?currency=AUD",
     );
 
     expect(result.status).toBe("ready");
@@ -186,7 +215,7 @@ describe("Skyscanner country comparison parser", () => {
     expect(result.results[0]).toMatchObject({
       price: 212,
       priceText: "$212",
-      currency: "USD",
+      currency: "AUD",
       carrierText: "Korean Air, KE",
       timeText: "12:55-15:25",
       durationText: "2 hr 30 min",
@@ -223,5 +252,32 @@ describe("Skyscanner country comparison parser", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]?.textContent).toContain("Korean Air");
     expect(rows[0]?.textContent).not.toContain("126 results sorted by Best");
+  });
+
+  it("finds Skyscanner result rows with supported localized currency formats", () => {
+    document.body.innerHTML = `
+      <main>
+        <article data-testid="itinerary-card">
+          <p>Thai Airways</p>
+          <p>1 deal from</p>
+          <strong>THB 4,200</strong>
+          <a href="/transport/flights/bkk/nrt/260624/config/example">Select</a>
+        </article>
+        <article data-testid="itinerary-card">
+          <p>Malaysia Airlines</p>
+          <p>1 deal from</p>
+          <strong>RM 520</strong>
+          <a href="/transport/flights/kul/nrt/260624/config/example">Select</a>
+        </article>
+      </main>
+    `;
+
+    const rows = skyscannerSearchResultRows(document);
+
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => row.textContent)).toEqual([
+      expect.stringContaining("Thai"),
+      expect.stringContaining("Malaysia"),
+    ]);
   });
 });

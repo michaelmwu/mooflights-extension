@@ -52,6 +52,8 @@ const GOOGLE_LOCATION_TO_SKYSCANNER_CODE: Record<string, string> = {
   "/m/0chgzm": "MELA",
   "/m/0ftkx": "TPET",
   "/m/0ftkxr": "TPET",
+  "/m/0177z": "BRUS",
+  "/m/02z0j": "FRAN",
 };
 
 const GOOGLE_LOCATION_TO_SKYSCANNER_AIRPORT_FALLBACK: Record<string, string> = {
@@ -63,6 +65,7 @@ const GOOGLE_LOCATION_TO_SKYSCANNER_AIRPORT_FALLBACK: Record<string, string> = {
 const SKYSCANNER_LOCATION_TO_GOOGLE_CODE: Record<string, string> = {
   BJSA: "BJS",
   BKKT: "BKK",
+  BRUS: "BRU",
   BUEA: "BUE",
   CGKI: "CGK",
   CHIA: "CHI",
@@ -70,6 +73,7 @@ const SKYSCANNER_LOCATION_TO_GOOGLE_CODE: Record<string, string> = {
   CSHA: "SHA",
   DFWA: "DFW",
   DXBA: "DXB",
+  FRAN: "FRA",
   HOUA: "HOU",
   MEXA: "MEX",
   ISTA: "IST",

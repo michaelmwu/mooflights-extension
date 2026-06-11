@@ -164,8 +164,9 @@ function normalizeCurrencyCode(value: string): string {
 }
 
 export function parseSkyscannerPricingOptions(root: ParentNode, country: string, url: string): CountryResult {
+  const pageCurrency = skyscannerCurrencyFromUrl(url);
   const options = Array.from(root.querySelectorAll('[data-testid="PricingItem"]'))
-    .map((row) => parseSkyscannerPricingOption(row, url))
+    .map((row) => parseSkyscannerPricingOption(row, url, pageCurrency))
     .filter((option): option is BookingOption => Boolean(option))
     .sort((left, right) => left.price - right.price || left.provider.localeCompare(right.provider));
 
@@ -179,7 +180,16 @@ export function parseSkyscannerPricingOptions(root: ParentNode, country: string,
   };
 }
 
-function parseSkyscannerPricingOption(row: Element, pageUrl: string): BookingOption | null {
+function skyscannerCurrencyFromUrl(url: string): string {
+  try {
+    const currency = new URL(url).searchParams.get("currency")?.trim().toUpperCase() || "";
+    return /^[A-Z]{3}$/.test(currency) ? currency : "";
+  } catch {
+    return "";
+  }
+}
+
+function parseSkyscannerPricingOption(row: Element, pageUrl: string, pageCurrency: string): BookingOption | null {
   const provider = skyscannerProviderLabel(row);
   const price = skyscannerProviderPrice(row);
   if (!provider || !price) return null;
@@ -188,7 +198,7 @@ function parseSkyscannerPricingOption(row: Element, pageUrl: string): BookingOpt
   return {
     provider,
     price: price.price,
-    currency: price.currency,
+    currency: pageCurrency || price.currency,
     priceText: price.priceText,
     isDirect: false,
     ...(bookingUrl ? { bookingUrl } : {}),
@@ -236,7 +246,7 @@ function skyscannerBookingOptionUrl(row: Element, pageUrl: string): string | und
 }
 
 export function parseSkyscannerSearchApiResponse(payload: unknown, country: string, url: string): SearchCountryResult {
-  const results = skyscannerSearchResults(payload);
+  const results = skyscannerSearchResults(payload, skyscannerCurrencyFromUrl(url));
   return {
     country,
     url,
@@ -245,7 +255,7 @@ export function parseSkyscannerSearchApiResponse(payload: unknown, country: stri
   };
 }
 
-function skyscannerSearchResults(payload: unknown): SearchResult[] {
+function skyscannerSearchResults(payload: unknown, pageCurrency: string): SearchResult[] {
   const body =
     payload && typeof payload === "object" && !Array.isArray(payload) ? (payload as Record<string, unknown>) : {};
   const itineraries = objectValue(body.itineraries);
@@ -255,11 +265,11 @@ function skyscannerSearchResults(payload: unknown): SearchResult[] {
       ? body.results
       : [];
   return rawResults
-    .map((item, index) => parseSkyscannerSearchResult(item, index))
+    .map((item, index) => parseSkyscannerSearchResult(item, index, pageCurrency))
     .filter((result): result is SearchResult => Boolean(result));
 }
 
-function parseSkyscannerSearchResult(value: unknown, rowIndex: number): SearchResult | null {
+function parseSkyscannerSearchResult(value: unknown, rowIndex: number, pageCurrency: string): SearchResult | null {
   const result = objectValue(value);
   const price = objectValue(result.price);
   const rawPrice = numberValue(price.raw);
@@ -290,7 +300,7 @@ function parseSkyscannerSearchResult(value: unknown, rowIndex: number): SearchRe
     matchKey,
     rowIndex,
     price: rawPrice,
-    currency: currencyFromFormattedPrice(priceText),
+    currency: pageCurrency || currencyFromFormattedPrice(priceText),
     priceText,
     summaryText,
     ...(carrierText ? { carrierText } : {}),
@@ -411,7 +421,7 @@ function isSkyscannerComparableSearchRow(element: Element | null): element is El
 }
 
 function hasSkyscannerResultPrice(text: string): boolean {
-  return /(?:[$€£¥₹₩]\s*\d|\b(?:USD|EUR|GBP|JPY|KRW|INR|AUD|CAD|NZD|SGD|HKD|ZAR)\s*\d|\b\d+\s+deals?\s+from\b)/i.test(
+  return /(?:[$€£¥₹₩฿]\s*\d|\b(?:USD|EUR|GBP|JPY|KRW|INR|AUD|CAD|NZD|SGD|HKD|ZAR|THB|MYR|CNY|RMB|RM)\s*\d|\b\d+\s*(?:USD|EUR|GBP|JPY|KRW|INR|AUD|CAD|NZD|SGD|HKD|ZAR|THB|MYR|CNY|RMB|RM)\b|\b\d+\s+deals?\s+from\b)/i.test(
     text,
   );
 }
