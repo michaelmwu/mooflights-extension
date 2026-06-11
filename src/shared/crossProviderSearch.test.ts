@@ -99,6 +99,11 @@ describe("crossProviderSearch", () => {
       "https://www.skyscanner.com/transport/flights/laxa/nrt/260624/?adultsv2=1&cabinclass=economy&currency=USD&locale=en-US&market=US",
     );
     expect(new URL(laUrl).searchParams.get("q")).toBe("Flights from LAX to NRT on 2026-06-24 one way");
+
+    const newYorkParisUrl = googleFlightsSearchUrlFromSkyscanner(
+      "https://www.skyscanner.co.id/transport/flights/nyca/pari/260624/?adultsv2=1&cabinclass=economy&currency=USD&locale=en-US&market=ID",
+    );
+    expect(new URL(newYorkParisUrl).searchParams.get("q")).toBe("Flights from NYC to PAR on 2026-06-24 one way");
   });
 
   it("preserves broader BCP 47 locale tags in cross-provider links", () => {
@@ -177,6 +182,11 @@ describe("crossProviderSearch", () => {
       "https://www.google.com/travel/flights/search?tfs=CBwQAhouEgoyMDI2LTA2LTI0MgdTS1lURUFNag4IAxIKL20vMDMwcWIzdHIHCAESA05SVEABSAFwAYIBCwj___________8BmAEC&tfu=EgIIACIA&hl=en-US&gl=KR&curr=USD",
     );
     expect(new URL(laUrl).pathname).toBe("/transport/flights/laxa/nrt/260624/");
+
+    const newYorkParisUrl = routeSpecificCrossProviderSearchUrl(
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhoyEgoyMDI2LTA2LTI0MgdTS1lURUFNag0IAxIJL20vMDJfMjg2cgwIAxIIL20vMDVxdGpAAUgBcAGCAQsI____________AZgBAg&tfu=EgIIACIA&hl=en-US&gl=KR&curr=USD",
+    );
+    expect(new URL(newYorkParisUrl).pathname).toBe("/transport/flights/nyca/pari/260624/");
   });
 
   it("omits route-specific cross-provider links when Google tfs has unmapped city endpoints", () => {

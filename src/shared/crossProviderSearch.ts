@@ -18,6 +18,8 @@ type RouteSlice = {
 const GOOGLE_LOCATION_TO_SKYSCANNER_CODE: Record<string, string> = {
   "/m/07dfk": "TYOA",
   "/m/04jpl": "LOND",
+  "/m/02_286": "NYCA",
+  "/m/05qtj": "PARI",
   "/m/030qb3t": "LAXA",
   "/m/0ftkx": "TPET",
   "/m/0ftkxr": "TPET",
@@ -26,6 +28,8 @@ const GOOGLE_LOCATION_TO_SKYSCANNER_CODE: Record<string, string> = {
 const SKYSCANNER_LOCATION_TO_GOOGLE_CODE: Record<string, string> = {
   LAXA: "LAX",
   LOND: "LON",
+  NYCA: "NYC",
+  PARI: "PAR",
   TPET: "TPE",
   TYOA: "TYO",
 };
