@@ -68,7 +68,9 @@ test("opens Google Flights country comparison tabs from a routed US booking page
   await expect(panel.getByText("Compare country pricing")).toBeVisible();
   const skyscannerSearchLink = panel.getByRole("link", { name: "Search Skyscanner" });
   await expect(skyscannerSearchLink).toBeVisible();
-  const skyscannerSearchUrl = new URL((await skyscannerSearchLink.getAttribute("href")) || "");
+  const skyscannerSearchHref = await skyscannerSearchLink.getAttribute("href");
+  expect(skyscannerSearchHref).toEqual(expect.any(String));
+  const skyscannerSearchUrl = new URL(skyscannerSearchHref as string);
   expect(skyscannerSearchUrl.hostname).toBe("www.skyscanner.com");
   expect(skyscannerSearchUrl.searchParams.get("currency")).toBe("USD");
   expect(skyscannerSearchUrl.searchParams.get("market")).toBe("US");
@@ -218,7 +220,9 @@ test("renders Skyscanner search row comparison badges from captured API response
   await expect(panel.getByText("Compare visible flight rows")).toBeVisible();
   const googleFlightsSearchLink = panel.getByRole("link", { name: "Search Google Flights" });
   await expect(googleFlightsSearchLink).toBeVisible();
-  const googleFlightsSearchUrl = new URL((await googleFlightsSearchLink.getAttribute("href")) || "");
+  const googleFlightsSearchHref = await googleFlightsSearchLink.getAttribute("href");
+  expect(googleFlightsSearchHref).toEqual(expect.any(String));
+  const googleFlightsSearchUrl = new URL(googleFlightsSearchHref as string);
   expect(googleFlightsSearchUrl.hostname).toBe("www.google.com");
   expect(googleFlightsSearchUrl.searchParams.get("curr")).toBe("USD");
   expect(googleFlightsSearchUrl.searchParams.get("gl")).toBe("ZA");

@@ -748,6 +748,7 @@ function applySkyscannerMarketSearchResponse(message: {
   requestId?: unknown;
   country?: unknown;
   payload?: unknown;
+  errorCode?: unknown;
   error?: unknown;
 }): void {
   if (typeof message.requestId !== "string") return;
@@ -755,11 +756,20 @@ function applySkyscannerMarketSearchResponse(message: {
   if (!pending) return;
   pendingSkyscannerMarketSearches.delete(message.requestId);
   window.clearTimeout(pending.timeoutId);
+  if (typeof message.errorCode === "string" && message.errorCode) {
+    pending.reject(new Error(skyscannerMarketErrorMessage(message.errorCode)));
+    return;
+  }
   if (typeof message.error === "string" && message.error) {
-    pending.reject(new Error(message.error));
+    pending.reject(new Error(t()("countryComparisonFailed")));
     return;
   }
   pending.resolve(message.payload);
+}
+
+function skyscannerMarketErrorMessage(errorCode: string): string {
+  if (errorCode === "missing-search-request") return t()("noSkyscannerSearchApiResponse");
+  return t()("countryComparisonFailed");
 }
 
 function currentCountryCode(): string {

@@ -9,7 +9,8 @@ export const SKYSCANNER_SEARCH_RESULT_ROW_SELECTOR = [
   '[data-testid*="itinerary" i]',
   'a[href*="/transport/flights/"][href*="/config/"]',
   'a[href*="/transport/d/"][href*="/config/"]',
-  "button",
+  'button[aria-label^="Select" i]',
+  'button[data-testid*="itinerary" i]',
 ].join(",");
 
 const SKYSCANNER_COUNTRY_HOSTS: Record<string, string> = {

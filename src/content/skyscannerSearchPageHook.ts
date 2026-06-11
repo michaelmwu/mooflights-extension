@@ -138,7 +138,7 @@ async function compareMarket(message: { requestId?: unknown; country?: unknown }
   const latest = window.__mooFlightsSkyscannerSearchCapture;
   const latestRequest = latest?.request;
   if (!requestId || !country || !latestRequest || !captureMatchesCurrentPage(latest)) {
-    postMarketResponse(requestId, country, undefined, "No Skyscanner search request captured yet.");
+    postMarketResponse(requestId, country, undefined, "missing-search-request");
     return;
   }
 
@@ -164,12 +164,12 @@ async function compareMarket(message: { requestId?: unknown; country?: unknown }
     }
     const payload = await response.json();
     postMarketResponse(requestId, country, payload);
-  } catch (error) {
-    postMarketResponse(requestId, country, undefined, error instanceof Error ? error.message : "Market search failed.");
+  } catch {
+    postMarketResponse(requestId, country, undefined, "market-search-failed");
   }
 }
 
-function postMarketResponse(requestId: string, country: string, payload?: unknown, error?: string): void {
+function postMarketResponse(requestId: string, country: string, payload?: unknown, errorCode?: string): void {
   window.postMessage(
     {
       source: MESSAGE_SOURCE,
@@ -177,7 +177,7 @@ function postMarketResponse(requestId: string, country: string, payload?: unknow
       requestId,
       country,
       ...(payload !== undefined ? { payload } : {}),
-      ...(error ? { error } : {}),
+      ...(errorCode ? { errorCode } : {}),
     },
     window.location.origin,
   );
