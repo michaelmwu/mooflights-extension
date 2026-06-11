@@ -2105,7 +2105,7 @@ function currentSkyscannerCountryCode(): string {
 
 function inferSkyscannerCurrency(root: ParentNode): string {
   const candidates = [
-    ...Array.from(root.querySelectorAll('[class*="ProviderListTitle"], [aria-label], [role="text"]')).map(
+    ...Array.from(root.querySelectorAll('[class*="ProviderListTitle"], [role="text"]')).map(
       (element) => element.textContent || "",
     ),
     root instanceof Document ? root.body?.textContent || "" : root.textContent || "",
@@ -2736,39 +2736,40 @@ function ensureSearchBadgeStyles(): void {
       overflow: visible !important;
     }
     .moo-flights-search-badge {
-      position: absolute;
-      top: -13px;
-      left: auto;
-      right: 0;
-      z-index: 4;
-      display: inline-flex;
-      align-items: center;
-      justify-content: flex-end;
-      width: max-content;
-      max-width: min(280px, calc(100vw - 28px));
-      min-height: 16px;
-      margin: 0;
-      border: 0;
-      border-radius: 0;
-      background: transparent;
-      color: #d8dbe0;
-      padding: 0;
-      font: 500 13px/1.25 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      letter-spacing: 0;
-      white-space: nowrap;
-      pointer-events: none;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      box-shadow: none;
-      text-align: right;
+      position: absolute !important;
+      top: 4px !important;
+      left: auto !important;
+      right: 8px !important;
+      z-index: 2147483646 !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: max-content !important;
+      max-width: min(260px, calc(100vw - 32px)) !important;
+      min-height: 22px !important;
+      margin: 0 !important;
+      border: 1px solid rgba(15, 118, 110, 0.22) !important;
+      border-radius: 999px !important;
+      background: #0f766e !important;
+      color: #ffffff !important;
+      padding: 3px 8px !important;
+      font: 700 12px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+      letter-spacing: 0 !important;
+      white-space: nowrap !important;
+      pointer-events: none !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18) !important;
+      text-align: center !important;
     }
     button.moo-flights-search-badge {
-      pointer-events: auto;
-      cursor: pointer;
+      pointer-events: auto !important;
+      cursor: pointer !important;
     }
     .moo-flights-search-badge:hover {
-      color: #f1f3f4;
-      text-decoration: underline;
+      background: #115e59 !important;
+      color: #ffffff !important;
+      text-decoration: none !important;
     }
     [data-moo-flights-search-highlight] {
       outline: 3px solid #0f766e !important;

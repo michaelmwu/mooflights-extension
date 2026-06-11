@@ -36,10 +36,11 @@ function installFetchHook(): void {
   const originalFetch = window.fetch;
   if (typeof originalFetch !== "function") return;
   window.fetch = async function hookedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-    const request = captureFetchRequest(input, init);
-    const response = await originalFetch.call(this, input, init);
     const url = requestUrl(input);
-    if (isSearchApiUrl(url) && !isReplaySearchApiUrl(url)) {
+    const shouldCapture = isSearchApiUrl(url) && !isReplaySearchApiUrl(url);
+    const request = shouldCapture ? captureFetchRequest(input, init) : undefined;
+    const response = await originalFetch.call(this, input, init);
+    if (shouldCapture && request) {
       const responseClone = response.clone();
       void request.then((capturedRequest) => captureResponse(url, responseClone, capturedRequest));
     }
