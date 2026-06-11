@@ -1,9 +1,4 @@
-import type {
-  GoogleFlightsBookingOption,
-  GoogleFlightsCountryResult,
-  GoogleFlightsSearchCountryResult,
-  GoogleFlightsSearchResult,
-} from "./countryComparison";
+import type { BookingOption, CountryResult, SearchCountryResult, SearchResult } from "./countryComparison";
 
 export const DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES = [
   "US",
@@ -196,14 +191,10 @@ export function parseGoogleFlightsMatrixSearch(
   };
 }
 
-export function parseGoogleFlightsBookingOptions(
-  root: ParentNode,
-  country: string,
-  url: string,
-): GoogleFlightsCountryResult {
+export function parseBookingOptions(root: ParentNode, country: string, url: string): CountryResult {
   const options = Array.from(root.querySelectorAll(".gN1nAc"))
     .map((row) => parseBookingOption(row, url))
-    .filter((option): option is GoogleFlightsBookingOption => Boolean(option))
+    .filter((option): option is BookingOption => Boolean(option))
     .sort((left, right) => left.price - right.price || left.provider.localeCompare(right.provider));
 
   return {
@@ -216,15 +207,17 @@ export function parseGoogleFlightsBookingOptions(
   };
 }
 
-export function parseGoogleFlightsSearchResults(
+export const parseGoogleFlightsBookingOptions = parseBookingOptions;
+
+export function parseSearchResults(
   root: ParentNode,
   country: string,
   url: string,
   limit = Number.POSITIVE_INFINITY,
-): GoogleFlightsSearchCountryResult {
+): SearchCountryResult {
   const results = searchResultRows(root)
     .map((row, index) => parseSearchResultRow(row, index))
-    .filter((result): result is GoogleFlightsSearchResult => Boolean(result))
+    .filter((result): result is SearchResult => Boolean(result))
     .slice(0, limit);
 
   return {
@@ -234,6 +227,8 @@ export function parseGoogleFlightsSearchResults(
     status: results.length > 0 ? "ready" : "empty",
   };
 }
+
+export const parseGoogleFlightsSearchResults = parseSearchResults;
 
 export function searchResultRows(root: ParentNode): Element[] {
   const seen = new Set<Element>();
@@ -566,7 +561,7 @@ function isString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
 }
 
-function parseSearchResultRow(row: Element, rowIndex: number): GoogleFlightsSearchResult | null {
+function parseSearchResultRow(row: Element, rowIndex: number): SearchResult | null {
   const price = parseSearchResultPrice(row);
   if (!price) return null;
 
@@ -823,7 +818,7 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function parseBookingOption(row: Element, pageUrl: string): GoogleFlightsBookingOption | null {
+function parseBookingOption(row: Element, pageUrl: string): BookingOption | null {
   const label = providerLabel(row);
   const price = providerPrice(row);
   if (!label || !price) return null;

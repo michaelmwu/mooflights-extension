@@ -1,11 +1,12 @@
 import { safeChromeCall, sendRuntimeMessage } from "../shared/chromeRuntime";
 import { createContentTranslator } from "../shared/contentI18n";
 import {
+  type CountryResult,
   countryComparisonUrl,
-  type GoogleFlightsCountryResult,
-  type GoogleFlightsSearchCountryResult,
-  type GoogleFlightsSearchResult,
+  type SearchCountryResult,
+  type SearchResult,
 } from "../shared/countryComparison";
+import { crossProviderSearchUrl } from "../shared/crossProviderSearch";
 import { flagEmoji } from "../shared/flags";
 import {
   DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES,
@@ -49,9 +50,9 @@ import {
 
 type CompareState = {
   comparing: boolean;
-  baseline: GoogleFlightsCountryResult | null;
+  baseline: CountryResult | null;
   baselineSignature: string;
-  results: GoogleFlightsCountryResult[];
+  results: CountryResult[];
   resultsCachedAt: number;
   error: string;
   countryInput: string;
@@ -66,8 +67,8 @@ type CompareState = {
   progressTotal: number;
   countrySearch: string;
   language: AppLanguage;
-  searchBaseline: GoogleFlightsSearchCountryResult | null;
-  searchResults: GoogleFlightsSearchCountryResult[];
+  searchBaseline: SearchCountryResult | null;
+  searchResults: SearchCountryResult[];
   searchBestByRowKey: Record<string, SearchBestPrice>;
 };
 
@@ -81,7 +82,7 @@ type SearchBestPrice = {
   priceText: string;
   currentPrice: number;
   delta: number;
-  matchConfidence: GoogleFlightsSearchResult["matchConfidence"];
+  matchConfidence: SearchResult["matchConfidence"];
 };
 
 type SearchCountryPriceOption = {
@@ -176,18 +177,18 @@ const state: CompareState = {
 const resultCache = new Map<
   string,
   {
-    results: GoogleFlightsCountryResult[];
+    results: CountryResult[];
     cachedAt: number;
   }
 >();
 const searchComparisonCache = new Map<string, StoredSearchComparisonEntry>();
 
-type StoredResultCache = Record<string, { results: GoogleFlightsCountryResult[]; cachedAt: number }>;
+type StoredResultCache = Record<string, { results: CountryResult[]; cachedAt: number }>;
 
 type StoredSearchComparisonHandoff = {
   pageKey: string;
   selectedCountries: string[];
-  results: GoogleFlightsSearchCountryResult[];
+  results: SearchCountryResult[];
   cachedAt: number;
 };
 
@@ -206,10 +207,7 @@ type SkyscannerSearchCapture = {
 const SKYSCANNER_SEARCH_HOOK_SOURCE = "mooFlightsSkyscannerSearchHook";
 const SKYSCANNER_CONTENT_SOURCE = "mooFlightsSkyscannerContent";
 
-function readCachedResults(
-  pageKey: string,
-  now = Date.now(),
-): { results: GoogleFlightsCountryResult[]; cachedAt: number } | null {
+function readCachedResults(pageKey: string, now = Date.now()): { results: CountryResult[]; cachedAt: number } | null {
   const cached = resultCache.get(pageKey);
   if (!cached) return null;
   if (now - cached.cachedAt <= RESULT_CACHE_TTL_MS) return cached;
@@ -223,7 +221,7 @@ function pruneExpiredResultCache(now = Date.now()): void {
   }
 }
 
-function applyCachedResults(cached: { results: GoogleFlightsCountryResult[]; cachedAt: number } | null): void {
+function applyCachedResults(cached: { results: CountryResult[]; cachedAt: number } | null): void {
   state.results = cached?.results || [];
   state.resultsCachedAt = cached?.cachedAt || 0;
 }
@@ -243,11 +241,7 @@ async function loadStoredCachedResults(cacheKey: string, now = Date.now()): Prom
   render();
 }
 
-async function storeCachedResults(
-  cacheKey: string,
-  results: GoogleFlightsCountryResult[],
-  cachedAt = Date.now(),
-): Promise<void> {
+async function storeCachedResults(cacheKey: string, results: CountryResult[], cachedAt = Date.now()): Promise<void> {
   const cached = { results, cachedAt };
   resultCache.set(cacheKey, cached);
   const cache = await readStoredResultCache();
@@ -280,7 +274,7 @@ function normalizeStoredResultCache(value: unknown): StoredResultCache {
     const candidate = entry as { results?: unknown; cachedAt?: unknown };
     if (!Array.isArray(candidate.results) || typeof candidate.cachedAt !== "number") continue;
     cache[pageKey] = {
-      results: sanitizeResultsForStorage(candidate.results.filter(isGoogleFlightsCountryResult)),
+      results: sanitizeResultsForStorage(candidate.results.filter(isCountryResult)),
       cachedAt: candidate.cachedAt,
     };
   }
@@ -291,7 +285,7 @@ function pruneStoredResultCache(cache: StoredResultCache, now = Date.now()): Sto
   return Object.fromEntries(Object.entries(cache).filter(([, cached]) => now - cached.cachedAt <= RESULT_CACHE_TTL_MS));
 }
 
-function isGoogleFlightsCountryResult(value: unknown): value is GoogleFlightsCountryResult {
+function isCountryResult(value: unknown): value is CountryResult {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const candidate = value as { country?: unknown; url?: unknown; options?: unknown; status?: unknown };
   return (
@@ -302,12 +296,12 @@ function isGoogleFlightsCountryResult(value: unknown): value is GoogleFlightsCou
   );
 }
 
-function sanitizeResultsForStorage(results: GoogleFlightsCountryResult[]): GoogleFlightsCountryResult[] {
+function sanitizeResultsForStorage(results: CountryResult[]): CountryResult[] {
   return results.map(sanitizeResultForStorage);
 }
 
-function sanitizeResultForStorage(result: GoogleFlightsCountryResult): GoogleFlightsCountryResult {
-  const safeOptions = result.options.filter(isGoogleFlightsBookingOption).map((option) => {
+function sanitizeResultForStorage(result: CountryResult): CountryResult {
+  const safeOptions = result.options.filter(isBookingOption).map((option) => {
     const { bookingUrl: _bookingUrl, ...safeOption } = option;
     return safeOption;
   });
@@ -431,7 +425,7 @@ function bestStoredSearchComparisonCacheEntry(
   cache: StoredSearchComparisonCache,
   cacheKey: string,
   baselineSignature: string,
-  currentBaseline: GoogleFlightsSearchCountryResult,
+  currentBaseline: SearchCountryResult,
   now = Date.now(),
 ): { entryKey: string; entry: StoredSearchComparisonEntry; source: string } | null {
   if (currentBaseline.results.length === 0) return null;
@@ -449,7 +443,7 @@ function bestStoredSearchComparisonCacheEntry(
 }
 
 function storedSearchComparisonOverlapScore(
-  currentBaseline: GoogleFlightsSearchCountryResult,
+  currentBaseline: SearchCountryResult,
   entry: StoredSearchComparisonEntry,
 ): number {
   if (currentBaseline.results.length === 0) return 0;
@@ -582,12 +576,12 @@ function normalizeStoredSearchComparisonHandoff(value: unknown): StoredSearchCom
     selectedCountries: filterAvailableGoogleFlightsCountryCodes(
       candidate.selectedCountries.filter((country): country is string => typeof country === "string"),
     ),
-    results: candidate.results.filter(isGoogleFlightsSearchCountryResult),
+    results: candidate.results.filter(isSearchCountryResult),
     cachedAt: candidate.cachedAt,
   };
 }
 
-function isGoogleFlightsBookingOption(value: unknown): value is GoogleFlightsCountryResult["options"][number] {
+function isBookingOption(value: unknown): value is CountryResult["options"][number] {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const candidate = value as {
     provider?: unknown;
@@ -810,14 +804,14 @@ function currentVisibleCurrencyCode(): string {
   return currency;
 }
 
-function parseCurrentBookingPage(): GoogleFlightsCountryResult {
+function parseCurrentBookingPage(): CountryResult {
   if (isCurrentSkyscannerPanelPage()) {
     return parseSkyscannerPricingOptions(document, currentCountryCode(), window.location.href);
   }
   return parseGoogleFlightsBookingOptions(document, currentCountryCode(), window.location.href);
 }
 
-function parseCurrentSearchPage(): GoogleFlightsSearchCountryResult {
+function parseCurrentSearchPage(): SearchCountryResult {
   if (isCurrentSkyscannerSearchPage()) {
     if (!latestSkyscannerSearchCapture || !skyscannerSearchCaptureMatchesCurrentPage(latestSkyscannerSearchCapture)) {
       return { country: currentComparableCountryCode(), url: window.location.href, results: [], status: "empty" };
@@ -1200,8 +1194,10 @@ function render(): void {
           : `${renderMooFlightsPanelHeader({ optionsAction: "open-options", labels: panelChromeLabels() })}
             ${
               mode === "search"
-                ? renderSearchComparisonPanel(selectedCodes)
-                : `${renderMilesEstimatePrompt(matrixSearch)}
+                ? `${renderCrossProviderSearchAction()}
+                  ${renderSearchComparisonPanel(selectedCodes)}`
+                : `${renderCrossProviderSearchAction()}
+                  ${renderMilesEstimatePrompt(matrixSearch)}
                   <div class="section-heading">${escapeHtml(translate("compareCountryPricing"))}</div>
                   ${renderCountrySelect(selectedCodes)}
                   <div class="actions">
@@ -1402,6 +1398,17 @@ function renderCountrySelect(selectedCodes: string[]): string {
         <button type="button" class="link" data-action="country-all" ${disabled}>${escapeHtml(translate("allUseful"))}</button>
         <button type="button" class="link" data-action="country-clear" ${disabled}>${escapeHtml(translate("clear"))}</button>
       </div>
+    </div>
+  `;
+}
+
+function renderCrossProviderSearchAction(): string {
+  const translate = t();
+  const url = crossProviderSearchUrl(window.location.href, currentComparableCurrencyCode());
+  const label = isCurrentSkyscannerPage() ? translate("searchGoogleFlights") : translate("searchSkyscanner");
+  return `
+    <div class="cross-search">
+      <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>
     </div>
   `;
 }
@@ -1626,7 +1633,7 @@ async function openMatrixWithAutoOpen(matrixUrl: string, openedByPage = false): 
   window.location.assign(matrixUrl);
 }
 
-function renderResults(results: GoogleFlightsCountryResult[]): string {
+function renderResults(results: CountryResult[]): string {
   if (results.length === 0) return "";
   const translate = t();
   const sorted = [...results].sort(compareCountryResultDisplayOrder);
@@ -1652,7 +1659,7 @@ function renderResults(results: GoogleFlightsCountryResult[]): string {
   `;
 }
 
-function compareCountryResultDisplayOrder(left: GoogleFlightsCountryResult, right: GoogleFlightsCountryResult): number {
+function compareCountryResultDisplayOrder(left: CountryResult, right: CountryResult): number {
   const priceDifference =
     (left.cheapest?.price ?? Number.POSITIVE_INFINITY) - (right.cheapest?.price ?? Number.POSITIVE_INFINITY);
   if (priceDifference !== 0) return priceDifference;
@@ -1662,7 +1669,7 @@ function compareCountryResultDisplayOrder(left: GoogleFlightsCountryResult, righ
   return currentDifference || left.country.localeCompare(right.country);
 }
 
-function renderResultActions(result: GoogleFlightsCountryResult): string {
+function renderResultActions(result: CountryResult): string {
   const bookingTargets = bookingActionTargets(result);
   return `
     <div class="result-actions">
@@ -1685,10 +1692,10 @@ function countryComparisonResultCountries(selectedCountries: string[]): string[]
 }
 
 function mergeCountryResults(
-  previousResults: GoogleFlightsCountryResult[],
-  updates: GoogleFlightsCountryResult[],
+  previousResults: CountryResult[],
+  updates: CountryResult[],
   selectedCountries: string[],
-): { results: GoogleFlightsCountryResult[]; retained: boolean } {
+): { results: CountryResult[]; retained: boolean } {
   const updateCountries = new Set(updates.map((result) => result.country));
   const selectedCountrySet = new Set(selectedCountries);
   const byCountry = new Map(
@@ -1709,10 +1716,7 @@ function mergeCountryResults(
   return { results: Array.from(byCountry.values()), retained };
 }
 
-function mergeCountryResult(
-  previous: GoogleFlightsCountryResult,
-  update: GoogleFlightsCountryResult,
-): GoogleFlightsCountryResult {
+function mergeCountryResult(previous: CountryResult, update: CountryResult): CountryResult {
   const optionsByKey = new Map(previous.options.map((option) => [bookingOptionKey(option), option]));
   for (const option of update.options) optionsByKey.set(bookingOptionKey(option), option);
   const options = Array.from(optionsByKey.values()).sort(
@@ -1728,11 +1732,7 @@ function mergeCountryResult(
   };
 }
 
-function resultRetainedPreviousData(
-  previous: GoogleFlightsCountryResult,
-  update: GoogleFlightsCountryResult,
-  merged: GoogleFlightsCountryResult,
-): boolean {
+function resultRetainedPreviousData(previous: CountryResult, update: CountryResult, merged: CountryResult): boolean {
   return (
     merged.options.length > update.options.length ||
     Boolean(previous.direct && !update.direct && merged.direct) ||
@@ -1740,11 +1740,11 @@ function resultRetainedPreviousData(
   );
 }
 
-function bookingOptionKey(option: GoogleFlightsCountryResult["options"][number]): string {
+function bookingOptionKey(option: CountryResult["options"][number]): string {
   return `${option.provider}:${option.isDirect ? "direct" : "ota"}`;
 }
 
-function bookingActionTargets(result: GoogleFlightsCountryResult): Array<{ label: string; url: string }> {
+function bookingActionTargets(result: CountryResult): Array<{ label: string; url: string }> {
   const targets: Array<{ label: string; url: string }> = [];
   if (result.cheapest?.bookingUrl) {
     targets.push({
@@ -1758,7 +1758,7 @@ function bookingActionTargets(result: GoogleFlightsCountryResult): Array<{ label
   return targets;
 }
 
-function renderCheapest(result: GoogleFlightsCountryResult): string {
+function renderCheapest(result: CountryResult): string {
   if (!result.cheapest) return t()("noOptions");
   const tiedProviders = result.options
     .filter((option) => option.price === result.cheapest?.price)
@@ -2043,13 +2043,13 @@ function debugSearch(event: string, details: Record<string, unknown> = {}): void
   }
 }
 
-function googleFlightsResultSignature(result: GoogleFlightsCountryResult): string {
+function googleFlightsResultSignature(result: CountryResult): string {
   const cheapest = result.cheapest ? `${result.cheapest.provider}:${result.cheapest.priceText}` : "";
   const direct = result.direct ? `${result.direct.provider}:${result.direct.priceText}` : "";
   return [result.country, result.options.length, cheapest, direct, result.status].join("|");
 }
 
-function googleFlightsSearchResultSignature(result: GoogleFlightsSearchCountryResult): string {
+function googleFlightsSearchResultSignature(result: SearchCountryResult): string {
   return [
     result.country,
     result.results.length,
@@ -2325,7 +2325,7 @@ function applyGoogleFlightsCountryProgress(payload: { requestId?: unknown; resul
   if (
     typeof payload.requestId !== "string" ||
     payload.requestId !== state.comparingRequestId ||
-    !isGoogleFlightsCountryResult(payload.result)
+    !isCountryResult(payload.result)
   ) {
     return;
   }
@@ -2362,7 +2362,7 @@ function applyGoogleFlightsSearchProgress(payload: { requestId?: unknown; result
   if (
     typeof payload.requestId !== "string" ||
     payload.requestId !== state.comparingRequestId ||
-    !isGoogleFlightsSearchCountryResult(payload.result)
+    !isSearchCountryResult(payload.result)
   ) {
     return;
   }
@@ -2449,7 +2449,7 @@ function existingSearchBadgesByRowKey(): Map<string, HTMLElement> {
 
 function reconcileSearchBadge(
   existingBadge: HTMLElement | undefined,
-  row: GoogleFlightsSearchResult,
+  row: SearchResult,
   best: SearchBestPrice,
 ): HTMLElement {
   const isCurrentCountryBest = searchBadgeIsCurrentCountry(best);
@@ -2520,7 +2520,7 @@ async function openSearchResultDeepLink(best: SearchBestPrice): Promise<void> {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
-function applyRequestedSearchHighlight(searchBaseline: GoogleFlightsSearchCountryResult | null): void {
+function applyRequestedSearchHighlight(searchBaseline: SearchCountryResult | null): void {
   removeSearchHighlights();
   if (currentGoogleFlightsPanelMode() !== "search" || !searchBaseline) return;
   const requestedMatchKey = requestedSearchMatchKey();
@@ -2546,11 +2546,7 @@ function applyRequestedSearchHighlight(searchBaseline: GoogleFlightsSearchCountr
   }
 }
 
-function findSearchResultByMatchKey(
-  rows: GoogleFlightsSearchResult[],
-  matchKey: string,
-  minimumScore = 0.72,
-): GoogleFlightsSearchResult | null {
+function findSearchResultByMatchKey(rows: SearchResult[], matchKey: string, minimumScore = 0.72): SearchResult | null {
   return (
     rows.find((row) => row.matchKey === matchKey) ||
     rows
@@ -2624,7 +2620,7 @@ function currentSearchResultRows(): Element[] {
   return isCurrentSkyscannerSearchPage() ? skyscannerSearchResultRows(document) : searchResultRows(document);
 }
 
-function searchBadgeTarget(row: Element, parsed: GoogleFlightsSearchResult): Element {
+function searchBadgeTarget(row: Element, parsed: SearchResult): Element {
   if (isCurrentSkyscannerSearchPage()) return skyscannerSearchBadgeTarget(row, parsed);
   const priceContainers = Array.from(
     row.querySelectorAll(".U3gSDe .YMlIz.FpEdX, .XWuBZb .YMlIz.FpEdX, .BVAVmf .YMlIz.FpEdX, .YMlIz.FpEdX"),
@@ -2650,7 +2646,7 @@ function searchBadgeTarget(row: Element, parsed: GoogleFlightsSearchResult): Ele
   return priceElement?.parentElement || row.querySelector(".YMlIz, .FpEdX, .U3gSDe")?.parentElement || row;
 }
 
-function skyscannerSearchBadgeTarget(row: Element, parsed: GoogleFlightsSearchResult): Element {
+function skyscannerSearchBadgeTarget(row: Element, parsed: SearchResult): Element {
   const priceElement = Array.from(row.querySelectorAll("[aria-label], span, div, p")).find((element) => {
     if (element.closest(SEARCH_BADGE_SELECTOR)) return false;
     return searchTargetContainsPrice(element, parsed.priceText);
@@ -2686,7 +2682,7 @@ function searchBadgeText(best: SearchBestPrice): string {
   return searchBadgeIsCurrentCountry(best) ? "Cheapest" : `${countryDisplayName(best.country)} ${best.priceText}`;
 }
 
-function searchBadgeTitle(row: GoogleFlightsSearchResult, best: SearchBestPrice): string {
+function searchBadgeTitle(row: SearchResult, best: SearchBestPrice): string {
   const options = searchCountryPriceOptionsForRow(row)
     .filter((option) => option.country !== currentComparableCountryCode())
     .slice(0, 5);
@@ -2697,7 +2693,7 @@ function searchBadgeTitle(row: GoogleFlightsSearchResult, best: SearchBestPrice)
   return lines.join("\n");
 }
 
-function searchCountryPriceOptionsForRow(row: GoogleFlightsSearchResult): SearchCountryPriceOption[] {
+function searchCountryPriceOptionsForRow(row: SearchResult): SearchCountryPriceOption[] {
   if (!state.searchBaseline) return [];
   const options: SearchCountryPriceOption[] = [
     {
@@ -2782,17 +2778,17 @@ function ensureSearchBadgeStyles(): void {
 }
 
 function mergeSearchCountryResults(
-  previousResults: GoogleFlightsSearchCountryResult[],
-  updates: GoogleFlightsSearchCountryResult[],
-): GoogleFlightsSearchCountryResult[] {
+  previousResults: SearchCountryResult[],
+  updates: SearchCountryResult[],
+): SearchCountryResult[] {
   const byCountry = new Map(previousResults.map((result) => [result.country, result]));
   for (const update of updates) byCountry.set(update.country, update);
   return Array.from(byCountry.values());
 }
 
 function bestPricesBySearchRow(
-  baseline: GoogleFlightsSearchCountryResult | null,
-  countryResults: GoogleFlightsSearchCountryResult[],
+  baseline: SearchCountryResult | null,
+  countryResults: SearchCountryResult[],
 ): Record<string, SearchBestPrice> {
   if (!baseline) return {};
   const comparedByCountry = new Map(countryResults.map((result) => [result.country, result]));
@@ -2852,8 +2848,8 @@ function updateSearchBaselineDuringComparison(): void {
 }
 
 function searchBaselineIncludesPreviousRows(
-  previousBaseline: GoogleFlightsSearchCountryResult,
-  nextBaseline: GoogleFlightsSearchCountryResult,
+  previousBaseline: SearchCountryResult,
+  nextBaseline: SearchCountryResult,
 ): boolean {
   if (previousBaseline.results.length === 0 || nextBaseline.results.length < previousBaseline.results.length) {
     return false;
@@ -2865,17 +2861,17 @@ function searchBaselineIncludesPreviousRows(
 }
 
 function shouldKeepHandoffResultsForInitialRows(
-  previousBaseline: GoogleFlightsSearchCountryResult,
-  nextBaseline: GoogleFlightsSearchCountryResult,
+  previousBaseline: SearchCountryResult,
+  nextBaseline: SearchCountryResult,
 ): boolean {
   return previousBaseline.results.length === 0 && nextBaseline.results.length > 0 && state.searchResults.length > 0;
 }
 
 function bestSearchResultMatch(
-  baseline: GoogleFlightsSearchResult,
-  candidates: GoogleFlightsSearchResult[],
+  baseline: SearchResult,
+  candidates: SearchResult[],
   minimumScore = 0.72,
-): GoogleFlightsSearchResult | null {
+): SearchResult | null {
   const itineraryExact = candidates.find(
     (candidate) => baseline.itineraryKey && candidate.itineraryKey === baseline.itineraryKey,
   );
@@ -2896,7 +2892,7 @@ function bestSearchResultMatch(
   );
 }
 
-function searchResultMatchScore(left: GoogleFlightsSearchResult, right: GoogleFlightsSearchResult): number {
+function searchResultMatchScore(left: SearchResult, right: SearchResult): number {
   if (left.itineraryKey && right.itineraryKey && left.itineraryKey !== right.itineraryKey) return 0;
 
   const leftTime = normalizeText(left.timeText || "");
@@ -2953,19 +2949,19 @@ const SEARCH_MATCH_STOP_WORDS = new Set([
   "google",
 ]);
 
-function isGoogleFlightsSearchCountryResult(value: unknown): value is GoogleFlightsSearchCountryResult {
+function isSearchCountryResult(value: unknown): value is SearchCountryResult {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const candidate = value as { country?: unknown; url?: unknown; results?: unknown; status?: unknown };
   return (
     typeof candidate.country === "string" &&
     typeof candidate.url === "string" &&
     Array.isArray(candidate.results) &&
-    candidate.results.every(isGoogleFlightsSearchResult) &&
+    candidate.results.every(isSearchResult) &&
     typeof candidate.status === "string"
   );
 }
 
-function isGoogleFlightsSearchResult(value: unknown): value is GoogleFlightsSearchResult {
+function isSearchResult(value: unknown): value is SearchResult {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const candidate = value as {
     rowKey?: unknown;
@@ -3100,6 +3096,26 @@ function styles(): string {
       color: #475569;
       font-size: 18px;
       line-height: 1;
+    }
+    .cross-search {
+      padding: 10px 12px 0;
+    }
+    .cross-search a {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 32px;
+      width: 100%;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      background: #ffffff;
+      color: #334155;
+      text-decoration: none;
+      font-weight: 650;
+    }
+    .cross-search a:hover {
+      background: #f8fafc;
+      border-color: #94a3b8;
     }
     .mileage-prompt {
       display: grid;

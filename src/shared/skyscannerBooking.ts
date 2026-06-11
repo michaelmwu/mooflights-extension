@@ -1,9 +1,4 @@
-import type {
-  GoogleFlightsBookingOption,
-  GoogleFlightsCountryResult,
-  GoogleFlightsSearchCountryResult,
-  GoogleFlightsSearchResult,
-} from "./countryComparison";
+import type { BookingOption, CountryResult, SearchCountryResult, SearchResult } from "./countryComparison";
 
 const SKYSCANNER_FLIGHTS_PATH_RE = /^\/transport\/(?:flights|d)\//;
 const SKYSCANNER_CONFIG_PATH_RE = /\/config\/[^/]+/;
@@ -167,14 +162,10 @@ function normalizeCurrencyCode(value: string): string {
   return /^[A-Z]{3}$/.test(currency) ? currency : "USD";
 }
 
-export function parseSkyscannerPricingOptions(
-  root: ParentNode,
-  country: string,
-  url: string,
-): GoogleFlightsCountryResult {
+export function parseSkyscannerPricingOptions(root: ParentNode, country: string, url: string): CountryResult {
   const options = Array.from(root.querySelectorAll('[data-testid="PricingItem"]'))
     .map((row) => parseSkyscannerPricingOption(row, url))
-    .filter((option): option is GoogleFlightsBookingOption => Boolean(option))
+    .filter((option): option is BookingOption => Boolean(option))
     .sort((left, right) => left.price - right.price || left.provider.localeCompare(right.provider));
 
   return {
@@ -187,7 +178,7 @@ export function parseSkyscannerPricingOptions(
   };
 }
 
-function parseSkyscannerPricingOption(row: Element, pageUrl: string): GoogleFlightsBookingOption | null {
+function parseSkyscannerPricingOption(row: Element, pageUrl: string): BookingOption | null {
   const provider = skyscannerProviderLabel(row);
   const price = skyscannerProviderPrice(row);
   if (!provider || !price) return null;
@@ -243,11 +234,7 @@ function skyscannerBookingOptionUrl(row: Element, pageUrl: string): string | und
   }
 }
 
-export function parseSkyscannerSearchApiResponse(
-  payload: unknown,
-  country: string,
-  url: string,
-): GoogleFlightsSearchCountryResult {
+export function parseSkyscannerSearchApiResponse(payload: unknown, country: string, url: string): SearchCountryResult {
   const results = skyscannerSearchResults(payload);
   return {
     country,
@@ -257,7 +244,7 @@ export function parseSkyscannerSearchApiResponse(
   };
 }
 
-function skyscannerSearchResults(payload: unknown): GoogleFlightsSearchResult[] {
+function skyscannerSearchResults(payload: unknown): SearchResult[] {
   const body =
     payload && typeof payload === "object" && !Array.isArray(payload) ? (payload as Record<string, unknown>) : {};
   const itineraries = objectValue(body.itineraries);
@@ -268,10 +255,10 @@ function skyscannerSearchResults(payload: unknown): GoogleFlightsSearchResult[] 
       : [];
   return rawResults
     .map((item, index) => parseSkyscannerSearchResult(item, index))
-    .filter((result): result is GoogleFlightsSearchResult => Boolean(result));
+    .filter((result): result is SearchResult => Boolean(result));
 }
 
-function parseSkyscannerSearchResult(value: unknown, rowIndex: number): GoogleFlightsSearchResult | null {
+function parseSkyscannerSearchResult(value: unknown, rowIndex: number): SearchResult | null {
   const result = objectValue(value);
   const price = objectValue(result.price);
   const rawPrice = numberValue(price.raw);

@@ -83,63 +83,18 @@ const staticFiles = [
   ["src/options/index.html", "options/index.html"],
 ];
 
-const skyscannerWebAccessibleMatches = [
-  "https://www.skyscanner.ae/*",
-  "https://www.skyscanner.at/*",
-  "https://www.skyscanner.be/*",
-  "https://www.skyscanner.ca/*",
-  "https://www.skyscanner.ch/*",
-  "https://www.skyscanner.cl/*",
-  "https://skyscanner.com/*",
-  "https://cn.skyscanner.com/*",
-  "https://www.skyscanner.co.id/*",
-  "https://www.skyscanner.co.il/*",
-  "https://www.skyscanner.co.in/*",
-  "https://www.skyscanner.co.kr/*",
-  "https://www.skyscanner.co.nz/*",
-  "https://www.skyscanner.co.th/*",
-  "https://www.skyscanner.co.uk/*",
-  "https://www.skyscanner.co.za/*",
-  "https://www.skyscanner.com/*",
-  "https://www.skyscanner.com.ar/*",
-  "https://www.skyscanner.com.au/*",
-  "https://www.skyscanner.com.br/*",
-  "https://www.skyscanner.com.co/*",
-  "https://www.skyscanner.com.eg/*",
-  "https://www.skyscanner.com.hk/*",
-  "https://www.skyscanner.com.mx/*",
-  "https://www.skyscanner.com.my/*",
-  "https://www.skyscanner.com.pe/*",
-  "https://www.skyscanner.com.ph/*",
-  "https://www.skyscanner.com.sg/*",
-  "https://www.skyscanner.com.tr/*",
-  "https://www.skyscanner.com.tw/*",
-  "https://www.skyscanner.com.ua/*",
-  "https://www.skyscanner.com.vn/*",
-  "https://www.skyscanner.de/*",
-  "https://www.skyscanner.dk/*",
-  "https://www.skyscanner.es/*",
-  "https://www.skyscanner.fi/*",
-  "https://www.skyscanner.fr/*",
-  "https://gr.skyscanner.com/*",
-  "https://www.skyscanner.ie/*",
-  "https://www.skyscanner.it/*",
-  "https://www.skyscanner.jp/*",
-  "https://www.skyscanner.net/*",
-  "https://www.skyscanner.nl/*",
-  "https://www.skyscanner.no/*",
-  "https://www.skyscanner.pl/*",
-  "https://www.skyscanner.pt/*",
-  "https://ro.skyscanner.com/*",
-  "https://www.skyscanner.ru/*",
-  "https://www.skyscanner.se/*",
-];
+const mainContentScript = "content/googleFlightsContent.js";
+const skyscannerHookScript = "content/skyscannerSearchPageHook.js";
 
 async function copyStaticFiles() {
   const manifest = JSON.parse(await readFile(resolve(root, "src/manifest.json"), "utf8"));
-  manifest.host_permissions = Array.from(
-    new Set([...(manifest.host_permissions || []), ...(devBuild ? ["http://localhost/*", "http://127.0.0.1/*"] : [])]),
-  );
+  const skyscannerTransportMatches = skyscannerTransportMatchesFromManifest(manifest);
+  const skyscannerWebAccessibleMatches = skyscannerTransportMatches.map(skyscannerWebAccessibleMatch);
+  addSkyscannerMatchesToGeneratedManifest(manifest, skyscannerTransportMatches);
+  manifest.host_permissions = unique([
+    ...(manifest.host_permissions || []),
+    ...(devBuild ? ["http://localhost/*", "http://127.0.0.1/*"] : []),
+  ]);
   manifest.web_accessible_resources = [
     {
       matches: ["https://matrix.itasoftware.com/*"],
@@ -197,6 +152,52 @@ async function copyStaticFiles() {
       "",
     ].join("\n"),
   );
+}
+
+function addSkyscannerMatchesToGeneratedManifest(manifest, skyscannerTransportMatches) {
+  const mainScript = contentScriptForJs(manifest, mainContentScript);
+  const hookScript = contentScriptForJs(manifest, skyscannerHookScript);
+
+  hookScript.matches = skyscannerTransportMatches;
+  mainScript.matches = unique([
+    ...(mainScript.matches || []).filter((match) => !isSkyscannerMatch(match)),
+    ...skyscannerTransportMatches,
+  ]);
+  manifest.host_permissions = unique([
+    ...(manifest.host_permissions || []).filter((match) => !isSkyscannerMatch(match)),
+    ...skyscannerTransportMatches,
+  ]);
+}
+
+function skyscannerTransportMatchesFromManifest(manifest) {
+  const hookScript = contentScriptForJs(manifest, skyscannerHookScript);
+  const matches = unique((hookScript.matches || []).filter(isSkyscannerTransportMatch));
+  if (matches.length === 0) {
+    throw new Error(`${skyscannerHookScript} must define at least one Skyscanner transport match pattern`);
+  }
+  return matches;
+}
+
+function contentScriptForJs(manifest, script) {
+  const contentScript = (manifest.content_scripts || []).find((candidate) => candidate.js?.includes(script));
+  if (!contentScript) throw new Error(`Missing content script entry for ${script}`);
+  return contentScript;
+}
+
+function isSkyscannerTransportMatch(match) {
+  return /^https:\/\/(?:[^/]+\.)?skyscanner\.[^/]+\/transport\/\*$/.test(match);
+}
+
+function isSkyscannerMatch(match) {
+  return /^https:\/\/(?:[^/]+\.)?skyscanner\.[^/]+\//.test(match);
+}
+
+function skyscannerWebAccessibleMatch(match) {
+  return match.replace(/\/transport\/\*$/, "/*");
+}
+
+function unique(values) {
+  return Array.from(new Set(values));
 }
 
 async function distPath() {

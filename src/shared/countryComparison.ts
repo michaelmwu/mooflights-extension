@@ -1,7 +1,7 @@
 import { googleFlightsCountryUrl, isGoogleFlightsPanelPageUrl } from "./googleFlightsBooking";
 import { isSkyscannerFlightsPageUrl, skyscannerCountryUrl } from "./skyscannerBooking";
 
-export type GoogleFlightsBookingOption = {
+export type BookingOption = {
   provider: string;
   price: number;
   currency: string;
@@ -10,18 +10,18 @@ export type GoogleFlightsBookingOption = {
   bookingUrl?: string;
 };
 
-export type GoogleFlightsCountryResult = {
+export type CountryResult = {
   country: string;
   url: string;
-  options: GoogleFlightsBookingOption[];
-  cheapest?: GoogleFlightsBookingOption;
-  direct?: GoogleFlightsBookingOption;
+  options: BookingOption[];
+  cheapest?: BookingOption;
+  direct?: BookingOption;
   status: "ready" | "sparse" | "empty" | "error";
   refreshed?: boolean;
   error?: string;
 };
 
-export type GoogleFlightsSearchResult = {
+export type SearchResult = {
   rowKey: string;
   matchKey: string;
   rowIndex: number;
@@ -37,10 +37,10 @@ export type GoogleFlightsSearchResult = {
   matchConfidence: "high" | "medium";
 };
 
-export type GoogleFlightsSearchCountryResult = {
+export type SearchCountryResult = {
   country: string;
   url: string;
-  results: GoogleFlightsSearchResult[];
+  results: SearchResult[];
   status: "ready" | "empty" | "error";
   error?: string;
 };

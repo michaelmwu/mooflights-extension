@@ -66,6 +66,12 @@ test("opens Google Flights country comparison tabs from a routed US booking page
   const panel = page.locator("#mooflights-google-flights-panel");
   await expect(panel).toBeAttached();
   await expect(panel.getByText("Compare country pricing")).toBeVisible();
+  const skyscannerSearchLink = panel.getByRole("link", { name: "Search Skyscanner" });
+  await expect(skyscannerSearchLink).toBeVisible();
+  const skyscannerSearchUrl = new URL((await skyscannerSearchLink.getAttribute("href")) || "");
+  expect(skyscannerSearchUrl.hostname).toBe("www.skyscanner.com");
+  expect(skyscannerSearchUrl.searchParams.get("currency")).toBe("USD");
+  expect(skyscannerSearchUrl.searchParams.get("market")).toBe("US");
   await expect(panel.getByRole("button", { name: "Compare (3)" })).toBeEnabled();
 
   const comparisonTabsPromise = Promise.all(["CA", "ZA"].map((country) => waitForComparisonTab(context, country)));
@@ -210,6 +216,14 @@ test("renders Skyscanner search row comparison badges from captured API response
   const panel = page.locator("#mooflights-google-flights-panel");
   await expect(panel).toBeAttached();
   await expect(panel.getByText("Compare visible flight rows")).toBeVisible();
+  const googleFlightsSearchLink = panel.getByRole("link", { name: "Search Google Flights" });
+  await expect(googleFlightsSearchLink).toBeVisible();
+  const googleFlightsSearchUrl = new URL((await googleFlightsSearchLink.getAttribute("href")) || "");
+  expect(googleFlightsSearchUrl.hostname).toBe("www.google.com");
+  expect(googleFlightsSearchUrl.searchParams.get("curr")).toBe("USD");
+  expect(googleFlightsSearchUrl.searchParams.get("gl")).toBe("ZA");
+  expect(googleFlightsSearchUrl.searchParams.get("hl")).toBe("en-US");
+  expect(googleFlightsSearchUrl.searchParams.get("q")).toBe("Flights from CJU to NRT on 2026-06-24");
   await panel.getByRole("button", { name: "Clear" }).click();
   const countrySearch = panel.locator('[data-role="country-search"]');
   await countrySearch.fill("US");
