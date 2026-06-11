@@ -505,7 +505,7 @@ function currencyFromFormattedPrice(value: string): string {
   if (/¥|￥|Japanese yen|JPY|円|日圓|日元/i.test(value)) return "JPY";
   if (/₩|Korean won|KRW/i.test(value)) return "KRW";
   if (/฿|baht|THB/i.test(value)) return "THB";
-  if (/ringgit|MYR/i.test(value)) return "MYR";
+  if (/\bRM\b|ringgit|MYR/i.test(value)) return "MYR";
   if (/yuan|CNY|RMB/i.test(value)) return "CNY";
   if (/₹|rupees?|INR/i.test(value)) return "INR";
   return "";
