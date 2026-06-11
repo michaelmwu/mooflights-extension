@@ -20,12 +20,25 @@ export function crossProviderSearchUrl(currentUrl: string, fallbackCurrency = DE
   return skyscannerSearchUrlFromGoogleFlights(currentUrl, fallbackCurrency);
 }
 
+export function routeSpecificCrossProviderSearchUrl(currentUrl: string, fallbackCurrency = DEFAULT_CURRENCY): string {
+  if (isSkyscannerUrl(currentUrl)) return googleFlightsSearchUrlFromSkyscannerUrl(currentUrl, fallbackCurrency, false);
+  return skyscannerSearchUrlFromGoogleFlightsUrl(currentUrl, fallbackCurrency, { allowFallback: false });
+}
+
 export function skyscannerSearchUrlFromGoogleFlights(currentUrl: string, fallbackCurrency = DEFAULT_CURRENCY): string {
+  return skyscannerSearchUrlFromGoogleFlightsUrl(currentUrl, fallbackCurrency, { allowFallback: true });
+}
+
+function skyscannerSearchUrlFromGoogleFlightsUrl(
+  currentUrl: string,
+  fallbackCurrency: string,
+  options: { allowFallback: boolean },
+): string {
   const context = googleFlightsUrlContext(currentUrl, fallbackCurrency);
   const search = parseGoogleFlightsMatrixSearch(currentUrl, context.currency);
   const routeSlices = search?.slices || googleFlightsRouteSlices(currentUrl);
   const path = skyscannerRoutePath(routeSlices);
-  if (!path) return skyscannerFallbackSearchUrl(context);
+  if (!path) return options.allowFallback ? skyscannerFallbackSearchUrl(context) : "";
 
   const params = new URLSearchParams();
   params.set("adultsv2", "1");
@@ -45,6 +58,14 @@ export function skyscannerSearchUrlFromGoogleFlights(currentUrl: string, fallbac
 }
 
 export function googleFlightsSearchUrlFromSkyscanner(currentUrl: string, fallbackCurrency = DEFAULT_CURRENCY): string {
+  return googleFlightsSearchUrlFromSkyscannerUrl(currentUrl, fallbackCurrency, true);
+}
+
+function googleFlightsSearchUrlFromSkyscannerUrl(
+  currentUrl: string,
+  fallbackCurrency: string,
+  allowFallback: boolean,
+): string {
   const context = skyscannerUrlContext(currentUrl, fallbackCurrency);
   const slices = skyscannerRouteSlices(currentUrl);
   const params = new URLSearchParams();
@@ -53,6 +74,7 @@ export function googleFlightsSearchUrlFromSkyscanner(currentUrl: string, fallbac
   params.set("hl", context.locale);
   const query = googleFlightsSearchQuery(slices, context.cabin);
   if (query) params.set("q", query);
+  if (!query && !allowFallback) return "";
   return `https://www.google.com/travel/flights?${params.toString()}`;
 }
 
@@ -291,13 +313,13 @@ function normalizeCountry(value: string | null): string {
 
 function normalizeLocale(value: string | null): string {
   const locale = value?.trim() || "";
-  return /^[a-z]{2}(?:-[A-Z]{2})?$/.test(locale) ? locale : "";
+  return /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$/.test(locale) ? locale : "";
 }
 
 function isSkyscannerUrl(currentUrl: string): boolean {
   try {
     const url = new URL(currentUrl);
-    return url.hostname === "skyscanner.com" || /(^|\.)skyscanner\./.test(url.hostname);
+    return /(^|\.)skyscanner\.[a-z]{2,3}(?:\.[a-z]{2})?$/.test(url.hostname.toLowerCase());
   } catch {
     return false;
   }

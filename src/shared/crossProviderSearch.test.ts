@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { googleFlightsSearchUrlFromSkyscanner, skyscannerSearchUrlFromGoogleFlights } from "./crossProviderSearch";
+import {
+  googleFlightsSearchUrlFromSkyscanner,
+  routeSpecificCrossProviderSearchUrl,
+  skyscannerSearchUrlFromGoogleFlights,
+} from "./crossProviderSearch";
 
 describe("crossProviderSearch", () => {
   it("builds a Skyscanner search from a Google Flights tfs URL", () => {
@@ -66,6 +70,14 @@ describe("crossProviderSearch", () => {
     expect(parsed.searchParams.get("q")).toBe("Flights from CJU to TYO on 2026-06-24 one way");
   });
 
+  it("preserves broader BCP 47 locale tags in cross-provider links", () => {
+    const url = googleFlightsSearchUrlFromSkyscanner(
+      "https://www.skyscanner.com.br/transport/flights/gru/eze/260624/?adultsv2=1&cabinclass=economy&currency=BRL&locale=zh-Hant-TW&market=BR",
+    );
+
+    expect(new URL(url).searchParams.get("hl")).toBe("zh-Hant-TW");
+  });
+
   it("derives the Google Flights country from localized Skyscanner hosts and UK market aliases", () => {
     const hostUrl = googleFlightsSearchUrlFromSkyscanner(
       "https://www.skyscanner.co.kr/transport/flights/cju/nrt/260624/?adultsv2=1&cabinclass=economy&currency=USD&locale=en-US",
@@ -101,6 +113,14 @@ describe("crossProviderSearch", () => {
     expect(parsed.searchParams.has("q")).toBe(false);
   });
 
+  it("omits route-specific cross-provider links for unsupported Skyscanner multi-city routes", () => {
+    const url = routeSpecificCrossProviderSearchUrl(
+      "https://www.skyscanner.co.kr/transport/d/cju/2026-06-24/tyoa/tyoa/2026-06-27/sela/?currency=USD&locale=en-US&market=KR",
+    );
+
+    expect(url).toBe("");
+  });
+
   it("falls back to a normal Skyscanner search page when Google route data is unavailable", () => {
     const url = skyscannerSearchUrlFromGoogleFlights("https://www.google.com/travel/flights/booking?gl=TW&curr=TWD");
 
@@ -109,5 +129,13 @@ describe("crossProviderSearch", () => {
     expect(parsed.pathname).toBe("/transport/flights/");
     expect(parsed.searchParams.get("currency")).toBe("TWD");
     expect(parsed.searchParams.get("market")).toBe("TW");
+  });
+
+  it("omits route-specific cross-provider links when Google tfs lacks IATA endpoints", () => {
+    const currentUrl =
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhojEgoyMDI2LTA3LTA4agwIAhIIL20vMGZ0a3hyBwgBEgNOUlRAAUgBcAGCAQsI____________AZgBAg&tfu=EgoIABAAGAAgAigB";
+
+    expect(routeSpecificCrossProviderSearchUrl(currentUrl, "TWD")).toBe("");
+    expect(new URL(skyscannerSearchUrlFromGoogleFlights(currentUrl, "TWD")).pathname).toBe("/transport/flights/");
   });
 });

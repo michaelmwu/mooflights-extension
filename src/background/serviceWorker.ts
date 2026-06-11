@@ -119,7 +119,7 @@ async function compareGoogleFlightsCountries(payload: RuntimeMessage, progressTa
   const countries = Array.from(new Set((payload.countries || []).filter((country) => /^[A-Z]{2}$/.test(country))));
   const baselineOptionCount = payload.baselineOptionCount || 0;
   await mapWithConcurrency(countries, GOOGLE_FLIGHTS_COMPARE_CONCURRENCY, async (country) => {
-    const result = await compareGoogleFlightsCountry(baseUrl, country, baselineOptionCount);
+    const result = await compareBookingCountry(baseUrl, country, baselineOptionCount);
     sendGoogleFlightsCountryProgress(progressTabId, payload.requestId, result);
     return result;
   });
@@ -301,7 +301,7 @@ function sendGoogleFlightsSearchComplete(
   );
 }
 
-async function compareGoogleFlightsCountry(
+async function compareBookingCountry(
   baseUrl: string,
   country: string,
   baselineOptionCount: number,
@@ -313,11 +313,11 @@ async function compareGoogleFlightsCountry(
     tabId = tab.id;
     if (typeof tabId !== "number") throw new Error("Chrome did not provide a tab id.");
     await waitForTabComplete(tabId);
-    let result = await parseGoogleFlightsTab(tabId, country, url);
+    let result = await parseBookingComparisonTab(tabId, country, url);
     if (shouldRetrySparseResult(result, baselineOptionCount)) {
       await reloadTab(tabId);
       await waitForTabComplete(tabId);
-      result = await parseGoogleFlightsTab(tabId, country, url);
+      result = await parseBookingComparisonTab(tabId, country, url);
       result.refreshed = true;
       if (isSparseResult(result, baselineOptionCount)) result.status = "sparse";
     }
@@ -404,7 +404,7 @@ function isSparseResult(result: CountryResult, baselineOptionCount: number): boo
   );
 }
 
-async function parseGoogleFlightsTab(tabId: number, country: string, url: string): Promise<CountryResult> {
+async function parseBookingComparisonTab(tabId: number, country: string, url: string): Promise<CountryResult> {
   let latest: CountryResult | null = null;
   const deadline = Date.now() + 18000;
   while (Date.now() < deadline) {

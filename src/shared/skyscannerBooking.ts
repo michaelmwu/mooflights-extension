@@ -132,7 +132,7 @@ function isSkyscannerFlightsPage(url: URL): boolean {
 }
 
 function isSkyscannerHost(hostname: string): boolean {
-  return hostname === "skyscanner.com" || hostname === SKYSCANNER_DEFAULT_HOST || /(^|\.)skyscanner\./.test(hostname);
+  return /(^|\.)skyscanner\.[a-z]{2,3}(?:\.[a-z]{2})?$/.test(hostname.toLowerCase());
 }
 
 export function skyscannerCountryCodeFromUrl(url: string): string {

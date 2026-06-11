@@ -6,7 +6,7 @@ import {
   type SearchCountryResult,
   type SearchResult,
 } from "../shared/countryComparison";
-import { crossProviderSearchUrl } from "../shared/crossProviderSearch";
+import { routeSpecificCrossProviderSearchUrl } from "../shared/crossProviderSearch";
 import { flagEmoji } from "../shared/flags";
 import {
   DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES,
@@ -1220,7 +1220,11 @@ function render(): void {
                   ${renderCountrySelect(selectedCodes)}
                   <div class="actions">
                     <button type="button" class="wide" ${state.comparing || selectedCodes.length === 0 ? "disabled" : ""} data-action="compare-countries">
-                      ${escapeHtml(state.comparing ? translate("checking") : translate("compareCount", { count: selectedCodes.length }))}
+                      ${escapeHtml(
+                        state.comparing
+                          ? translate("checking")
+                          : translate("compareCount", { count: countryComparisonDisplayCount(selectedCodes) }),
+                      )}
                     </button>
                   </div>
                   ${state.error ? `<p class="error">${escapeHtml(state.error)}</p>` : ""}
@@ -1422,7 +1426,8 @@ function renderCountrySelect(selectedCodes: string[]): string {
 
 function renderCrossProviderSearchAction(): string {
   const translate = t();
-  const url = crossProviderSearchUrl(window.location.href, currentComparableCurrencyCode());
+  const url = routeSpecificCrossProviderSearchUrl(window.location.href, currentComparableCurrencyCode());
+  if (!url) return "";
   const label = isCurrentSkyscannerPage() ? translate("searchGoogleFlights") : translate("searchSkyscanner");
   return `
     <div class="cross-search">
@@ -1434,6 +1439,9 @@ function renderCrossProviderSearchAction(): string {
 function renderSearchComparisonPanel(selectedCodes: string[]): string {
   const translate = t();
   const visibleRows = state.searchBaseline?.results.length || parseCurrentSearchPage().results.length;
+  const emptyRowsMessage = isCurrentSkyscannerSearchPage()
+    ? translate("noSkyscannerSearchApiResponse")
+    : translate("noVisibleGoogleFlightsRows");
   return `
     <div class="section-heading">${escapeHtml(translate("compareVisibleFlightRows"))}</div>
     ${renderCountrySelect(selectedCodes)}
@@ -1450,8 +1458,13 @@ function renderSearchComparisonPanel(selectedCodes: string[]): string {
           )}</p>`
         : ""
     }
-    ${visibleRows === 0 ? `<p class="cache-note">${escapeHtml(translate("noVisibleGoogleFlightsRows"))}</p>` : ""}
+    ${visibleRows === 0 ? `<p class="cache-note">${escapeHtml(emptyRowsMessage)}</p>` : ""}
   `;
+}
+
+function countryComparisonDisplayCount(selectedCodes: string[]): number {
+  const baselineCountry = currentComparableCountryCode();
+  return baselineCountry && !selectedCodes.includes(baselineCountry) ? selectedCodes.length + 1 : selectedCodes.length;
 }
 
 function countryDropdownOptions(): Array<{ code: string; label: string; searchValue: string; aliases?: string[] }> {

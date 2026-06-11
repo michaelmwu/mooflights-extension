@@ -57,7 +57,8 @@ test("opens Google Flights country comparison tabs from a routed US booking page
   extensionServiceWorker,
   page,
 }) => {
-  const pageUrl = "https://www.google.com/travel/flights/booking?tfs=e2e-fixture&curr=USD&gl=US";
+  const pageUrl =
+    "https://www.google.com/travel/flights/booking?tfs=CDIQAho_EgoyMDI2LTA4LTI3Ih8KA0hLRxIKMjAyNi0wOC0yNxoDVFBFKgJKWDIDMjM2agcIARIDSEtHcgcIARIDVFBFQAFIAZgBAg&curr=USD&gl=US";
   await setGoogleFlightsCountries(extensionServiceWorker, ["US", "CA", "ZA"]);
   await routeGoogleFlightsBookingFixtures(context);
 
@@ -122,6 +123,18 @@ test("does not show the Google Flights comparison panel on unresolved top-level 
   await page.goto(pageUrl);
 
   await expect(page.locator("#mooflights-google-flights-panel")).not.toBeAttached();
+});
+
+test("hides Search Skyscanner when Google Flights tfs lacks IATA endpoints", async ({ context, page }) => {
+  const pageUrl =
+    "https://www.google.com/travel/flights/search?tfs=CBwQAhojEgoyMDI2LTA3LTA4agwIAhIIL20vMGZ0a3hyBwgBEgNOUlRAAUgBcAGCAQsI____________AZgBAg&tfu=EgoIABAAGAAgAigB";
+  await routeGoogleFlightsBookingFixtures(context);
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel).toBeAttached();
+  await expect(panel.getByRole("link", { name: "Search Skyscanner" })).not.toBeVisible();
 });
 
 test("opens Skyscanner country comparison tabs from a routed final compare page", async ({
@@ -206,9 +219,9 @@ test("keeps the current Skyscanner price visible when comparing other countries"
 
   const panel = page.locator("#mooflights-google-flights-panel");
   await expect(panel).toBeAttached();
-  await expect(panel.getByRole("button", { name: "Compare (1)" })).toBeEnabled();
+  await expect(panel.getByRole("button", { name: "Compare (2)" })).toBeEnabled();
 
-  await panel.getByRole("button", { name: "Compare (1)" }).click();
+  await panel.getByRole("button", { name: "Compare (2)" }).click();
 
   await expect(panel.getByText("United States")).toBeVisible();
   await expect(panel.getByText("current", { exact: true })).toBeVisible();
