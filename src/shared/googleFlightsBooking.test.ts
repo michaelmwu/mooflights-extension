@@ -419,6 +419,13 @@ describe("Google Flights booking option parser", () => {
     );
   });
 
+  it("does not treat unresolved top-level Google Flights tfs shells as panel pages", () => {
+    const url =
+      "https://www.google.com/travel/flights?tfs=CBwQARoeEgoyMDI2LTA2LTI0agcIARIDQ0pVcgcIARIDTlJUGh4SCjIwMjYtMDYtMzBqBwgBEgNOUlRyBwgBEgNDSlVAAUgBcAGCAQsI____________AZgBAQ&tfu=KgIIAw";
+
+    expect(googleFlightsPanelPageKey(url, "US", true)).toBe("");
+  });
+
   it("recognizes Google Flights search query pages before Google resolves tfs", () => {
     const url = "https://www.google.com/travel/flights?curr=USD&gl=KR&hl=en-US&q=Flights+from+CJU+to+NRT+on+2026-06-24";
 

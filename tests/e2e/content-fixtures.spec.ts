@@ -111,6 +111,19 @@ test("orders the current Google Flights country before tied comparison countries
   expect(resultHeadings[1]).toContain("South Africa");
 });
 
+test("does not show the Google Flights comparison panel on unresolved top-level tfs pages", async ({
+  context,
+  page,
+}) => {
+  const pageUrl =
+    "https://www.google.com/travel/flights?tfs=CBwQARoeEgoyMDI2LTA2LTI0agcIARIDQ0pVcgcIARIDTlJUGh4SCjIwMjYtMDYtMzBqBwgBEgNOUlRyBwgBEgNDSlVAAUgBcAGCAQsI____________AZgBAQ&tfu=KgIIAw";
+  await routeGoogleFlightsBookingFixtures(context);
+
+  await page.goto(pageUrl);
+
+  await expect(page.locator("#mooflights-google-flights-panel")).not.toBeAttached();
+});
+
 test("opens Skyscanner country comparison tabs from a routed final compare page", async ({
   context,
   extensionServiceWorker,

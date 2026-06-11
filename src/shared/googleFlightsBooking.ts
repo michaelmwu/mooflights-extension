@@ -113,8 +113,11 @@ export function isGoogleFlightsPanelPageUrl(url: string): boolean {
 
 function isGoogleFlightsPanelPage(url: URL): boolean {
   if (GOOGLE_FLIGHTS_BOOKING_PATH_RE.test(url.pathname)) return true;
+  if (url.pathname === GOOGLE_FLIGHTS_ITINERARY_PATH) {
+    return url.searchParams.get("source") === "ita_matrix" || hasGoogleFlightsSearchParams(url.searchParams);
+  }
   return (
-    (url.pathname === GOOGLE_FLIGHTS_ITINERARY_PATH || url.pathname.startsWith(`${GOOGLE_FLIGHTS_ITINERARY_PATH}/`)) &&
+    url.pathname.startsWith(`${GOOGLE_FLIGHTS_ITINERARY_PATH}/`) &&
     (Boolean(url.searchParams.get("tfs")) || hasGoogleFlightsSearchParams(url.searchParams)) &&
     !GOOGLE_FLIGHTS_BOOKING_PATH_RE.test(url.pathname)
   );
