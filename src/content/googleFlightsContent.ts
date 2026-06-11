@@ -967,6 +967,7 @@ function scheduleRender(): void {
   const mode = currentGoogleFlightsPanelMode();
   const pageKey = currentPanelPageKey(mode);
   const cacheKey = currentPanelComparisonCacheKey(mode);
+  const pageKeyChanged = state.pageKey !== pageKey;
   if (
     mode === "search" &&
     latestSkyscannerSearchCapture &&
@@ -1015,7 +1016,7 @@ function scheduleRender(): void {
         : "";
   debugSearch("schedule", {
     mode,
-    pageKeyChanged: state.pageKey !== pageKey,
+    pageKeyChanged,
     previousSignatureHash: state.baselineSignature ? stableContentHash(state.baselineSignature) : "",
     nextSignatureHash: baselineSignature ? stableContentHash(baselineSignature) : "",
     parsedRows: searchBaseline?.results.length || 0,
@@ -1038,7 +1039,7 @@ function scheduleRender(): void {
     applyRequestedSearchHighlight(state.searchBaseline);
     return;
   }
-  if (state.pageKey !== pageKey) {
+  if (pageKeyChanged) {
     state.pageKey = pageKey;
     state.cacheKey = cacheKey;
     state.baselineSignature = "";
@@ -1089,7 +1090,7 @@ function scheduleRender(): void {
     }
   }
 
-  if (state.baselineSignature === baselineSignature) {
+  if (!pageKeyChanged && state.baselineSignature === baselineSignature) {
     applySearchBadges();
     applyRequestedSearchHighlight(searchBaseline);
     if (mode === "search" && state.searchResults.length === 0)

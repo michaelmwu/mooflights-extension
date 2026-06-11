@@ -222,6 +222,19 @@ test("renders Skyscanner search row comparison badges from captured API response
   await expect(page.locator("[data-moo-flights-search-badge]", { hasText: "South Korea $180" })).toBeVisible();
 });
 
+test("shows the Skyscanner search panel before an API response is captured", async ({ context, page }) => {
+  const pageUrl =
+    "https://www.skyscanner.co.za/transport/flights/cju/nrt/260624/?adultsv2=1&cabinclass=economy&childrenv2=&rtn=0&outboundaltsenabled=false&inboundaltsenabled=false&currency=USD&locale=en-US&market=ZA&userSessionDataId=37a758a6-28c6-4733-ab8d-4501a8b360e8&preferdirects=false";
+  await routeSkyscannerSearchFixtures(context, { includeApiFetch: false });
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel).toBeAttached();
+  await expect(panel.getByText("Compare visible flight rows")).toBeVisible();
+  await expect(panel.getByRole("button", { name: /Compare rows/ })).toBeDisabled();
+});
+
 test("renders Skyscanner row comparison on routed multi-city search pages", async ({
   context,
   extensionServiceWorker,
@@ -318,7 +331,10 @@ async function routeSkyscannerPricingFixtures(context: BrowserContext): Promise<
   });
 }
 
-async function routeSkyscannerSearchFixtures(context: BrowserContext): Promise<void> {
+async function routeSkyscannerSearchFixtures(
+  context: BrowserContext,
+  options: { includeApiFetch?: boolean } = {},
+): Promise<void> {
   await context.route(/https:\/\/(?:[^/]+\.)?skyscanner\.[^/]+(?:\.[^/]+)?\/.*/, async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname === "/g/radar/api/v2/web-unified-search/") {
@@ -340,7 +356,7 @@ async function routeSkyscannerSearchFixtures(context: BrowserContext): Promise<v
     }
     await route.fulfill({
       contentType: "text/html",
-      body: skyscannerSearchFixture(url.toString()),
+      body: skyscannerSearchFixture(url.toString(), options),
     });
   });
 }
@@ -529,11 +545,12 @@ function skyscannerFixtureCurrencyLabel(currency: string, url: URL): string {
   return url.searchParams.get("locale") === "ja-JP" ? `${currency}での価格` : `Prices in ${currency}`;
 }
 
-function skyscannerSearchFixture(url: string): string {
+function skyscannerSearchFixture(url: string, options: { includeApiFetch?: boolean } = {}): string {
   const parsedUrl = new URL(url);
   const country =
     parsedUrl.hostname === "www.skyscanner.co.kr" || parsedUrl.searchParams.get("market") === "KR" ? "KR" : "US";
   const price = country === "KR" ? 180 : 210;
+  const includeApiFetch = options.includeApiFetch !== false;
   return htmlFixture(`
     <main>
       <h1>Skyscanner search fixture</h1>
@@ -546,21 +563,25 @@ function skyscannerSearchFixture(url: string): string {
           <a href="/transport/flights/cju/tyoa/260624/config/10562-2606241255--32128-0-14788-2606241525">Select</a>
         </div>
       </section>
-      <script>
-        fetch("/g/radar/api/v2/web-unified-search/", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            fixture: true,
-            market: "${country}",
-            query: {
-              originPlace: { id: "CJU", countryCode: "KR" },
-              destinationPlace: { id: "NRT", countryCode: "JP" },
-              passengerMetadata: { country: "ZA" }
-            }
-          })
-        }).catch(() => {});
-      </script>
+      ${
+        includeApiFetch
+          ? `<script>
+              fetch("/g/radar/api/v2/web-unified-search/", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                  fixture: true,
+                  market: "${country}",
+                  query: {
+                    originPlace: { id: "CJU", countryCode: "KR" },
+                    destinationPlace: { id: "NRT", countryCode: "JP" },
+                    passengerMetadata: { country: "ZA" }
+                  }
+                })
+              }).catch(() => {});
+            </script>`
+          : ""
+      }
     </main>
   `);
 }
