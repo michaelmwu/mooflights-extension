@@ -2651,9 +2651,10 @@ function searchBadgeTarget(row: Element, parsed: GoogleFlightsSearchResult): Ele
 }
 
 function skyscannerSearchBadgeTarget(row: Element, parsed: GoogleFlightsSearchResult): Element {
-  const priceElement = Array.from(row.querySelectorAll("[aria-label], span, div, p")).find((element) =>
-    searchTargetContainsPrice(element, parsed.priceText),
-  );
+  const priceElement = Array.from(row.querySelectorAll("[aria-label], span, div, p")).find((element) => {
+    if (element.closest(SEARCH_BADGE_SELECTOR)) return false;
+    return searchTargetContainsPrice(element, parsed.priceText);
+  });
   if (priceElement?.parentElement) return priceElement.parentElement;
   return row;
 }

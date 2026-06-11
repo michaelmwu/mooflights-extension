@@ -47,6 +47,9 @@ describe("Skyscanner country comparison parser", () => {
     expect(
       skyscannerCountryCodeFromUrl("https://www.skyscanner.co.kr/transport/flights/cju/tyoa/260624/config/abc"),
     ).toBe("KR");
+    expect(skyscannerCountryCodeFromUrl("https://skyscanner.com/transport/flights/cju/tyoa/260624/config/abc")).toBe(
+      "US",
+    );
   });
 
   it("builds Japan country URLs using the jp hostname", () => {

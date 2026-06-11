@@ -69,6 +69,7 @@ const SKYSCANNER_COUNTRY_HOSTS: Record<string, string> = {
 
 const SKYSCANNER_HOST_COUNTRIES = new Map([
   ...Object.entries(SKYSCANNER_COUNTRY_HOSTS).map(([country, host]) => [host, country] as const),
+  ["skyscanner.com", "US"] as const,
   ["www.skyscanner.co.uk", "GB"] as const,
   ["www.skyscanner.cn", "CN"] as const,
 ]);

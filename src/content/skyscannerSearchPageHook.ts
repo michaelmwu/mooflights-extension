@@ -63,12 +63,9 @@ function installXhrHook(): void {
       xhrLoadListeners.add(this);
       this.addEventListener("load", () => {
         const responseUrl = this.responseURL || xhrRequests.get(this)?.url || "";
-        if (!isSearchApiUrl(responseUrl) || typeof this.responseText !== "string") return;
-        try {
-          publishCapture(responseUrl, JSON.parse(this.responseText), xhrRequests.get(this));
-        } catch {
-          // Ignore non-JSON responses; the fetch hook covers the normal path.
-        }
+        const payload = xhrJsonPayload(this);
+        if (!isSearchApiUrl(responseUrl) || payload === undefined) return;
+        publishCapture(responseUrl, payload, xhrRequests.get(this));
       });
     }
     return Reflect.apply(originalOpen, this, args);
@@ -230,6 +227,16 @@ function requestBodyFromValue(body: BodyInit | Document | null | undefined): str
 function replayRequestBody(request: CapturedSearchRequest, market: string): string | undefined {
   if (request.method === "GET" || request.method === "HEAD" || !request.body) return undefined;
   return rewriteJsonMarketBody(request.body, market) || request.body;
+}
+
+function xhrJsonPayload(xhr: XMLHttpRequest): unknown {
+  if (xhr.responseType === "json") return xhr.response ?? undefined;
+  if (xhr.responseType && xhr.responseType !== "text") return undefined;
+  try {
+    return typeof xhr.responseText === "string" ? JSON.parse(xhr.responseText) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function rewriteJsonMarketBody(body: string, market: string): string {
