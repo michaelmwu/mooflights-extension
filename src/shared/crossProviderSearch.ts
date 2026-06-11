@@ -15,6 +15,21 @@ type RouteSlice = {
   date: string;
 };
 
+const GOOGLE_LOCATION_TO_SKYSCANNER_CODE: Record<string, string> = {
+  "/m/07dfk": "TYOA",
+  "/m/04jpl": "LOND",
+  "/m/030qb3t": "LAXA",
+  "/m/0ftkx": "TPET",
+  "/m/0ftkxr": "TPET",
+};
+
+const SKYSCANNER_LOCATION_TO_GOOGLE_CODE: Record<string, string> = {
+  LAXA: "LAX",
+  LOND: "LON",
+  TPET: "TPE",
+  TYOA: "TYO",
+};
+
 export function crossProviderSearchUrl(currentUrl: string, fallbackCurrency = DEFAULT_CURRENCY): string {
   if (isSkyscannerUrl(currentUrl)) return googleFlightsSearchUrlFromSkyscanner(currentUrl, fallbackCurrency);
   return skyscannerSearchUrlFromGoogleFlights(currentUrl, fallbackCurrency);
@@ -180,11 +195,30 @@ function googleFlightsRouteSlices(currentUrl: string): RouteSlice[] {
   try {
     const url = new URL(currentUrl);
     return (
-      googleFlightsParamRouteSlices(url.searchParams) || googleFlightsQueryRouteSlices(url.searchParams.get("q") || "")
+      googleFlightsTfsRouteSlices(url.searchParams.get("tfs") || "") ||
+      googleFlightsParamRouteSlices(url.searchParams) ||
+      googleFlightsQueryRouteSlices(url.searchParams.get("q") || "")
     );
   } catch {
     return [];
   }
+}
+
+function googleFlightsTfsRouteSlices(tfs: string): RouteSlice[] | null {
+  const decoded = decodeBase64UrlText(tfs);
+  if (!decoded) return null;
+  // biome-ignore lint/complexity/useRegexLiterals: constructor keeps protobuf control markers out of a regex literal.
+  const routePattern = new RegExp(
+    "\\x12\\x0a(\\d{4}-\\d{2}-\\d{2}).*?\\x6a[\\s\\S]*?\\x12([\\s\\S]{1})([A-Z]{3}|/m/[A-Za-z0-9_]+).*?\\x72[\\s\\S]*?\\x12([\\s\\S]{1})([A-Z]{3}|/m/[A-Za-z0-9_]+)",
+  );
+  const match = routePattern.exec(decoded);
+  if (!match) return null;
+
+  const date = normalizeIsoDate(match[1]);
+  const origin = normalizeSkyscannerGoogleLocation(match[3] || "");
+  const destination = normalizeSkyscannerGoogleLocation(match[5] || "");
+  if (!origin || !destination || !date) return null;
+  return [{ origin, destination, date }];
 }
 
 function googleFlightsParamRouteSlices(params: URLSearchParams): RouteSlice[] | null {
@@ -229,8 +263,8 @@ function skyscannerRouteSlices(currentUrl: string): RouteSlice[] {
     if (parts[0] !== "transport") return [];
 
     if (parts[1] === "flights" && parts.length >= 5) {
-      const origin = normalizeAirportCode(parts[2]);
-      const destination = normalizeAirportCode(parts[3]);
+      const origin = normalizeGoogleFlightsSkyscannerLocation(parts[2]);
+      const destination = normalizeGoogleFlightsSkyscannerLocation(parts[3]);
       const date = parseSkyscannerDate(parts[4]);
       if (!origin || !destination || !date) return [];
       const returnDate = parseSkyscannerDate(parts[5] || "");
@@ -246,9 +280,9 @@ function skyscannerRouteSlices(currentUrl: string): RouteSlice[] {
     const slices: RouteSlice[] = [];
     for (let index = 2; index + 2 < parts.length; index += 3) {
       if (parts[index] === "config") break;
-      const origin = normalizeAirportCode(parts[index]);
+      const origin = normalizeGoogleFlightsSkyscannerLocation(parts[index]);
       const date = parseSkyscannerDate(parts[index + 1] || "");
-      const destination = normalizeAirportCode(parts[index + 2]);
+      const destination = normalizeGoogleFlightsSkyscannerLocation(parts[index + 2]);
       if (!origin || !destination || !date) break;
       slices.push({ origin, destination, date });
     }
@@ -304,6 +338,32 @@ function normalizeAirportCode(value: string | undefined): string {
   const code = value?.trim().toUpperCase() || "";
   if (!/^[A-Z0-9]{3,4}$/.test(code)) return "";
   return /^[A-Z]{4}$/.test(code) && code.endsWith("A") ? code.slice(0, 3) : code;
+}
+
+function normalizeGoogleFlightsSkyscannerLocation(value: string | undefined): string {
+  const code = value?.trim().toUpperCase() || "";
+  return SKYSCANNER_LOCATION_TO_GOOGLE_CODE[code] || normalizeAirportCode(code);
+}
+
+function normalizeSkyscannerGoogleLocation(value: string): string {
+  const location = value.trim();
+  const mapped = GOOGLE_LOCATION_TO_SKYSCANNER_CODE[location];
+  if (mapped) return mapped;
+  const code = location.toUpperCase();
+  return /^[A-Z0-9]{3,4}$/.test(code) ? code : "";
+}
+
+function decodeBase64UrlText(value: string): string {
+  if (!value) return "";
+  try {
+    const base64 = value
+      .replaceAll("-", "+")
+      .replaceAll("_", "/")
+      .padEnd(Math.ceil(value.length / 4) * 4, "=");
+    return globalThis.atob(base64);
+  } catch {
+    return "";
+  }
 }
 
 function normalizeCountry(value: string | null): string {

@@ -1435,7 +1435,8 @@ function renderCrossProviderSearchAction(): string {
       : translate("searchSkyscannerUnavailable");
     return `
       <div class="cross-search unavailable" aria-label="${escapeHtml(label)}">
-        <span>${escapeHtml(unavailableMessage)}</span>
+        <button type="button" disabled>${escapeHtml(label)}</button>
+        <small>${escapeHtml(unavailableMessage)}</small>
       </div>
     `;
   }
@@ -1703,7 +1704,7 @@ function renderResults(results: CountryResult[]): string {
 function compareCountryResultDisplayOrder(left: CountryResult, right: CountryResult): number {
   const priceDifference =
     (left.cheapest?.price ?? Number.POSITIVE_INFINITY) - (right.cheapest?.price ?? Number.POSITIVE_INFINITY);
-  if (Number.isFinite(priceDifference) && priceDifference !== 0) return priceDifference;
+  if (!Number.isNaN(priceDifference) && priceDifference !== 0) return priceDifference;
 
   const baselineCountry = state.baseline?.country;
   const currentDifference = (left.country === baselineCountry ? 0 : 1) - (right.country === baselineCountry ? 0 : 1);
@@ -2324,10 +2325,10 @@ async function compareSearchRows(): Promise<void> {
       requestId,
     })) as { ok?: boolean; error?: string } | undefined;
     if (state.pageKey !== comparePageKey || state.comparingRequestId !== requestId) return;
-    if (!response?.ok) throw new Error(response?.error || "Search row comparison failed.");
+    if (!response?.ok) throw new Error(response?.error || t()("countryComparisonFailed"));
   } catch (error) {
     if (state.pageKey !== comparePageKey || state.comparingRequestId !== requestId) return;
-    state.error = error instanceof Error ? error.message : "Search row comparison failed.";
+    state.error = error instanceof Error ? error.message : t()("countryComparisonFailed");
     state.comparing = false;
     state.comparingRequestId = "";
     state.comparingCountryCodes = [];
@@ -2357,7 +2358,7 @@ async function compareSkyscannerSearchRowsInPage(
     applyGoogleFlightsSearchComplete({
       requestId,
       ok: false,
-      error: error instanceof Error ? error.message : "Skyscanner search comparison failed.",
+      error: error instanceof Error ? error.message : t()("countryComparisonFailed"),
     });
   }
 }
@@ -2420,7 +2421,7 @@ function applyGoogleFlightsSearchProgress(payload: { requestId?: unknown; result
 function applyGoogleFlightsSearchComplete(payload: { requestId?: unknown; ok?: unknown; error?: unknown }): void {
   if (typeof payload.requestId !== "string" || payload.requestId !== state.comparingRequestId) return;
   if (!payload.ok) {
-    state.error = typeof payload.error === "string" ? payload.error : "Search row comparison failed.";
+    state.error = typeof payload.error === "string" ? payload.error : t()("countryComparisonFailed");
   } else if (state.cacheKey || state.pageKey) {
     state.resultsCachedAt = Date.now();
     void storeSearchComparisonCache(state.cacheKey || state.pageKey, state.baselineSignature, state.resultsCachedAt);
@@ -3234,7 +3235,8 @@ function styles(): string {
     .cross-search {
       padding: 10px 12px 0;
     }
-    .cross-search a {
+    .cross-search a,
+    .cross-search button {
       display: flex;
       align-items: center;
       justify-content: center;
@@ -3246,19 +3248,31 @@ function styles(): string {
       color: #334155;
       text-decoration: none;
       font-weight: 650;
+      font: inherit;
     }
     .cross-search a:hover {
       background: #f8fafc;
       border-color: #94a3b8;
     }
+    .cross-search button:disabled {
+      cursor: default;
+      border-color: #e2e8f0;
+      background: #f8fafc;
+      color: #94a3b8;
+      opacity: 1;
+    }
     .cross-search.unavailable {
+      display: grid;
+      gap: 4px;
       color: #64748b;
       font-size: 11px;
       line-height: 1.35;
     }
-    .cross-search.unavailable span {
+    .cross-search.unavailable small {
       display: block;
-      padding: 2px 0;
+      color: #64748b;
+      font: inherit;
+      padding: 0 2px;
     }
     .mileage-prompt {
       display: grid;

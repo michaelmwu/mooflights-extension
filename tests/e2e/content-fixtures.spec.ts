@@ -127,7 +127,7 @@ test("does not show the Google Flights comparison panel on unresolved top-level 
 
 test("explains when Search Skyscanner cannot open a Google city search", async ({ context, page }) => {
   const pageUrl =
-    "https://www.google.com/travel/flights/search?tfs=CBwQAhojEgoyMDI2LTA3LTA4agwIAhIIL20vMGZ0a3hyBwgBEgNOUlRAAUgBcAGCAQsI____________AZgBAg&tfu=EgoIABAAGAAgAigB";
+    "https://www.google.com/travel/flights/search?tfs=CBwQAhojEgoyMDI2LTA3LTA4agwIAhIIL20venp6enp6BwgBEgNOUlRAAUgBcAGCAQsI____________AZgBAg&tfu=EgoIABAAGAAgAigB";
   await routeGoogleFlightsBookingFixtures(context);
 
   await page.goto(pageUrl);
@@ -135,7 +135,27 @@ test("explains when Search Skyscanner cannot open a Google city search", async (
   const panel = page.locator("#mooflights-google-flights-panel");
   await expect(panel).toBeAttached();
   await expect(panel.getByRole("link", { name: "Search Skyscanner" })).not.toBeVisible();
-  await expect(panel.getByText("Search Skyscanner needs a single airport origin and destination.")).toBeVisible();
+  await expect(panel.getByRole("button", { name: "Search Skyscanner" })).toBeDisabled();
+  await expect(panel.getByText("Unsupported route.")).toBeVisible();
+});
+
+test("opens Search Skyscanner for mapped Google city searches", async ({ context, page }) => {
+  const pageUrl =
+    "https://www.google.com/travel/flights/search?tfs=CBwQAhojEgoyMDI2LTA3LTA4agwIAhIIL20vMGZ0a3hyBwgBEgNOUlRAAUgBcAGCAQsI____________AZgBAg&tfu=EgoIABAAGAAgAigB&curr=TWD&gl=TW&hl=en-US";
+  await routeGoogleFlightsBookingFixtures(context);
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  const skyscannerSearchLink = panel.getByRole("link", { name: "Search Skyscanner" });
+  await expect(skyscannerSearchLink).toBeVisible();
+  const skyscannerSearchHref = await skyscannerSearchLink.getAttribute("href");
+  expect(skyscannerSearchHref).toEqual(expect.any(String));
+  const skyscannerSearchUrl = new URL(skyscannerSearchHref as string);
+  expect(skyscannerSearchUrl.hostname).toBe("www.skyscanner.com.tw");
+  expect(skyscannerSearchUrl.pathname).toBe("/transport/flights/tpet/nrt/260708/");
+  expect(skyscannerSearchUrl.searchParams.get("currency")).toBe("TWD");
+  expect(skyscannerSearchUrl.searchParams.get("market")).toBe("TW");
 });
 
 test("opens Skyscanner country comparison tabs from a routed final compare page", async ({

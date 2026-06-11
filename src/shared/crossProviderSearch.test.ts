@@ -33,6 +33,20 @@ describe("crossProviderSearch", () => {
     expect(parsed.searchParams.get("rtn")).toBe("0");
   });
 
+  it("builds a Skyscanner one-way search from route-only Google Flights tfs URLs with IATA endpoints", () => {
+    const url = routeSpecificCrossProviderSearchUrl(
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhoeEgoyMDI2LTA3LTA3agcIARIDVFBFcgcIARIDTlJUQAFIAXABggELCP___________wGYAQI&tfu=EgYIABAAGAA&curr=TWD&gl=TW&hl=en-US",
+    );
+
+    const parsed = new URL(url);
+    expect(parsed.hostname).toBe("www.skyscanner.com.tw");
+    expect(parsed.pathname).toBe("/transport/flights/tpe/nrt/260707/");
+    expect(parsed.searchParams.get("currency")).toBe("TWD");
+    expect(parsed.searchParams.get("locale")).toBe("en-US");
+    expect(parsed.searchParams.get("market")).toBe("TW");
+    expect(parsed.searchParams.get("rtn")).toBe("0");
+  });
+
   it("builds a valid one-way Skyscanner URL from a Google Flights query URL", () => {
     const url = skyscannerSearchUrlFromGoogleFlights(
       "https://www.google.com/travel/flights?curr=USD&gl=KR&hl=en-US&q=Flights+from+CJU+to+NRT+on+2026-06-24",
@@ -68,6 +82,23 @@ describe("crossProviderSearch", () => {
 
     const parsed = new URL(url);
     expect(parsed.searchParams.get("q")).toBe("Flights from CJU to TYO on 2026-06-24 one way");
+  });
+
+  it("normalizes Skyscanner city codes before building Google Flights searches", () => {
+    const taipeiUrl = googleFlightsSearchUrlFromSkyscanner(
+      "https://www.skyscanner.co.id/transport/flights/tpet/nrt/260624/?adultsv2=1&cabinclass=economy&currency=USD&locale=en-US&market=ID",
+    );
+    expect(new URL(taipeiUrl).searchParams.get("q")).toBe("Flights from TPE to NRT on 2026-06-24 one way");
+
+    const londonUrl = googleFlightsSearchUrlFromSkyscanner(
+      "https://www.skyscanner.co.uk/transport/flights/lond/nrt/260624/?adultsv2=1&cabinclass=economy&currency=GBP&locale=en-GB&market=UK",
+    );
+    expect(new URL(londonUrl).searchParams.get("q")).toBe("Flights from LON to NRT on 2026-06-24 one way");
+
+    const laUrl = googleFlightsSearchUrlFromSkyscanner(
+      "https://www.skyscanner.com/transport/flights/laxa/nrt/260624/?adultsv2=1&cabinclass=economy&currency=USD&locale=en-US&market=US",
+    );
+    expect(new URL(laUrl).searchParams.get("q")).toBe("Flights from LAX to NRT on 2026-06-24 one way");
   });
 
   it("preserves broader BCP 47 locale tags in cross-provider links", () => {
@@ -131,9 +162,26 @@ describe("crossProviderSearch", () => {
     expect(parsed.searchParams.get("market")).toBe("TW");
   });
 
-  it("omits route-specific cross-provider links when Google tfs lacks IATA endpoints", () => {
+  it("maps known Google city locations to Skyscanner all-airport route codes", () => {
+    const taipeiUrl = routeSpecificCrossProviderSearchUrl(
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhojEgoyMDI2LTA3LTA4agwIAhIIL20vMGZ0a3hyBwgBEgNOUlRAAUgBcAGCAQsI____________AZgBAg&tfu=EgoIABAAGAAgAigB&curr=TWD&gl=TW&hl=en-US",
+    );
+    expect(new URL(taipeiUrl).pathname).toBe("/transport/flights/tpet/nrt/260708/");
+
+    const londonUrl = routeSpecificCrossProviderSearchUrl(
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhosEgoyMDI2LTA2LTI0MgdTS1lURUFNagwIAxIIL20vMDRqcGxyBwgBEgNOUlRAAUgBcAGCAQsI____________AZgBAg&tfu=EgIIACIA&hl=en-US&gl=KR&curr=USD",
+    );
+    expect(new URL(londonUrl).pathname).toBe("/transport/flights/lond/nrt/260624/");
+
+    const laUrl = routeSpecificCrossProviderSearchUrl(
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhouEgoyMDI2LTA2LTI0MgdTS1lURUFNag4IAxIKL20vMDMwcWIzdHIHCAESA05SVEABSAFwAYIBCwj___________8BmAEC&tfu=EgIIACIA&hl=en-US&gl=KR&curr=USD",
+    );
+    expect(new URL(laUrl).pathname).toBe("/transport/flights/laxa/nrt/260624/");
+  });
+
+  it("omits route-specific cross-provider links when Google tfs has unmapped city endpoints", () => {
     const currentUrl =
-      "https://www.google.com/travel/flights/search?tfs=CBwQAhojEgoyMDI2LTA3LTA4agwIAhIIL20vMGZ0a3hyBwgBEgNOUlRAAUgBcAGCAQsI____________AZgBAg&tfu=EgoIABAAGAAgAigB";
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhojEgoyMDI2LTA3LTA4agwIAhIIL20venp6enp6BwgBEgNOUlRAAUgBcAGCAQsI____________AZgBAg&tfu=EgoIABAAGAAgAigB";
 
     expect(routeSpecificCrossProviderSearchUrl(currentUrl, "TWD")).toBe("");
     expect(new URL(skyscannerSearchUrlFromGoogleFlights(currentUrl, "TWD")).pathname).toBe("/transport/flights/");
