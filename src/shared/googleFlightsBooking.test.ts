@@ -1,6 +1,7 @@
 import {
   DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES,
   googleFlightsCountryUrl,
+  googleFlightsMulticityLegFilterPlan,
   googleFlightsPanelPageKey,
   googleFlightsPreserveMulticityFiltersUrl,
   googleFlightsSearchSliceCount,
@@ -1096,6 +1097,53 @@ describe("Google Flights booking option parser", () => {
         },
       ],
     });
+  });
+});
+
+describe("Google Flights multicity leg filter plan", () => {
+  const threeLegUrl = (legOneFields: string[], legTwoFields: string[] = []) =>
+    `https://www.google.com/travel/flights/search?tfs=${encodeTfsText([
+      tfsSearchSlice("2026-06-03", "HKG", "TPE", ...legOneFields),
+      tfsSearchSlice("2026-06-05", "TPE", "HKG", ...legTwoFields),
+      tfsSearchSlice("2026-06-07", "HKG", "NRT"),
+    ])}`;
+
+  it("targets the current leg with the airline filter from the filtered leg", () => {
+    const plan = googleFlightsMulticityLegFilterPlan(threeLegUrl(["\x32\x02CI"]), 1);
+
+    expect(plan).toEqual({
+      currentLegIndex: 1,
+      legCount: 3,
+      airlineCodes: ["CI"],
+      stopFilterValue: null,
+      airlinesOnly: true,
+      currentLegHasFilter: false,
+    });
+  });
+
+  it("advances the target to the next leg as more legs are selected", () => {
+    const plan = googleFlightsMulticityLegFilterPlan(threeLegUrl(["\x32\x02CI"]), 2);
+
+    expect(plan?.currentLegIndex).toBe(2);
+    expect(plan?.currentLegHasFilter).toBe(false);
+  });
+
+  it("reports the current leg as already filtered when it carries the codes", () => {
+    const plan = googleFlightsMulticityLegFilterPlan(threeLegUrl(["\x32\x02CI"], ["\x32\x02CI"]), 1);
+
+    expect(plan?.currentLegHasFilter).toBe(true);
+  });
+
+  it("includes the stops filter value in plans with stops and airline filters", () => {
+    const plan = googleFlightsMulticityLegFilterPlan(threeLegUrl(["\x28\x01", "\x32\x02CI"]), 1);
+
+    expect(plan?.airlineCodes).toEqual(["CI"]);
+    expect(plan?.stopFilterValue).toBe(1);
+    expect(plan?.airlinesOnly).toBe(false);
+  });
+
+  it("returns null when no leg carries a filter", () => {
+    expect(googleFlightsMulticityLegFilterPlan(threeLegUrl([]), 1)).toBeNull();
   });
 });
 

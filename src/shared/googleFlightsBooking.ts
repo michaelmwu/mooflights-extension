@@ -170,6 +170,96 @@ export function googleFlightsSearchSliceCount(url: string): number {
   return decoded ? googleFlightsTfsTopLevelSliceBlocks(decoded).length : 0;
 }
 
+export interface GoogleFlightsMulticityLegFilterPlan {
+  /** 0-based index of the leg the user is currently choosing (== selected leg count). */
+  currentLegIndex: number;
+  /** Total leg/slice blocks in the search. */
+  legCount: number;
+  /** Airline IATA codes copied from the leg that the user filtered. */
+  airlineCodes: string[];
+  /** Google Flights stop filter value copied from the leg that the user filtered. */
+  stopFilterValue: number | null;
+  /** True when the source filter contains only airline fields (no stops/other). */
+  airlinesOnly: boolean;
+  /** True when nothing needs to be applied to the current leg (already filtered or out of range). */
+  currentLegHasFilter: boolean;
+}
+
+/**
+ * Describes what airline filter (if any) should be carried onto the leg the user is
+ * currently choosing in a partially-selected multicity search. Used to drive Google's
+ * own airline filter UI so the leg re-filters without a full page reload.
+ */
+export function googleFlightsMulticityLegFilterPlan(
+  url: string,
+  selectedLegCount: number,
+): GoogleFlightsMulticityLegFilterPlan | null {
+  let tfs = "";
+  try {
+    tfs = new URL(url).searchParams.get("tfs") || "";
+  } catch {
+    return null;
+  }
+  if (!tfs) return null;
+  const decoded = decodeBase64UrlText(tfs);
+  if (!decoded) return null;
+  const slices = googleFlightsTfsTopLevelSliceBlocks(decoded);
+  if (slices.length < 2) return null;
+
+  const sourceFilterIndex = slices.findIndex((slice) => googleFlightsSliceFilterFieldEntries(slice.value).length > 0);
+  if (sourceFilterIndex < 0) return null;
+
+  const sourceEntries = googleFlightsSliceFilterFieldEntries(slices[sourceFilterIndex]?.value || "");
+  const airlineCodes = Array.from(
+    new Set(
+      sourceEntries
+        .filter((entry) => entry.fieldNumber === 6)
+        .map((entry) => googleFlightsAirlineCodeFromFilterField(entry.value))
+        .filter((code): code is string => Boolean(code)),
+    ),
+  );
+  const stopFilterValue =
+    sourceEntries
+      .filter((entry) => entry.fieldNumber === 5)
+      .map((entry) => googleFlightsStopValueFromFilterField(entry.value))
+      .find((value) => value !== null) ?? null;
+  const airlinesOnly = sourceEntries.length > 0 && sourceEntries.every((entry) => entry.fieldNumber === 6);
+
+  // The current leg is "done" only once it carries every filter field number the
+  // source leg has (stops = 5, airlines = 6) — matching how the URL-level preserve
+  // logic decides whether a leg still needs a field copied in.
+  const sourceFieldNumbers = Array.from(new Set(sourceEntries.map((entry) => entry.fieldNumber)));
+  const currentLegIndex = selectedLegCount;
+  const currentSlice = slices[currentLegIndex];
+  const currentLegHasFilter =
+    currentLegIndex <= sourceFilterIndex ||
+    currentLegIndex >= slices.length ||
+    !currentSlice ||
+    googleFlightsSliceHasFilterFields(currentSlice.value, sourceFieldNumbers);
+
+  return { currentLegIndex, legCount: slices.length, airlineCodes, stopFilterValue, airlinesOnly, currentLegHasFilter };
+}
+
+function googleFlightsSliceHasFilterFields(sliceValue: string, fieldNumbers: number[]): boolean {
+  if (fieldNumbers.length === 0) return true;
+  const present = new Set(googleFlightsSliceFilterFieldEntries(sliceValue).map((entry) => entry.fieldNumber));
+  return fieldNumbers.every((fieldNumber) => present.has(fieldNumber));
+}
+
+function googleFlightsAirlineCodeFromFilterField(entry: string): string {
+  const tag = readProtobufTag(entry, 0);
+  if (!tag) return "";
+  const length = readVarint(entry, tag.nextIndex);
+  if (!length) return "";
+  return entry.slice(length.nextIndex, length.nextIndex + length.value);
+}
+
+function googleFlightsStopValueFromFilterField(entry: string): number | null {
+  const tag = readProtobufTag(entry, 0);
+  if (!tag || tag.fieldNumber !== 5 || tag.wireType !== 0) return null;
+  return readVarint(entry, tag.nextIndex)?.value ?? null;
+}
+
 export function isGoogleFlightsPanelPageUrl(url: string): boolean {
   try {
     return isGoogleFlightsPanelPage(new URL(url));

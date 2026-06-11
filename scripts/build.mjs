@@ -35,8 +35,8 @@ const entries = [
     format: "iife",
   },
   {
-    entryPoints: ["src/content/googleFlightsPageBridge.ts"],
-    outfile: "content/googleFlightsPageBridge.js",
+    entryPoints: ["src/content/googleFlightsFilterAgent.ts"],
+    outfile: "content/googleFlightsFilterAgent.js",
     format: "iife",
   },
   {

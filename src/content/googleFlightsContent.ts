@@ -7,6 +7,7 @@ import {
   type GoogleFlightsSearchCountryResult,
   type GoogleFlightsSearchResult,
   googleFlightsCountryUrl,
+  googleFlightsMulticityLegFilterPlan,
   googleFlightsPanelPageKey,
   googleFlightsPreserveMulticityFiltersUrl,
   googleFlightsSearchSliceCount,
@@ -99,7 +100,6 @@ const SEARCH_COMPARISON_CACHE_STORAGE_KEY = "mooFlightsGoogleFlightsSearchCompar
 const SEARCH_COUNTRY_SELECTION_SESSION_KEY = "mooFlightsGoogleFlightsCountrySelection";
 const SEARCH_DEBUG_LOG_SESSION_KEY = "mooFlightsGoogleFlightsDebugLog";
 const MULTICITY_FILTER_PRESERVATION_SESSION_KEY = "mooFlightsGoogleFlightsPreserveMulticityFilters";
-const MAIN_WORLD_MULTICITY_FILTER_REWRITE_SESSION_KEY = "mooFlightsGoogleFlightsMainWorldPreservedHref";
 const SEARCH_BADGE_SELECTOR = "[data-moo-flights-search-badge]";
 const SEARCH_BADGE_TARGET_SELECTOR = "[data-moo-flights-search-badge-target]";
 const SEARCH_HIGHLIGHT_SELECTOR = "[data-moo-flights-search-highlight]";
@@ -128,7 +128,7 @@ let countryCodeByDisplayName: Map<string, string> | null | undefined;
 let suppressPanelRestoreClick = false;
 let inferredCurrencyCache: { href: string; currency: string; cachedAt: number } | null = null;
 let highlightedSearchDeepLink = "";
-let refreshedMulticityFiltersHref = "";
+let multicityFilterAttemptHref = "";
 const panelUi = loadPanelUiState();
 
 const state: CompareState = {
@@ -1267,25 +1267,91 @@ function preserveCurrentMulticityFilters(): void {
   if (currentGoogleFlightsPanelMode() !== "search") return;
   if (!state.preserveMulticityFilters || !hasMultipleGoogleFlightsLegs()) return;
   if (!shouldRefreshCurrentMulticityFilters()) return;
-  const nextUrl = googleFlightsPreserveMulticityFiltersUrl(window.location.href);
-  if (!nextUrl) return;
-  if (nextUrl === window.location.href) {
-    refreshCurrentMulticityFilters();
-    return;
+
+  const href = window.location.href;
+  if (multicityFilterAttemptHref === href) return;
+
+  const plan = googleFlightsMulticityLegFilterPlan(href, selectedMulticityLegCount());
+  if (!plan || plan.currentLegHasFilter) return;
+
+  multicityFilterAttemptHref = href;
+  // Prefer applying filters through Google's own UI so the leg re-filters in
+  // place (no reload). Stop filters are especially important to click: copying
+  // them through a synthesized tfs URL can make Google reopen the blank search
+  // editor instead of the next-leg result list.
+  if (plan.airlineCodes.length > 0 || plan.stopFilterValue !== null) {
+    void applyMulticityFiltersByClick(href);
+  } else {
+    fallbackMulticityFilterReload();
   }
-  refreshedMulticityFiltersHref = nextUrl;
-  window.location.replace(nextUrl);
 }
 
-function refreshCurrentMulticityFilters(): void {
-  if (!shouldRefreshCurrentMulticityFilters()) return;
-  if (refreshedMulticityFiltersHref === window.location.href) return;
-  if (readMainWorldMulticityFilterRewriteHref() === window.location.href) {
-    refreshedMulticityFiltersHref = window.location.href;
+function selectedMulticityLegCount(): number {
+  const matrixSearch = parseGoogleFlightsMatrixSearch(window.location.href, currentComparableCurrencyCode());
+  return matrixSearch ? matrixSearch.slices.length : 0;
+}
+
+async function applyMulticityFiltersByClick(attemptHref: string): Promise<void> {
+  // Google updates the URL before the next-leg filter toolbar has always
+  // rerendered. If we click immediately, we can hit stale selected chips from the
+  // previous/top search and Google may bounce back to the blank search editor.
+  await delay(1500);
+  if (window.location.href !== attemptHref) return;
+  const currentPlan = googleFlightsMulticityLegFilterPlan(window.location.href, selectedMulticityLegCount());
+  if (!currentPlan || currentPlan.currentLegHasFilter) return;
+
+  // The clicks must run in the page's own world (Google ignores synthetic events
+  // dispatched from the isolated content-script world), so hand off to the
+  // main-world filter agent, then confirm via the URL.
+  const names = currentPlan.airlineCodes.map((code) => mileageCarrierName(code) || code);
+  const applied = await requestFilterAgent(names, currentPlan.stopFilterValue, 22000);
+  if (applied && (await waitForCurrentLegAirlineFilter(5000))) {
+    // Google rewrote the URL with the filtered leg in place; nothing else to do.
     return;
   }
-  refreshedMulticityFiltersHref = window.location.href;
-  dispatchMulticityFilterRefresh();
+  // Airline-only filters can still fall back to a direct navigation. Stop
+  // filters are intentionally not URL-fallbacked here because Google can treat
+  // that synthesized selected-leg tfs as a request to reopen the top search form.
+  if (currentPlan.stopFilterValue === null) fallbackMulticityFilterReload();
+}
+
+function requestFilterAgent(names: string[], stopFilterValue: number | null, timeoutMs: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    let settled = false;
+    const finish = (applied: boolean) => {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener("message", onMessage);
+      resolve(applied);
+    };
+    const onMessage = (event: MessageEvent) => {
+      if (event.source !== window) return;
+      const data = event.data as { channel?: string; id?: string; applied?: boolean } | null;
+      if (!data || data.channel !== "mooflights:airline-filter-result" || data.id !== id) return;
+      finish(Boolean(data.applied));
+    };
+    window.addEventListener("message", onMessage);
+    window.postMessage({ channel: "mooflights:apply-airline-filter", id, names, stopFilterValue }, "*");
+    window.setTimeout(() => finish(false), timeoutMs);
+  });
+}
+
+async function waitForCurrentLegAirlineFilter(timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const plan = googleFlightsMulticityLegFilterPlan(window.location.href, selectedMulticityLegCount());
+    if (plan && plan.airlineCodes.length === 0) return false;
+    if (plan?.currentLegHasFilter) return true;
+    await delay(150);
+  }
+  return false;
+}
+
+function fallbackMulticityFilterReload(): void {
+  const nextUrl = googleFlightsPreserveMulticityFiltersUrl(window.location.href);
+  if (!nextUrl || nextUrl === window.location.href) return;
+  window.location.replace(nextUrl);
 }
 
 function shouldRefreshCurrentMulticityFilters(): boolean {
@@ -1293,10 +1359,6 @@ function shouldRefreshCurrentMulticityFilters(): boolean {
   if (searchSliceCount < 2) return false;
   const matrixSearch = parseGoogleFlightsMatrixSearch(window.location.href, currentComparableCurrencyCode());
   return Boolean(matrixSearch && matrixSearch.slices.length > 0 && matrixSearch.slices.length < searchSliceCount);
-}
-
-function dispatchMulticityFilterRefresh(): void {
-  window.dispatchEvent(new PopStateEvent("popstate", { state: history.state }));
 }
 
 function readSessionMulticityFilterPreservation(): boolean {
@@ -1313,14 +1375,6 @@ function writeSessionMulticityFilterPreservation(enabled: boolean): void {
     sessionStorage.setItem(MULTICITY_FILTER_PRESERVATION_SESSION_KEY, enabled ? "1" : "0");
   } catch {
     // Session storage is an enhancement; the current page state still tracks the checkbox.
-  }
-}
-
-function readMainWorldMulticityFilterRewriteHref(): string {
-  try {
-    return sessionStorage.getItem(MAIN_WORLD_MULTICITY_FILTER_REWRITE_SESSION_KEY) || "";
-  } catch {
-    return "";
   }
 }
 

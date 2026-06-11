@@ -31,7 +31,7 @@
     },
     {
       "matches": ["https://www.google.com/travel/flights*", "https://google.com/travel/flights*"],
-      "js": ["content/googleFlightsPageBridge.js"],
+      "js": ["content/googleFlightsFilterAgent.js"],
       "run_at": "document_start",
       "world": "MAIN"
     },
