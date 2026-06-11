@@ -1127,6 +1127,12 @@ function currentSearchPageKey(includeCountry: boolean): string {
     const params = new URLSearchParams();
     const tfs = url.searchParams.get("tfs");
     if (tfs) params.set("tfs", tfs);
+    if (!tfs) {
+      for (const key of ["q", "origin", "destination", "depart", "return"]) {
+        const value = url.searchParams.get(key);
+        if (value) params.set(key, value);
+      }
+    }
     params.set("curr", currentComparableCurrencyCode());
     if (includeCountry) params.set("gl", currentComparableCountryCode());
     return `${url.pathname}?${params.toString()}`;

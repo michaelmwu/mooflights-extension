@@ -90,7 +90,9 @@ export function googleFlightsPanelPageKey(
   if (!isGoogleFlightsPanelPage(parsedUrl)) return "";
 
   const params = new URLSearchParams();
-  for (const key of ["tfs", "tfu"]) {
+  const tfs = parsedUrl.searchParams.get("tfs");
+  const keyNames = tfs ? ["tfs", "tfu"] : ["q", "origin", "destination", "depart", "return"];
+  for (const key of keyNames) {
     const value = parsedUrl.searchParams.get(key);
     if (value) params.set(key, value);
   }
@@ -113,9 +115,14 @@ function isGoogleFlightsPanelPage(url: URL): boolean {
   if (GOOGLE_FLIGHTS_BOOKING_PATH_RE.test(url.pathname)) return true;
   return (
     (url.pathname === GOOGLE_FLIGHTS_ITINERARY_PATH || url.pathname.startsWith(`${GOOGLE_FLIGHTS_ITINERARY_PATH}/`)) &&
-    Boolean(url.searchParams.get("tfs")) &&
-    (url.searchParams.get("source") === "ita_matrix" || !GOOGLE_FLIGHTS_BOOKING_PATH_RE.test(url.pathname))
+    (Boolean(url.searchParams.get("tfs")) || hasGoogleFlightsSearchParams(url.searchParams)) &&
+    !GOOGLE_FLIGHTS_BOOKING_PATH_RE.test(url.pathname)
   );
+}
+
+function hasGoogleFlightsSearchParams(params: URLSearchParams): boolean {
+  if (params.get("q")) return true;
+  return Boolean(params.get("origin") && params.get("destination") && params.get("depart"));
 }
 
 export function normalizeGoogleFlightsCountryCodes(

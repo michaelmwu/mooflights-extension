@@ -9,10 +9,24 @@ describe("crossProviderSearch", () => {
 
     const parsed = new URL(url);
     expect(parsed.hostname).toBe("www.skyscanner.co.kr");
-    expect(parsed.pathname).toBe("/transport/d/hkg/2026-08-27/tpe");
+    expect(parsed.pathname).toBe("/transport/flights/hkg/tpe/260827/");
     expect(parsed.searchParams.get("currency")).toBe("HKD");
     expect(parsed.searchParams.get("locale")).toBe("zh-TW");
     expect(parsed.searchParams.get("market")).toBe("KR");
+  });
+
+  it("builds a valid one-way Skyscanner URL from a Google Flights query URL", () => {
+    const url = skyscannerSearchUrlFromGoogleFlights(
+      "https://www.google.com/travel/flights?curr=USD&gl=KR&hl=en-US&q=Flights+from+CJU+to+NRT+on+2026-06-24",
+    );
+
+    const parsed = new URL(url);
+    expect(parsed.hostname).toBe("www.skyscanner.co.kr");
+    expect(parsed.pathname).toBe("/transport/flights/cju/nrt/260624/");
+    expect(parsed.searchParams.get("currency")).toBe("USD");
+    expect(parsed.searchParams.get("locale")).toBe("en-US");
+    expect(parsed.searchParams.get("market")).toBe("KR");
+    expect(parsed.searchParams.get("rtn")).toBe("0");
   });
 
   it("builds a Google Flights search from a Skyscanner route URL", () => {
@@ -26,7 +40,33 @@ describe("crossProviderSearch", () => {
     expect(parsed.searchParams.get("curr")).toBe("USD");
     expect(parsed.searchParams.get("gl")).toBe("ZA");
     expect(parsed.searchParams.get("hl")).toBe("en-US");
-    expect(parsed.searchParams.get("q")).toBe("Flights from CJU to NRT on 2026-06-24");
+    expect(parsed.searchParams.get("origin")).toBe("CJU");
+    expect(parsed.searchParams.get("destination")).toBe("NRT");
+    expect(parsed.searchParams.get("depart")).toBe("2026-06-24");
+  });
+
+  it("derives the Google Flights country from localized Skyscanner hosts and UK market aliases", () => {
+    const hostUrl = googleFlightsSearchUrlFromSkyscanner(
+      "https://www.skyscanner.co.kr/transport/flights/cju/nrt/260624/?adultsv2=1&cabinclass=economy&currency=USD&locale=en-US",
+    );
+    expect(new URL(hostUrl).searchParams.get("gl")).toBe("KR");
+
+    const ukUrl = googleFlightsSearchUrlFromSkyscanner(
+      "https://www.skyscanner.co.uk/transport/flights/lhr/jfk/260624/?adultsv2=1&cabinclass=economy&currency=GBP&locale=en-GB&market=UK",
+    );
+    expect(new URL(ukUrl).searchParams.get("gl")).toBe("GB");
+  });
+
+  it("includes return dates from standard Skyscanner round-trip flight URLs", () => {
+    const url = googleFlightsSearchUrlFromSkyscanner(
+      "https://www.skyscanner.co.kr/transport/flights/cju/nrt/260624/260628/?adultsv2=1&cabinclass=economy&currency=USD&locale=en-US&market=KR",
+    );
+
+    const parsed = new URL(url);
+    expect(parsed.searchParams.get("origin")).toBe("CJU");
+    expect(parsed.searchParams.get("destination")).toBe("NRT");
+    expect(parsed.searchParams.get("depart")).toBe("2026-06-24");
+    expect(parsed.searchParams.get("return")).toBe("2026-06-28");
   });
 
   it("falls back to a normal Skyscanner search page when Google route data is unavailable", () => {

@@ -419,6 +419,14 @@ describe("Google Flights booking option parser", () => {
     );
   });
 
+  it("recognizes Google Flights search query pages before Google resolves tfs", () => {
+    const url = "https://www.google.com/travel/flights?curr=USD&gl=KR&hl=en-US&q=Flights+from+CJU+to+NRT+on+2026-06-24";
+
+    expect(googleFlightsPanelPageKey(url, "KR", true)).toBe(
+      "/travel/flights?q=Flights+from+CJU+to+NRT+on+2026-06-24&curr=USD&gl=KR",
+    );
+  });
+
   it("uses inferred currency in Google Flights panel page keys", () => {
     const url = "https://www.google.com/travel/flights/booking?tfs=abc&gl=TW";
 
