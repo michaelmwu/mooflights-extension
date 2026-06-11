@@ -677,6 +677,7 @@ function onSettingsChanged(changes: Record<string, chrome.storage.StorageChange>
 function installSkyscannerSearchCaptureListener(): void {
   window.addEventListener("message", (event) => {
     if (event.source !== window) return;
+    if (event.origin !== window.location.origin) return;
     const data = event.data as {
       source?: unknown;
       type?: unknown;

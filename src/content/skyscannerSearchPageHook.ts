@@ -87,6 +87,7 @@ function installXhrHook(): void {
 function installRequestListener(): void {
   window.addEventListener("message", (event) => {
     if (event.source !== window) return;
+    if (event.origin !== window.location.origin) return;
     const data = event.data as { source?: unknown; type?: unknown };
     if (data?.source !== REQUEST_SOURCE) return;
     if (data.type === "request-latest") {
