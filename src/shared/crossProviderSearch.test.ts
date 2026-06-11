@@ -104,6 +104,81 @@ describe("crossProviderSearch", () => {
       "https://www.skyscanner.co.id/transport/flights/nyca/pari/260624/?adultsv2=1&cabinclass=economy&currency=USD&locale=en-US&market=ID",
     );
     expect(new URL(newYorkParisUrl).searchParams.get("q")).toBe("Flights from NYC to PAR on 2026-06-24 one way");
+
+    const sanDiegoSaoPauloUrl = googleFlightsSearchUrlFromSkyscanner(
+      "https://www.skyscanner.co.id/transport/flights/sana/saoa/260624/?adultsv2=1&cabinclass=economy&currency=USD&locale=en-US&market=ID",
+    );
+    expect(new URL(sanDiegoSaoPauloUrl).searchParams.get("q")).toBe("Flights from SAN to SAO on 2026-06-24 one way");
+
+    const washingtonChicagoUrl = googleFlightsSearchUrlFromSkyscanner(
+      "https://www.skyscanner.co.id/transport/flights/wasa/chia/260624/?adultsv2=1&cabinclass=economy&currency=USD&locale=en-US&market=ID",
+    );
+    expect(new URL(washingtonChicagoUrl).searchParams.get("q")).toBe("Flights from WAS to CHI on 2026-06-24 one way");
+
+    const milanRomeUrl = googleFlightsSearchUrlFromSkyscanner(
+      "https://www.skyscanner.co.id/transport/flights/mila/rome/260624/?adultsv2=1&cabinclass=economy&currency=USD&locale=en-US&market=ID",
+    );
+    expect(new URL(milanRomeUrl).searchParams.get("q")).toBe("Flights from MIL to ROM on 2026-06-24 one way");
+
+    const shanghaiSeoulUrl = googleFlightsSearchUrlFromSkyscanner(
+      "https://www.skyscanner.co.id/transport/flights/csha/sela/260624/?adultsv2=1&cabinclass=economy&currency=USD&locale=en-US&market=ID",
+    );
+    expect(new URL(shanghaiSeoulUrl).searchParams.get("q")).toBe("Flights from SHA to SEL on 2026-06-24 one way");
+
+    const beijingBangkokUrl = googleFlightsSearchUrlFromSkyscanner(
+      "https://www.skyscanner.co.id/transport/flights/bjsa/bkkt/260624/?adultsv2=1&cabinclass=economy&currency=USD&locale=en-US&market=ID",
+    );
+    expect(new URL(beijingBangkokUrl).searchParams.get("q")).toBe("Flights from BJS to BKK on 2026-06-24 one way");
+
+    const osakaDubaiUrl = googleFlightsSearchUrlFromSkyscanner(
+      "https://www.skyscanner.co.id/transport/flights/osaa/dxba/260624/?adultsv2=1&cabinclass=economy&currency=USD&locale=en-US&market=ID",
+    );
+    expect(new URL(osakaDubaiUrl).searchParams.get("q")).toBe("Flights from OSA to DXB on 2026-06-24 one way");
+
+    const istanbulBuenosAiresUrl = googleFlightsSearchUrlFromSkyscanner(
+      "https://www.skyscanner.co.id/transport/flights/ista/buea/260624/?adultsv2=1&cabinclass=economy&currency=USD&locale=en-US&market=ID",
+    );
+    expect(new URL(istanbulBuenosAiresUrl).searchParams.get("q")).toBe("Flights from IST to BUE on 2026-06-24 one way");
+
+    const sanJoseDallasUrl = googleFlightsSearchUrlFromSkyscanner(
+      "https://www.skyscanner.co.id/transport/flights/sjca/dfwa/260624/?adultsv2=1&cabinclass=economy&currency=USD&locale=en-US&market=ID",
+    );
+    expect(new URL(sanJoseDallasUrl).searchParams.get("q")).toBe("Flights from SJC to DFW on 2026-06-24 one way");
+
+    const houstonMiamiUrl = googleFlightsSearchUrlFromSkyscanner(
+      "https://www.skyscanner.co.id/transport/flights/houa/miaa/260624/?adultsv2=1&cabinclass=economy&currency=USD&locale=en-US&market=ID",
+    );
+    expect(new URL(houstonMiamiUrl).searchParams.get("q")).toBe("Flights from HOU to MIA on 2026-06-24 one way");
+
+    const torontoMontrealUrl = googleFlightsSearchUrlFromSkyscanner(
+      "https://www.skyscanner.co.id/transport/flights/ytoa/ymqa/260624/?adultsv2=1&cabinclass=economy&currency=USD&locale=en-US&market=ID",
+    );
+    expect(new URL(torontoMontrealUrl).searchParams.get("q")).toBe("Flights from YTO to YMQ on 2026-06-24 one way");
+
+    const vancouverMexicoCityUrl = googleFlightsSearchUrlFromSkyscanner(
+      "https://www.skyscanner.co.id/transport/flights/yvra/mexa/260624/?adultsv2=1&cabinclass=economy&currency=USD&locale=en-US&market=ID",
+    );
+    expect(new URL(vancouverMexicoCityUrl).searchParams.get("q")).toBe("Flights from YVR to MEX on 2026-06-24 one way");
+
+    const stockholmOsloUrl = googleFlightsSearchUrlFromSkyscanner(
+      "https://www.skyscanner.co.id/transport/flights/stoc/oslo/260624/?adultsv2=1&cabinclass=economy&currency=USD&locale=en-US&market=ID",
+    );
+    expect(new URL(stockholmOsloUrl).searchParams.get("q")).toBe("Flights from STO to OSL on 2026-06-24 one way");
+
+    const rioColomboUrl = googleFlightsSearchUrlFromSkyscanner(
+      "https://www.skyscanner.co.id/transport/flights/rioa/cmba/260624/?adultsv2=1&cabinclass=economy&currency=USD&locale=en-US&market=ID",
+    );
+    expect(new URL(rioColomboUrl).searchParams.get("q")).toBe("Flights from RIO to CMB on 2026-06-24 one way");
+
+    const moscowKualaLumpurUrl = googleFlightsSearchUrlFromSkyscanner(
+      "https://www.skyscanner.co.id/transport/flights/mosc/kulm/260624/?adultsv2=1&cabinclass=economy&currency=USD&locale=en-US&market=ID",
+    );
+    expect(new URL(moscowKualaLumpurUrl).searchParams.get("q")).toBe("Flights from MOW to KUL on 2026-06-24 one way");
+
+    const jakartaMelbourneUrl = googleFlightsSearchUrlFromSkyscanner(
+      "https://www.skyscanner.co.id/transport/flights/cgki/mela/260624/?adultsv2=1&cabinclass=economy&currency=USD&locale=en-US&market=ID",
+    );
+    expect(new URL(jakartaMelbourneUrl).searchParams.get("q")).toBe("Flights from CGK to MEL on 2026-06-24 one way");
   });
 
   it("preserves broader BCP 47 locale tags in cross-provider links", () => {
@@ -187,6 +262,83 @@ describe("crossProviderSearch", () => {
       "https://www.google.com/travel/flights/search?tfs=CBwQAhoyEgoyMDI2LTA2LTI0MgdTS1lURUFNag0IAxIJL20vMDJfMjg2cgwIAxIIL20vMDVxdGpAAUgBcAGCAQsI____________AZgBAg&tfu=EgIIACIA&hl=en-US&gl=KR&curr=USD",
     );
     expect(new URL(newYorkParisUrl).pathname).toBe("/transport/flights/nyca/pari/260624/");
+
+    const sanDiegoSaoPauloUrl = routeSpecificCrossProviderSearchUrl(
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhoyEgoyMDI2LTA2LTI0MgdTS1lURUFNagwIAxIIL20vMDcxdnJyDQgDEgkvbS8wMjJwZm1AAUgBcAGCAQsI____________AZgBAg&tfu=EgIIACIA&hl=en-US&gl=KR&curr=USD",
+    );
+    expect(new URL(sanDiegoSaoPauloUrl).pathname).toBe("/transport/flights/sana/saoa/260624/");
+
+    const washingtonChicagoUrl = routeSpecificCrossProviderSearchUrl(
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhoxEgoyMDI2LTA2LTI0MgdTS1lURUFNagwIAxIIL20vMHJoNmtyDAgDEggvbS8wMV9kNEABSAFwAYIBCwj___________8BmAEC&tfu=EgIIACIA&hl=en-US&gl=KR&curr=USD",
+    );
+    expect(new URL(washingtonChicagoUrl).pathname).toBe("/transport/flights/wasa/chia/260624/");
+
+    const milanRomeUrl = routeSpecificCrossProviderSearchUrl(
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhoxEgoyMDI2LTA2LTI0MgdTS1lURUFNagwIAxIIL20vMDk0N2xyDAgDEggvbS8wNmM2MkABSAFwAYIBCwj___________8BmAEC&tfu=EgIIACIA&hl=en-US&gl=KR&curr=USD",
+    );
+    expect(new URL(milanRomeUrl).pathname).toBe("/transport/flights/mila/rome/260624/");
+
+    const beijingBangkokUrl = routeSpecificCrossProviderSearchUrl(
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhoxEgoyMDI2LTA2LTI0MgdTS1lURUFNagwIAxIIL20vMDE5MTRyDAgDEggvbS8wZm4yZ0ABSAFwAYIBCwj___________8BmAEC&tfu=EgIIACIA&hl=en-US&gl=KR&curr=USD",
+    );
+    expect(new URL(beijingBangkokUrl).pathname).toBe("/transport/flights/bjsa/bkkt/260624/");
+
+    const osakaDubaiUrl = routeSpecificCrossProviderSearchUrl(
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhoyEgoyMDI2LTA2LTI0MgdTS1lURUFNagwIAxIIL20vMGRxeXdyDQgDEgkvbS8wMWYwOHJAAUgBcAGCAQsI____________AZgBAg&tfu=EgIIACIA&hl=en-US&gl=KR&curr=USD",
+    );
+    expect(new URL(osakaDubaiUrl).pathname).toBe("/transport/flights/osaa/dxba/260624/");
+
+    const istanbulBuenosAiresUrl = routeSpecificCrossProviderSearchUrl(
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhozEgoyMDI2LTA2LTI0MgdTS1lURUFNag0IAxIJL20vMDk5NDltcg0IAxIJL20vMDFseTVtQAFIAXABggELCP___________wGYAQI&tfu=EgIIACIA&hl=en-US&gl=KR&curr=USD",
+    );
+    expect(new URL(istanbulBuenosAiresUrl).pathname).toBe("/transport/flights/ista/buea/260624/");
+
+    const sanJoseDallasUrl = routeSpecificCrossProviderSearchUrl(
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhoxEgoyMDI2LTA2LTI0MgdTS1lURUFNagwIAxIIL20vMGYwNHZyDAgDEggvbS8wZjJycUABSAFwAYIBCwj___________8BmAEC&tfu=EgIIACIA&hl=en-US&gl=KR&curr=USD",
+    );
+    expect(new URL(sanJoseDallasUrl).pathname).toBe("/transport/flights/sjca/dfwa/260624/");
+
+    const houstonMiamiUrl = routeSpecificCrossProviderSearchUrl(
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhoxEgoyMDI2LTA2LTI0MgdTS1lURUFNagwIAxIIL20vMDNsMm5yDAgDEggvbS8wZjJ2MEABSAFwAYIBCwj___________8BmAEC&tfu=EgIIACIA&hl=en-US&gl=KR&curr=USD",
+    );
+    expect(new URL(houstonMiamiUrl).pathname).toBe("/transport/flights/houa/miaa/260624/");
+
+    const torontoMontrealUrl = routeSpecificCrossProviderSearchUrl(
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhoxEgoyMDI2LTA2LTI0MgdTS1lURUFNagwIAxIIL20vMGg3aDZyDAgDEggvbS8wNTJwN0ABSAFwAYIBCwj___________8BmAEC&tfu=EgIIACIA&hl=en-US&gl=KR&curr=USD",
+    );
+    expect(new URL(torontoMontrealUrl).pathname).toBe("/transport/flights/ytoa/ymqa/260624/");
+
+    const vancouverMexicoCityUrl = routeSpecificCrossProviderSearchUrl(
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhooEgoyMDI2LTA2LTI0agwIAxIIL20vMDgwaDJyDAgDEggvbS8wNHNxakABSAFwAYIBCwj___________8BmAEC&tfu=EgIIACIA&hl=en-US&gl=KR&curr=USD",
+    );
+    expect(new URL(vancouverMexicoCityUrl).pathname).toBe("/transport/flights/yvra/mexa/260624/");
+
+    const stockholmOsloUrl = routeSpecificCrossProviderSearchUrl(
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhooEgoyMDI2LTA2LTI0agwIAxIIL20vMDZteHNyDAgDEggvbS8wNWw2NEABSAFwAYIBCwj___________8BmAEC&tfu=EgIIACIA&hl=en-US&gl=KR&curr=USD",
+    );
+    expect(new URL(stockholmOsloUrl).pathname).toBe("/transport/flights/stoc/oslo/260624/");
+
+    const rioColomboUrl = routeSpecificCrossProviderSearchUrl(
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhooEgoyMDI2LTA2LTI0agwIAxIIL20vMDZnbXJyDAgDEggvbS8wZm43ckABSAFwAYIBCwj___________8BmAEC&tfu=EgIIACIA&hl=en-US&gl=KR&curr=USD",
+    );
+    expect(new URL(rioColomboUrl).pathname).toBe("/transport/flights/rioa/cmba/260624/");
+
+    const moscowKualaLumpurUrl = routeSpecificCrossProviderSearchUrl(
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhooEgoyMDI2LTA2LTI0agwIAxIIL20vMDRzd2RyDAgDEggvbS8wNDlkMUABSAFwAYIBCwj___________8BmAEC&tfu=EgIIACIA&hl=en-US&gl=KR&curr=USD",
+    );
+    expect(new URL(moscowKualaLumpurUrl).pathname).toBe("/transport/flights/mosc/kulm/260624/");
+
+    const jakartaMelbourneUrl = routeSpecificCrossProviderSearchUrl(
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhopEgoyMDI2LTA2LTI0agwIAxIIL20vMDQ0cnZyDQgDEgkvbS8wY2hnem1AAUgBcAGCAQsI____________AZgBAg&tfu=EgIIACIA&hl=en-US&gl=KR&curr=USD",
+    );
+    expect(new URL(jakartaMelbourneUrl).pathname).toBe("/transport/flights/cgki/mela/260624/");
+  });
+
+  it("omits route-specific cross-provider links when one Google city endpoint is unmapped", () => {
+    const berlinSeoulUrl =
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhoxEgoyMDI2LTA2LTI0MgdTS1lURUFNagwIAxIIL20vMDE1NnFyDAgDEggvbS8waHNxZkABSAFwAYIBCwj___________8BmAEC&tfu=EgIIACIA&hl=en-US&gl=KR&curr=USD";
+
+    expect(routeSpecificCrossProviderSearchUrl(berlinSeoulUrl)).toBe("");
   });
 
   it("omits route-specific cross-provider links when Google tfs has unmapped city endpoints", () => {

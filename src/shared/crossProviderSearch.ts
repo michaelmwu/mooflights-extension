@@ -21,17 +21,76 @@ const GOOGLE_LOCATION_TO_SKYSCANNER_CODE: Record<string, string> = {
   "/m/02_286": "NYCA",
   "/m/05qtj": "PARI",
   "/m/030qb3t": "LAXA",
+  "/m/071vr": "SANA",
+  "/m/022pfm": "SAOA",
+  "/m/0rh6k": "WASA",
+  "/m/01_d4": "CHIA",
+  "/m/0947l": "MILA",
+  "/m/06c62": "ROME",
+  "/m/01914": "BJSA",
+  "/m/0fn2g": "BKKT",
+  "/m/0hsqf": "SELA",
+  "/m/0dqyw": "OSAA",
+  "/m/01f08r": "DXBA",
+  "/m/09949m": "ISTA",
+  "/m/01ly5m": "BUEA",
+  "/m/0f04v": "SJCA",
+  "/m/0f2rq": "DFWA",
+  "/m/03l2n": "HOUA",
+  "/m/0f2v0": "MIAA",
+  "/m/0h7h6": "YTOA",
+  "/m/052p7": "YMQA",
+  "/m/080h2": "YVRA",
+  "/m/04sqj": "MEXA",
+  "/m/06mxs": "STOC",
+  "/m/05l64": "OSLO",
+  "/m/06gmr": "RIOA",
+  "/m/0fn7r": "CMBA",
+  "/m/04swd": "MOSC",
+  "/m/049d1": "KULM",
+  "/m/044rv": "CGKI",
+  "/m/0chgzm": "MELA",
   "/m/0ftkx": "TPET",
   "/m/0ftkxr": "TPET",
 };
 
 const SKYSCANNER_LOCATION_TO_GOOGLE_CODE: Record<string, string> = {
+  BJSA: "BJS",
+  BKKT: "BKK",
+  BUEA: "BUE",
+  CGKI: "CGK",
+  CHIA: "CHI",
+  CMBA: "CMB",
+  CSHA: "SHA",
+  DFWA: "DFW",
+  DXBA: "DXB",
+  HOUA: "HOU",
+  MEXA: "MEX",
+  ISTA: "IST",
+  KULM: "KUL",
   LAXA: "LAX",
   LOND: "LON",
+  MELA: "MEL",
+  MILA: "MIL",
+  MOSC: "MOW",
+  MIAA: "MIA",
   NYCA: "NYC",
+  OSAA: "OSA",
+  OSLO: "OSL",
   PARI: "PAR",
+  RIOA: "RIO",
+  ROME: "ROM",
+  SANA: "SAN",
+  SAOA: "SAO",
+  SELA: "SEL",
+  SJCA: "SJC",
+  STOC: "STO",
   TPET: "TPE",
   TYOA: "TYO",
+  WASA: "WAS",
+  YMQA: "YMQ",
+  YTOA: "YTO",
+  YVRA: "YVR",
 };
 
 export function crossProviderSearchUrl(currentUrl: string, fallbackCurrency = DEFAULT_CURRENCY): string {
@@ -211,18 +270,53 @@ function googleFlightsRouteSlices(currentUrl: string): RouteSlice[] {
 function googleFlightsTfsRouteSlices(tfs: string): RouteSlice[] | null {
   const decoded = decodeBase64UrlText(tfs);
   if (!decoded) return null;
-  // biome-ignore lint/complexity/useRegexLiterals: constructor keeps protobuf control markers out of a regex literal.
-  const routePattern = new RegExp(
-    "\\x12\\x0a(\\d{4}-\\d{2}-\\d{2}).*?\\x6a[\\s\\S]*?\\x12([\\s\\S]{1})([A-Z]{3}|/m/[A-Za-z0-9_]+).*?\\x72[\\s\\S]*?\\x12([\\s\\S]{1})([A-Z]{3}|/m/[A-Za-z0-9_]+)",
-  );
-  const match = routePattern.exec(decoded);
-  if (!match) return null;
 
-  const date = normalizeIsoDate(match[1]);
-  const origin = normalizeSkyscannerGoogleLocation(match[3] || "");
-  const destination = normalizeSkyscannerGoogleLocation(match[5] || "");
+  const date = normalizeIsoDate(decoded.match(/\d{4}-\d{2}-\d{2}/)?.[0]);
+  const origin = normalizeSkyscannerGoogleLocation(readGoogleFlightsTfsLocationField(decoded, 0x6a));
+  const destination = normalizeSkyscannerGoogleLocation(readGoogleFlightsTfsLocationField(decoded, 0x72));
   if (!origin || !destination || !date) return null;
   return [{ origin, destination, date }];
+}
+
+function readGoogleFlightsTfsLocationField(value: string, fieldTag: number): string {
+  for (let index = 0; index < value.length - 1; index += 1) {
+    if (value.charCodeAt(index) !== fieldTag) continue;
+    const fieldLength = readVarint(value, index + 1);
+    if (!fieldLength) continue;
+    const fieldStart = fieldLength.nextIndex;
+    const fieldEnd = fieldStart + fieldLength.value;
+    if (fieldEnd > value.length) continue;
+    const location = readGoogleFlightsLocationValue(value.slice(fieldStart, fieldEnd));
+    if (location) return location;
+    index = fieldEnd - 1;
+  }
+  return "";
+}
+
+function readGoogleFlightsLocationValue(value: string): string {
+  for (let index = 0; index < value.length - 1; index += 1) {
+    if (value.charCodeAt(index) !== 0x12) continue;
+    const length = readVarint(value, index + 1);
+    if (!length) continue;
+    const start = length.nextIndex;
+    const end = start + length.value;
+    if (end > value.length) continue;
+    return value.slice(start, end);
+  }
+  return "";
+}
+
+function readVarint(value: string, startIndex: number): { value: number; nextIndex: number } | null {
+  let result = 0;
+  let shift = 0;
+  for (let index = startIndex; index < value.length; index += 1) {
+    const byte = value.charCodeAt(index);
+    result |= (byte & 0x7f) << shift;
+    if ((byte & 0x80) === 0) return { value: result, nextIndex: index + 1 };
+    shift += 7;
+    if (shift > 28) return null;
+  }
+  return null;
 }
 
 function googleFlightsParamRouteSlices(params: URLSearchParams): RouteSlice[] | null {
