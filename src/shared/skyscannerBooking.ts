@@ -12,9 +12,9 @@ const SKYSCANNER_DEFAULT_HOST = "www.skyscanner.com";
 export const SKYSCANNER_SEARCH_API_PATH = "/g/radar/api/v2/web-unified-search/";
 export const SKYSCANNER_SEARCH_RESULT_ROW_SELECTOR = [
   '[data-testid*="itinerary" i]',
-  '[class*="Itinerary"]',
   'a[href*="/transport/flights/"][href*="/config/"]',
   'a[href*="/transport/d/"][href*="/config/"]',
+  "button",
 ].join(",");
 
 const SKYSCANNER_COUNTRY_HOSTS: Record<string, string> = {
@@ -387,12 +387,44 @@ export function skyscannerSearchResultRows(root: ParentNode): Element[] {
 }
 
 function skyscannerSearchResultRow(element: Element): Element | null {
-  return (
-    element.closest('[data-testid*="itinerary" i]') ||
-    element.closest('[class*="Itinerary"]') ||
-    element.closest("li") ||
-    element.closest("article") ||
-    element.closest("div")
+  const candidates = [
+    element.closest('[data-testid*="itinerary" i]'),
+    element.closest("article"),
+    element.closest("li"),
+    ...ancestorElements(element, 8).filter((ancestor) => ancestor.tagName === "DIV"),
+  ];
+  return candidates.find(isSkyscannerComparableSearchRow) || null;
+}
+
+function ancestorElements(element: Element, limit: number): Element[] {
+  const ancestors: Element[] = [];
+  let current: Element | null = element;
+  while (current && ancestors.length < limit) {
+    ancestors.push(current);
+    current = current.parentElement;
+  }
+  return ancestors;
+}
+
+function isSkyscannerComparableSearchRow(element: Element | null): element is Element {
+  if (!element) return false;
+  const text = normalizedText(element.textContent || "");
+  if (!hasSkyscannerResultPrice(text)) return false;
+  if (
+    element.querySelector(
+      'a[href*="/transport/flights/"][href*="/config/"], a[href*="/transport/d/"][href*="/config/"]',
+    )
+  ) {
+    return true;
+  }
+  return Array.from(element.querySelectorAll("button, a")).some((control) =>
+    /^select\b/i.test(normalizedText(control.textContent || control.getAttribute("aria-label") || "")),
+  );
+}
+
+function hasSkyscannerResultPrice(text: string): boolean {
+  return /(?:[$€£¥₹₩]\s*\d|\b(?:USD|EUR|GBP|JPY|KRW|INR|AUD|CAD|NZD|SGD|HKD|ZAR)\s*\d|\b\d+\s+deals?\s+from\b)/i.test(
+    text,
   );
 }
 

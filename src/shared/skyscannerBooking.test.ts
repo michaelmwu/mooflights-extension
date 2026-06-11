@@ -7,6 +7,7 @@ import {
   skyscannerCountryCodeFromUrl,
   skyscannerCountryUrl,
   skyscannerPanelPageKey,
+  skyscannerSearchResultRows,
 } from "./skyscannerBooking";
 
 describe("Skyscanner country comparison parser", () => {
@@ -190,5 +191,34 @@ describe("Skyscanner country comparison parser", () => {
       itineraryKey: "10562-2606241255--32128-0-14788-2606241525",
       matchConfidence: "high",
     });
+  });
+
+  it("finds Skyscanner result rows without treating sort/header containers as rows", () => {
+    document.body.innerHTML = `
+      <main>
+        <section class="ItinerarySortHeader">
+          <span>126 results sorted by Best</span>
+          <button>Sort</button>
+          <span>Cheapest $96</span>
+        </section>
+        <article data-testid="itinerary-card">
+          <div>
+            <p>Korean Air</p>
+            <p>12:55 PM - 3:25 PM</p>
+          </div>
+          <div>
+            <p>10 deals from</p>
+            <strong>$204</strong>
+            <a href="/transport/flights/cju/nrt/260624/config/example">Select</a>
+          </div>
+        </article>
+      </main>
+    `;
+
+    const rows = skyscannerSearchResultRows(document);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.textContent).toContain("Korean Air");
+    expect(rows[0]?.textContent).not.toContain("126 results sorted by Best");
   });
 });

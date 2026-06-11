@@ -2737,29 +2737,29 @@ function ensureSearchBadgeStyles(): void {
     }
     .moo-flights-search-badge {
       position: absolute !important;
-      top: 4px !important;
+      top: 6px !important;
       left: auto !important;
-      right: 8px !important;
+      right: 48px !important;
       z-index: 2147483646 !important;
       display: inline-flex !important;
       align-items: center !important;
       justify-content: center !important;
       width: max-content !important;
-      max-width: min(260px, calc(100vw - 32px)) !important;
-      min-height: 22px !important;
+      max-width: min(180px, calc(100vw - 32px)) !important;
+      min-height: 20px !important;
       margin: 0 !important;
-      border: 1px solid rgba(15, 118, 110, 0.22) !important;
+      border: 1px solid #cbd5e1 !important;
       border-radius: 999px !important;
-      background: #0f766e !important;
-      color: #ffffff !important;
-      padding: 3px 8px !important;
-      font: 700 12px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+      background: #f1f5f9 !important;
+      color: #24364b !important;
+      padding: 2px 7px !important;
+      font: 700 11px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
       letter-spacing: 0 !important;
       white-space: nowrap !important;
       pointer-events: none !important;
       overflow: hidden !important;
       text-overflow: ellipsis !important;
-      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18) !important;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12) !important;
       text-align: center !important;
     }
     button.moo-flights-search-badge {
@@ -2767,15 +2767,15 @@ function ensureSearchBadgeStyles(): void {
       cursor: pointer !important;
     }
     .moo-flights-search-badge:hover {
-      background: #115e59 !important;
-      color: #ffffff !important;
+      background: #e2e8f0 !important;
+      color: #05203c !important;
       text-decoration: none !important;
     }
     [data-moo-flights-search-highlight] {
-      outline: 3px solid #0f766e !important;
+      outline: 3px solid #0062e3 !important;
       outline-offset: 2px !important;
       border-radius: 8px !important;
-      box-shadow: 0 0 0 6px rgba(15, 118, 110, 0.18), 0 12px 28px rgba(15, 23, 42, 0.28) !important;
+      box-shadow: 0 0 0 6px rgba(0, 98, 227, 0.14), 0 12px 28px rgba(15, 23, 42, 0.22) !important;
     }
   `;
   document.documentElement.appendChild(style);
