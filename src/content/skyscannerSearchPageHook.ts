@@ -252,7 +252,7 @@ function rewriteMarketFields(value: unknown, market: string): unknown {
 }
 
 function isMarketField(key: string): boolean {
-  return /^(market|marketCode|country|countryCode|localeMarket|userMarket)$/i.test(key);
+  return /^(market|marketCode|localeMarket|userMarket)$/i.test(key);
 }
 
 function headersRecord(headers: HeadersInit | undefined): Record<string, string> {

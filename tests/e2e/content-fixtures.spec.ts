@@ -78,6 +78,31 @@ test("opens Google Flights country comparison tabs from a routed US booking page
   ]);
 });
 
+test("orders the current Google Flights country before tied comparison countries", async ({
+  context,
+  extensionServiceWorker,
+  page,
+}) => {
+  const pageUrl = "https://www.google.com/travel/flights/booking?tfs=e2e-fixture&curr=USD&gl=US&tieFixture=1";
+  await setGoogleFlightsCountries(extensionServiceWorker, ["US", "ZA"]);
+  await routeGoogleFlightsBookingFixtures(context);
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel.getByRole("button", { name: "Compare (2)" })).toBeEnabled();
+
+  const comparisonTabPromise = waitForComparisonTab(context, "ZA");
+  await panel.getByRole("button", { name: "Compare (2)" }).click();
+  await comparisonTabPromise;
+
+  await expect(panel.getByText("South Africa", { exact: true })).toBeVisible({ timeout: 20_000 });
+  const resultHeadings = await panel.locator(".result strong").allTextContents();
+  expect(resultHeadings[0]).toContain("United States");
+  expect(resultHeadings[0]).toContain("current");
+  expect(resultHeadings[1]).toContain("South Africa");
+});
+
 test("opens Skyscanner country comparison tabs from a routed final compare page", async ({
   context,
   extensionServiceWorker,
@@ -300,7 +325,11 @@ async function routeSkyscannerSearchFixtures(context: BrowserContext): Promise<v
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify(
-          skyscannerSearchApiFixture(url.toString(), route.request().headers()["x-skyscanner-market"]),
+          skyscannerSearchApiFixture(
+            url.toString(),
+            route.request().headers()["x-skyscanner-market"],
+            route.request().postData() || "",
+          ),
         ),
       });
       return;
@@ -405,8 +434,9 @@ function matrixItineraryFixture(): string {
 }
 
 function googleFlightsBookingFixture(url: string): string {
-  const country = new URL(url).searchParams.get("gl") || "US";
-  const countryFixture = googleFlightsCountryFixture(country);
+  const parsedUrl = new URL(url);
+  const country = parsedUrl.searchParams.get("gl") || "US";
+  const countryFixture = googleFlightsCountryFixture(country, parsedUrl.searchParams.get("tieFixture") === "1");
 
   return htmlFixture(`
     <main>
@@ -424,8 +454,12 @@ function googleFlightsBookingFixture(url: string): string {
   `);
 }
 
-function googleFlightsCountryFixture(country: string): { cheapest: number; direct: number; provider: string } {
+function googleFlightsCountryFixture(
+  country: string,
+  tieFixture = false,
+): { cheapest: number; direct: number; provider: string } {
   if (country === "CA") return { cheapest: 900, direct: 1120, provider: "Canada Deals" };
+  if (tieFixture && country === "ZA") return { cheapest: 950, direct: 1300, provider: "South Africa Deals" };
   if (country === "ZA") return { cheapest: 870, direct: 1300, provider: "South Africa Deals" };
   return { cheapest: 950, direct: 1050, provider: "Example Travel" };
 }
@@ -516,21 +550,34 @@ function skyscannerSearchFixture(url: string): string {
         fetch("/g/radar/api/v2/web-unified-search/", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ fixture: true })
+          body: JSON.stringify({
+            fixture: true,
+            market: "${country}",
+            query: {
+              originPlace: { id: "CJU", countryCode: "KR" },
+              destinationPlace: { id: "NRT", countryCode: "JP" },
+              passengerMetadata: { country: "ZA" }
+            }
+          })
         }).catch(() => {});
       </script>
     </main>
   `);
 }
 
-function skyscannerSearchApiFixture(url: string, marketHeader = ""): unknown {
+function skyscannerSearchApiFixture(url: string, marketHeader = "", requestBodyText = ""): unknown {
   const parsedUrl = new URL(url);
-  const country =
+  const requestBody = jsonObject(requestBodyText);
+  const hasSafeMarketBody =
+    requestBody.market === "KR" &&
+    jsonObject(jsonObject(requestBody.query).originPlace).countryCode === "KR" &&
+    jsonObject(jsonObject(requestBody.query).destinationPlace).countryCode === "JP" &&
+    jsonObject(jsonObject(requestBody.query).passengerMetadata).country === "ZA";
+  const requestedKrMarket =
     marketHeader === "KR" ||
     parsedUrl.hostname === "www.skyscanner.co.kr" ||
-    parsedUrl.searchParams.get("market") === "KR"
-      ? "KR"
-      : "US";
+    parsedUrl.searchParams.get("market") === "KR";
+  const country = requestedKrMarket && hasSafeMarketBody ? "KR" : "US";
   const price = country === "KR" ? 180 : 210;
   return {
     itineraries: {
@@ -573,6 +620,17 @@ function skyscannerSearchApiFixture(url: string, marketHeader = ""): unknown {
       ],
     },
   };
+}
+
+function jsonObject(value: unknown): Record<string, unknown> {
+  if (typeof value === "string") {
+    try {
+      return jsonObject(JSON.parse(value));
+    } catch {
+      return {};
+    }
+  }
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
 async function waitForSkyscannerComparisonTab(

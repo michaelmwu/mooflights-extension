@@ -1628,11 +1628,7 @@ async function openMatrixWithAutoOpen(matrixUrl: string, openedByPage = false): 
 function renderResults(results: GoogleFlightsCountryResult[]): string {
   if (results.length === 0) return "";
   const translate = t();
-  const sorted = [...results].sort(
-    (left, right) =>
-      (left.cheapest?.price ?? Number.POSITIVE_INFINITY) - (right.cheapest?.price ?? Number.POSITIVE_INFINITY) ||
-      left.country.localeCompare(right.country),
-  );
+  const sorted = [...results].sort(compareCountryResultDisplayOrder);
 
   return `
     <div class="results">
@@ -1653,6 +1649,16 @@ function renderResults(results: GoogleFlightsCountryResult[]): string {
         .join("")}
     </div>
   `;
+}
+
+function compareCountryResultDisplayOrder(left: GoogleFlightsCountryResult, right: GoogleFlightsCountryResult): number {
+  const priceDifference =
+    (left.cheapest?.price ?? Number.POSITIVE_INFINITY) - (right.cheapest?.price ?? Number.POSITIVE_INFINITY);
+  if (priceDifference !== 0) return priceDifference;
+
+  const baselineCountry = state.baseline?.country;
+  const currentDifference = (left.country === baselineCountry ? 0 : 1) - (right.country === baselineCountry ? 0 : 1);
+  return currentDifference || left.country.localeCompare(right.country);
 }
 
 function renderResultActions(result: GoogleFlightsCountryResult): string {
