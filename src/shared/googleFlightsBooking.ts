@@ -319,7 +319,34 @@ function parseGoogleFlightsTfsSliceSegments(value: string, group: number): Googl
     });
     match = pattern.exec(value);
   }
-  return segments;
+  return segments.length > 0 ? segments : parseGoogleFlightsTfsRouteOnlySegment(value, group, sliceDate);
+}
+
+function parseGoogleFlightsTfsRouteOnlySegment(
+  value: string,
+  group: number,
+  sliceDate: string | undefined,
+): GoogleFlightsFlightSegment[] {
+  if (!sliceDate) return [];
+  // Route-only Google Flights search URLs can encode just date + endpoints, without carrier or flight number fields.
+  // biome-ignore lint/complexity/useRegexLiterals: constructor keeps protobuf control markers out of a regex literal.
+  const routePattern = new RegExp(
+    "\\x12\\x0a(\\d{4}-\\d{2}-\\d{2}).*?\\x6a\\x07\\x08[\\x00-\\x04]\\x12\\x03([A-Z]{3}).*?\\x72\\x07\\x08[\\x00-\\x04]\\x12\\x03([A-Z]{3})",
+    "s",
+  );
+  const match = routePattern.exec(value);
+  if (!match) return [];
+  const [, departureDate, origin, destination] = match;
+  if (!origin || !destination) return [];
+  return [
+    {
+      origin,
+      destination,
+      departureDate: departureDate || sliceDate,
+      sliceDate,
+      sliceGroup: group,
+    },
+  ];
 }
 
 function parseGoogleFlightsTfsCabin(tfs: string): GoogleFlightsMatrixCabin {

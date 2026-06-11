@@ -749,6 +749,33 @@ describe("Google Flights booking option parser", () => {
     });
   });
 
+  it("parses route-only Google Flights tfs search URLs", () => {
+    const result = parseGoogleFlightsMatrixSearch(
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhoeEgoyMDI2LTA2LTI0agcIARIDQ0pVcgcIARIDTlJUQAFIAXABggELCP___________wGYAQI",
+      "TWD",
+    );
+
+    expect(result).toMatchObject({
+      tripType: "one-way",
+      currency: "TWD",
+      carriers: [],
+      slices: [
+        {
+          origin: "CJU",
+          destination: "NRT",
+          departureDate: "2026-06-24",
+          segments: [
+            {
+              origin: "CJU",
+              destination: "NRT",
+              departureDate: "2026-06-24",
+            },
+          ],
+        },
+      ],
+    });
+  });
+
   it("preserves Google Flights cabin and currency in ITA Matrix handoff URLs", () => {
     const result = parseGoogleFlightsMatrixSearch(
       "https://www.google.com/travel/flights/booking?tfs=CBwQAhplEgoyMDI2LTA4LTI3Ih8KA0FLTBIKMjAyNi0wOC0yNxoDTkFOKgJGSjIDNDEwIh8KA05BThIKMjAyNi0wOC0yOBoDTlJUKgJGSjIDMzUxagcIARIDQUtMcgwIAxIIL20vMDdkZmsadxIKMjAyNy0wNC0xNCIfCgNOUlQSCjIwMjctMDQtMTRaA05BTioCRkoyAzM1MCIfCgNOQU4SCjIwMjctMDQtMTUaA01FTCoCRkoyAzkzNWoMCAMSCC9tLzA3ZGZrcgcIARIDTUVMcgcIARIDU1lEcgcIARIDQUtMQAFIA3ABggELCP___________wGYAQM&tfu=CnhDalJJY1hKSE5XUjRhWEE0ZEUxQlJEQjJSMEZDUnkwdExTMHRMUzB0TFMxMGJHOXlNMEZCUVVGQlIyOXBNelZaUlVsSllUQkJFZzFHU2pNMU1IeEdTamt6TlNNeEdnc0k3NndQRUFJYUExVlRSRGdjY08rc0R3PT0SBggAIAIoASIA&curr=USD",

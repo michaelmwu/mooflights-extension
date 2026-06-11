@@ -15,6 +15,20 @@ describe("crossProviderSearch", () => {
     expect(parsed.searchParams.get("market")).toBe("KR");
   });
 
+  it("builds a Skyscanner one-way search from route-only Google Flights tfs URLs", () => {
+    const url = skyscannerSearchUrlFromGoogleFlights(
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhoeEgoyMDI2LTA2LTI0agcIARIDQ0pVcgcIARIDTlJUQAFIAXABggELCP___________wGYAQI&curr=TWD&hl=en-US",
+    );
+
+    const parsed = new URL(url);
+    expect(parsed.hostname).toBe("www.skyscanner.com");
+    expect(parsed.pathname).toBe("/transport/flights/cju/nrt/260624/");
+    expect(parsed.searchParams.get("currency")).toBe("TWD");
+    expect(parsed.searchParams.get("locale")).toBe("en-US");
+    expect(parsed.searchParams.get("market")).toBe("US");
+    expect(parsed.searchParams.get("rtn")).toBe("0");
+  });
+
   it("builds a valid one-way Skyscanner URL from a Google Flights query URL", () => {
     const url = skyscannerSearchUrlFromGoogleFlights(
       "https://www.google.com/travel/flights?curr=USD&gl=KR&hl=en-US&q=Flights+from+CJU+to+NRT+on+2026-06-24",

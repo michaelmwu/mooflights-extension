@@ -2849,20 +2849,21 @@ function ensureSearchBadgeStyles(): void {
       justify-content: center !important;
       width: max-content !important;
       max-width: min(180px, calc(100vw - 32px)) !important;
-      min-height: 20px !important;
+      min-height: 16px !important;
       margin: 0 !important;
-      border: 1px solid #cbd5e1 !important;
-      border-radius: 999px !important;
-      background: #f1f5f9 !important;
-      color: #24364b !important;
-      padding: 2px 7px !important;
-      font: 700 11px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+      border: 0 !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+      color: #9aa3af !important;
+      padding: 0 !important;
+      font: 600 11px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
       letter-spacing: 0 !important;
       white-space: nowrap !important;
       pointer-events: none !important;
       overflow: hidden !important;
       text-overflow: ellipsis !important;
-      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12) !important;
+      box-shadow: none !important;
+      text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35) !important;
       text-align: center !important;
     }
     button.moo-flights-search-badge {
@@ -2870,8 +2871,8 @@ function ensureSearchBadgeStyles(): void {
       cursor: pointer !important;
     }
     .moo-flights-search-badge:hover {
-      background: #e2e8f0 !important;
-      color: #05203c !important;
+      background: transparent !important;
+      color: #cbd5e1 !important;
       text-decoration: none !important;
     }
     [data-moo-flights-search-highlight] {
