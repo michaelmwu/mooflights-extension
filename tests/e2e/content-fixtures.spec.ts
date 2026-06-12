@@ -321,6 +321,44 @@ test("shows the Skyscanner search panel before an API response is captured", asy
   await expect(panel.getByRole("button", { name: /Compare rows/ })).toBeDisabled();
 });
 
+test("updates Skyscanner search links after delayed currency text appears", async ({ context, page }) => {
+  const pageUrl =
+    "https://www.skyscanner.com/transport/flights/cju/nrt/260624/?adultsv2=1&cabinclass=economy&locale=ja-JP&market=US";
+  await routeSkyscannerSearchFixtures(context, {
+    includeApiFetch: false,
+    delayedCurrencyLabel: "JPYでの価格",
+  });
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  const googleFlightsSearchLink = panel.getByRole("link", { name: "Search Google Flights" });
+  await expect(googleFlightsSearchLink).toBeVisible();
+  await expect
+    .poll(async () => new URL((await googleFlightsSearchLink.getAttribute("href")) || "").searchParams.get("curr"), {
+      timeout: 4_000,
+    })
+    .toBe("JPY");
+});
+
+test("ignores stale Skyscanner search captures from the previous route", async ({ context, page }) => {
+  const firstUrl =
+    "https://www.skyscanner.co.za/transport/flights/cju/nrt/260624/?adultsv2=1&cabinclass=economy&currency=USD&locale=en-US&market=ZA";
+  const secondUrl =
+    "https://www.skyscanner.co.za/transport/flights/tpe/nrt/260707/?adultsv2=1&cabinclass=economy&currency=USD&locale=en-US&market=ZA";
+  await routeSkyscannerSearchFixtures(context, {
+    apiDelayMs: 800,
+    includeApiFetchForUrl: (url) => url.includes("/transport/flights/cju/nrt/260624/"),
+  });
+
+  await page.goto(firstUrl);
+  await page.goto(secondUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel).toBeAttached();
+  await expect(panel.getByRole("button", { name: /Compare rows/ })).toBeDisabled({ timeout: 2_000 });
+});
+
 test("renders Skyscanner row comparison on routed multi-city search pages", async ({
   context,
   extensionServiceWorker,
@@ -419,11 +457,17 @@ async function routeSkyscannerPricingFixtures(context: BrowserContext): Promise<
 
 async function routeSkyscannerSearchFixtures(
   context: BrowserContext,
-  options: { includeApiFetch?: boolean } = {},
+  options: {
+    includeApiFetch?: boolean;
+    includeApiFetchForUrl?: (url: string) => boolean;
+    apiDelayMs?: number;
+    delayedCurrencyLabel?: string;
+  } = {},
 ): Promise<void> {
   await context.route(/https:\/\/(?:[^/]+\.)?skyscanner\.[^/]+(?:\.[^/]+)?\/.*/, async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname === "/g/radar/api/v2/web-unified-search/") {
+      if (options.apiDelayMs) await new Promise((resolve) => setTimeout(resolve, options.apiDelayMs));
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify(
@@ -631,13 +675,21 @@ function skyscannerFixtureCurrencyLabel(currency: string, url: URL): string {
   return url.searchParams.get("locale") === "ja-JP" ? `${currency}での価格` : `Prices in ${currency}`;
 }
 
-function skyscannerSearchFixture(url: string, options: { includeApiFetch?: boolean } = {}): string {
+function skyscannerSearchFixture(
+  url: string,
+  options: {
+    includeApiFetch?: boolean;
+    includeApiFetchForUrl?: (url: string) => boolean;
+    delayedCurrencyLabel?: string;
+  } = {},
+): string {
   const parsedUrl = new URL(url);
   const country =
     parsedUrl.hostname === "www.skyscanner.co.kr" || parsedUrl.searchParams.get("market") === "KR" ? "KR" : "US";
   const firstPrice = country === "KR" ? 180 : 210;
   const secondPrice = country === "KR" ? 220 : 170;
-  const includeApiFetch = options.includeApiFetch !== false;
+  const includeApiFetch =
+    options.includeApiFetch !== false && (options.includeApiFetchForUrl ? options.includeApiFetchForUrl(url) : true);
   return htmlFixture(`
     <main>
       <h1>Skyscanner search fixture</h1>
@@ -694,6 +746,18 @@ function skyscannerSearchFixture(url: string, options: { includeApiFetch?: boole
                   }
                 })
               }).catch(() => {});
+            </script>`
+          : ""
+      }
+      ${
+        options.delayedCurrencyLabel
+          ? `<script>
+              window.setTimeout(() => {
+                const label = document.createElement("div");
+                label.className = "ProviderListTitle_header__N2IzY";
+                label.textContent = ${JSON.stringify(options.delayedCurrencyLabel)};
+                document.body.append(label);
+              }, 1000);
             </script>`
           : ""
       }

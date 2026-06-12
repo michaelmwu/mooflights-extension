@@ -710,7 +710,7 @@ function installSkyscannerSearchCaptureListener(): void {
       return;
     }
     latestSkyscannerSearchCapture = capture;
-    invalidatePositiveInferredCurrencyCache();
+    invalidateInferredCurrencyCache();
     scheduleRender();
   });
 }
@@ -813,7 +813,7 @@ function currentVisibleCurrencyCode(): string {
   }
   if (isCurrentSkyscannerPage()) {
     const currency = inferSkyscannerCurrency(document);
-    inferredCurrencyCache = { href: window.location.href, currency, cachedAt: now };
+    inferredCurrencyCache = currency ? { href: window.location.href, currency, cachedAt: now } : null;
     return currency;
   }
   const currency = inferGoogleFlightsCurrency(document);
@@ -933,7 +933,7 @@ function installObserver(): void {
   };
   const observer = new MutationObserver((mutations) => {
     if (mutations.every(isOwnSearchAnnotationMutation)) return;
-    invalidatePositiveInferredCurrencyCache();
+    invalidateInferredCurrencyCache();
     schedule();
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
@@ -945,10 +945,8 @@ function installObserver(): void {
   });
 }
 
-function invalidatePositiveInferredCurrencyCache(): void {
-  if (inferredCurrencyCache?.currency) {
-    inferredCurrencyCache = null;
-  }
+function invalidateInferredCurrencyCache(): void {
+  inferredCurrencyCache = null;
 }
 
 function isOwnSearchAnnotationMutation(mutation: MutationRecord): boolean {

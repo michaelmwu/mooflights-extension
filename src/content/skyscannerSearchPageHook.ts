@@ -8,6 +8,7 @@ type CapturedSearchResponse = {
 
 type CapturedSearchRequest = {
   url: string;
+  pageUrl: string;
   method: string;
   headers: Record<string, string>;
   body?: string;
@@ -38,7 +39,8 @@ function installFetchHook(): void {
   window.fetch = async function hookedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     const url = requestUrl(input);
     const shouldCapture = isSearchApiUrl(url) && !isReplaySearchApiUrl(url);
-    const request = shouldCapture ? captureFetchRequest(input, init) : undefined;
+    const requestPageUrl = window.location.href;
+    const request = shouldCapture ? captureFetchRequest(input, init, requestPageUrl) : undefined;
     const response = await originalFetch.call(this, input, init);
     if (shouldCapture && request) {
       const responseClone = response.clone();
@@ -113,7 +115,7 @@ async function captureResponse(url: string, response: Response, request?: Captur
 function publishCapture(url: string, payload: unknown, request?: CapturedSearchRequest): void {
   const capture = {
     url,
-    pageUrl: window.location.href,
+    pageUrl: request?.pageUrl || window.location.href,
     payload,
     capturedAt: Date.now(),
     ...(request ? { request } : {}),
@@ -184,7 +186,11 @@ function postMarketResponse(requestId: string, country: string, payload?: unknow
   );
 }
 
-async function captureFetchRequest(input: RequestInfo | URL, init?: RequestInit): Promise<CapturedSearchRequest> {
+async function captureFetchRequest(
+  input: RequestInfo | URL,
+  init: RequestInit | undefined,
+  pageUrl: string,
+): Promise<CapturedSearchRequest> {
   const request = input instanceof Request ? input : null;
   const headers = {
     ...(request ? headersRecord(request.headers) : {}),
@@ -192,6 +198,7 @@ async function captureFetchRequest(input: RequestInfo | URL, init?: RequestInit)
   };
   return {
     url: requestUrl(input),
+    pageUrl,
     method: (init?.method || request?.method || "GET").toUpperCase(),
     headers,
     ...(await requestBody(input, init)),
@@ -201,6 +208,7 @@ async function captureFetchRequest(input: RequestInfo | URL, init?: RequestInit)
 function captureXhrRequest(method: string, url: string): CapturedSearchRequest {
   return {
     url: new URL(url, window.location.href).toString(),
+    pageUrl: window.location.href,
     method: method.toUpperCase(),
     headers: {},
   };
