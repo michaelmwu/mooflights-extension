@@ -4,6 +4,7 @@ import {
   isSkyscannerSearchPageUrl,
   parseSkyscannerPricingOptions,
   parseSkyscannerSearchApiResponse,
+  parseSkyscannerSponsoredSearchRows,
   skyscannerCountryCodeFromUrl,
   skyscannerCountryUrl,
   skyscannerPanelPageKey,
@@ -309,5 +310,60 @@ describe("Skyscanner country comparison parser", () => {
       expect.stringContaining("Thai"),
       expect.stringContaining("Malaysia"),
     ]);
+  });
+
+  it("finds and parses sponsored inline-plus search rows", () => {
+    document.body.innerHTML = `
+      <main>
+        <li id="dayview-first-result">
+          <div class="ItineraryInlinePlus_container__ZGMxN">
+            <a class="ItineraryInlinePlus_link__NTYwN" href="https://www.skyscanner.com/transport_deeplink/4.0/US/en-US/KRW/cust/1/17075.14788.2026-07-07/air/trava/inlineads" data-testid="inlineplus-link">
+              <div data-testid="ticket">
+                <div class="LogoImage_label__YzNiO">Jetstar Japan</div>
+                <div class="FlightsTicketA11yDescriptor_visuallyHidden__ZGRhO">
+                  <h3>Flight option 1: Sponsored by Trip.com. Total cost ₩317,400.</h3>
+                  <ol>
+                    <li>Flight with Jetstar Japan.</li>
+                    <li>Departing from Taipei Taiwan Taoyuan at 2:40 AM, arriving in Tokyo Narita at 7:00 AM.</li>
+                    <li>Direct flight taking 3 hours 20 minutes.</li>
+                  </ol>
+                </div>
+                <div class="TicketStubContent_topContainer__YmQ5Z">
+                  <span>Book with Trip.com from</span>
+                  <div class="TicketStubContent_priceCluster__M2RlM">
+                    <div class="TicketStubPrice_priceWrapper__OGEwZ">
+                      <div class="Price_ticketStubPrice__Yzg5N">
+                        <div class="Price_mainPriceContainer__NzBmO">
+                          <span>₩317,400</span>
+                        </div>
+                      </div>
+                    </div>
+                    <button type="button">Select</button>
+                  </div>
+                </div>
+              </div>
+            </a>
+          </div>
+        </li>
+      </main>
+    `;
+
+    const rows = skyscannerSearchResultRows(document);
+    const parsed = parseSkyscannerSponsoredSearchRows(
+      document,
+      "US",
+      "https://www.skyscanner.com/transport/flights/tpet/nrt/260707/?currency=KRW",
+    );
+
+    expect(rows).toHaveLength(1);
+    expect(parsed.results).toHaveLength(1);
+    expect(parsed.results[0]).toMatchObject({
+      carrierText: "Jetstar Japan",
+      price: 317400,
+      priceText: "₩317,400",
+      currency: "KRW",
+      durationText: "3 hr 20 min",
+      stopsText: "Direct",
+    });
   });
 });

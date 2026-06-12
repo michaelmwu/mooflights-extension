@@ -7,6 +7,8 @@ const SKYSCANNER_DEFAULT_HOST = "www.skyscanner.com";
 export const SKYSCANNER_SEARCH_API_PATH = "/g/radar/api/v2/web-unified-search/";
 export const SKYSCANNER_SEARCH_RESULT_ROW_SELECTOR = [
   '[data-testid*="itinerary" i]',
+  '[class*="ItineraryInlinePlus_container"]',
+  '[data-testid="inlineplus-link"]',
   'a[href*="/transport/flights/"][href*="/config/"]',
   'a[href*="/transport/d/"][href*="/config/"]',
   'button[aria-label^="Select" i]',
@@ -255,6 +257,28 @@ export function parseSkyscannerSearchApiResponse(payload: unknown, country: stri
   };
 }
 
+export function parseSkyscannerSponsoredSearchRows(
+  root: ParentNode,
+  country: string,
+  url: string,
+): SearchCountryResult {
+  const pageCurrency = skyscannerCurrencyFromUrl(url);
+  const rows = Array.from(
+    root.querySelectorAll('[class*="ItineraryInlinePlus_container"], [data-testid="inlineplus-link"]'),
+  )
+    .map((element) => element.closest("li") || element)
+    .filter((row, index, allRows) => allRows.indexOf(row) === index)
+    .map((row, index) => parseSkyscannerSponsoredSearchRow(row, index, pageCurrency))
+    .filter((result): result is SearchResult => Boolean(result));
+
+  return {
+    country,
+    url,
+    results: rows,
+    status: rows.length > 0 ? "ready" : "empty",
+  };
+}
+
 function skyscannerSearchResults(payload: unknown, pageCurrency: string): SearchResult[] {
   const body =
     payload && typeof payload === "object" && !Array.isArray(payload) ? (payload as Record<string, unknown>) : {};
@@ -310,6 +334,82 @@ function parseSkyscannerSearchResult(value: unknown, rowIndex: number, pageCurre
     ...(itineraryKey ? { itineraryKey } : {}),
     matchConfidence: itineraryKey ? "high" : "medium",
   };
+}
+
+function parseSkyscannerSponsoredSearchRow(row: Element, rowIndex: number, pageCurrency: string): SearchResult | null {
+  const price = skyscannerVisibleSearchRowPrice(row);
+  if (!price) return null;
+
+  const rawText = normalizedText(row.textContent || "");
+  const carrierText =
+    firstPatternText(rawText, /Flight with ([^.]+)\./i) ||
+    normalizedText(row.querySelector('[class*="LogoImage_label"]')?.textContent || "").replace(/^\s+/, "");
+  const timeText = skyscannerVisibleTimeText(rawText);
+  const durationText = skyscannerVisibleDurationText(rawText);
+  const stopsText = firstPatternText(rawText, /\b(?:Direct|\d+\s+stops?)\b/i);
+  const summaryText = normalizedText([carrierText, timeText, durationText, stopsText].filter(Boolean).join(" "));
+  const matchKey = normalizeSearchKey(summaryText);
+  if (matchKey.length < 8) return null;
+
+  return {
+    rowKey: `ss-sponsored-${stableHash(`${matchKey}|${price.priceText}`)}`,
+    matchKey,
+    rowIndex,
+    price: price.price,
+    currency: pageCurrency || price.currency,
+    priceText: price.priceText,
+    summaryText,
+    ...(carrierText ? { carrierText } : {}),
+    ...(timeText ? { timeText } : {}),
+    ...(durationText ? { durationText } : {}),
+    ...(stopsText ? { stopsText } : {}),
+    matchConfidence: "medium",
+  };
+}
+
+function skyscannerVisibleSearchRowPrice(row: Element): { price: number; currency: string; priceText: string } | null {
+  const candidates = [
+    ...Array.from(
+      row.querySelectorAll(
+        [
+          '[class*="Price_mainPriceContainer"]',
+          '[class*="Price_ticketStubPrice"]',
+          '[class*="TicketStubPrice_priceWrapper"]',
+          '[class*="TicketStubContent_priceCluster"]',
+        ].join(", "),
+      ),
+    ),
+    row,
+  ].sort(
+    (left, right) => normalizedText(left.textContent || "").length - normalizedText(right.textContent || "").length,
+  );
+  for (const candidate of candidates) {
+    const price = parsePriceText(
+      candidate.getAttribute("aria-label") || "",
+      normalizedText(candidate.textContent || ""),
+    );
+    if (price) return price;
+  }
+  return null;
+}
+
+function skyscannerVisibleTimeText(value: string): string {
+  const times = Array.from(value.matchAll(/\b(?:[01]?\d|2[0-3]):[0-5]\d\s*(?:AM|PM)\b/gi)).map((match) =>
+    normalizedText(match[0]),
+  );
+  return times.length >= 2 ? `${times[0]}-${times.at(-1)}` : "";
+}
+
+function skyscannerVisibleDurationText(value: string): string {
+  const compact = value.match(/\b(\d+)h\s*(\d{2})\b/i);
+  if (compact) return `${Number(compact[1])} hr ${Number(compact[2])} min`;
+  const verbose = value.match(/\b(\d+)\s+hours?\s+(\d+)\s+minutes?\b/i);
+  if (verbose) return `${Number(verbose[1])} hr ${Number(verbose[2])} min`;
+  return "";
+}
+
+function firstPatternText(value: string, pattern: RegExp): string {
+  return normalizedText(value.match(pattern)?.[1] || value.match(pattern)?.[0] || "");
 }
 
 function carrierNames(carriers: Record<string, unknown>): string[] {

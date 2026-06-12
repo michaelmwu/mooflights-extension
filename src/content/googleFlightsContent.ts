@@ -36,6 +36,7 @@ import {
   isSkyscannerSearchPageUrl,
   parseSkyscannerPricingOptions,
   parseSkyscannerSearchApiResponse,
+  parseSkyscannerSponsoredSearchRows,
   skyscannerCountryCodeFromUrl,
   skyscannerPanelPageKey,
   skyscannerSearchResultRows,
@@ -832,13 +833,30 @@ function parseCurrentSearchPage(): SearchCountryResult {
     if (!latestSkyscannerSearchCapture || !skyscannerSearchCaptureMatchesCurrentPage(latestSkyscannerSearchCapture)) {
       return { country: currentComparableCountryCode(), url: window.location.href, results: [], status: "empty" };
     }
-    return parseSkyscannerSearchApiResponse(
-      latestSkyscannerSearchCapture.payload,
-      currentComparableCountryCode(),
-      window.location.href,
+    return mergeSkyscannerVisibleSponsoredRows(
+      parseSkyscannerSearchApiResponse(
+        latestSkyscannerSearchCapture.payload,
+        currentComparableCountryCode(),
+        window.location.href,
+      ),
     );
   }
   return parseGoogleFlightsSearchResults(document, currentComparableCountryCode(), window.location.href);
+}
+
+function mergeSkyscannerVisibleSponsoredRows(result: SearchCountryResult): SearchCountryResult {
+  const sponsored = parseSkyscannerSponsoredSearchRows(document, result.country, result.url).results;
+  if (sponsored.length === 0) return result;
+  const merged = [...result.results];
+  for (const row of sponsored) {
+    if (merged.some((candidate) => bestSearchResultMatch(row, [candidate], 0.9))) continue;
+    merged.push({ ...row, rowIndex: merged.length });
+  }
+  return {
+    ...result,
+    results: merged,
+    status: merged.length > 0 ? "ready" : result.status,
+  };
 }
 
 async function expandGoogleFlightsSearchResults(waitForExpansion = true): Promise<{
@@ -2936,10 +2954,14 @@ function ensureSearchBadgeStyles(): void {
       cursor: pointer !important;
     }
     .moo-flights-search-badge-skyscanner {
-      top: -18px !important;
-      right: 0 !important;
-      color: #6b7280 !important;
+      position: static !important;
+      display: flex !important;
+      justify-content: flex-start !important;
+      max-width: 100% !important;
+      margin-top: 2px !important;
+      color: #4b5563 !important;
       text-shadow: none !important;
+      text-align: left !important;
     }
     .moo-flights-search-badge:hover {
       background: transparent !important;
