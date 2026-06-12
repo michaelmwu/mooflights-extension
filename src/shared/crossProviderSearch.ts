@@ -3,6 +3,7 @@ import {
   normalizeGoogleFlightsCurrency,
   parseGoogleFlightsMatrixSearch,
 } from "./googleFlightsBooking";
+import { googleFlightsPlaceToSkyscannerCode, skyscannerPlaceToGoogleFlightsCode } from "./providerPlaceMappings";
 import { skyscannerCountryCodeFromUrl, skyscannerCountryUrl } from "./skyscannerBooking";
 
 const DEFAULT_CURRENCY = "USD";
@@ -13,94 +14,6 @@ type RouteSlice = {
   origin: string;
   destination: string;
   date: string;
-};
-
-const GOOGLE_LOCATION_TO_SKYSCANNER_CODE: Record<string, string> = {
-  "/m/07dfk": "TYOA",
-  "/m/04jpl": "LOND",
-  "/m/02_286": "NYCA",
-  "/m/05qtj": "PARI",
-  "/m/030qb3t": "LAXA",
-  "/m/071vr": "SANA",
-  "/m/022pfm": "SAOA",
-  "/m/0rh6k": "WASA",
-  "/m/01_d4": "CHIA",
-  "/m/0947l": "MILA",
-  "/m/06c62": "ROME",
-  "/m/01914": "BJSA",
-  "/m/0fn2g": "BKKT",
-  "/m/0hsqf": "SELA",
-  "/m/0dqyw": "OSAA",
-  "/m/01f08r": "DXBA",
-  "/m/09949m": "ISTA",
-  "/m/01ly5m": "BUEA",
-  "/m/0f04v": "SJCA",
-  "/m/0f2rq": "DFWA",
-  "/m/03l2n": "HOUA",
-  "/m/0f2v0": "MIAA",
-  "/m/0h7h6": "YTOA",
-  "/m/052p7": "YMQA",
-  "/m/080h2": "YVRA",
-  "/m/04sqj": "MEXA",
-  "/m/06mxs": "STOC",
-  "/m/05l64": "OSLO",
-  "/m/06gmr": "RIOA",
-  "/m/0fn7r": "CMBA",
-  "/m/04swd": "MOSC",
-  "/m/049d1": "KULM",
-  "/m/044rv": "CGKI",
-  "/m/0chgzm": "MELA",
-  "/m/0ftkx": "TPET",
-  "/m/0ftkxr": "TPET",
-  "/m/0177z": "BRUS",
-  "/m/02z0j": "FRAN",
-};
-
-const GOOGLE_LOCATION_TO_SKYSCANNER_AIRPORT_FALLBACK: Record<string, string> = {
-  "/m/0156q": "BER",
-  "/m/01f62": "BCN",
-  "/m/056_y": "MAD",
-};
-
-const SKYSCANNER_LOCATION_TO_GOOGLE_CODE: Record<string, string> = {
-  BJSA: "BJS",
-  BKKT: "BKK",
-  BRUS: "BRU",
-  BUEA: "BUE",
-  CGKI: "CGK",
-  CHIA: "CHI",
-  CMBA: "CMB",
-  CSHA: "SHA",
-  DFWA: "DFW",
-  DXBA: "DXB",
-  FRAN: "FRA",
-  HOUA: "HOU",
-  MEXA: "MEX",
-  ISTA: "IST",
-  KULM: "KUL",
-  LAXA: "LAX",
-  LOND: "LON",
-  MELA: "MEL",
-  MILA: "MIL",
-  MOSC: "MOW",
-  MIAA: "MIA",
-  NYCA: "NYC",
-  OSAA: "OSA",
-  OSLO: "OSL",
-  PARI: "PAR",
-  RIOA: "RIO",
-  ROME: "ROM",
-  SANA: "SAN",
-  SAOA: "SAO",
-  SELA: "SEL",
-  SJCA: "SJC",
-  STOC: "STO",
-  TPET: "TPE",
-  TYOA: "TYO",
-  WASA: "WAS",
-  YMQA: "YMQ",
-  YTOA: "YTO",
-  YVRA: "YVR",
 };
 
 export function crossProviderSearchUrl(currentUrl: string, fallbackCurrency = DEFAULT_CURRENCY): string {
@@ -450,15 +363,13 @@ function normalizeAirportCode(value: string | undefined): string {
 
 function normalizeGoogleFlightsSkyscannerLocation(value: string | undefined): string {
   const code = value?.trim().toUpperCase() || "";
-  return SKYSCANNER_LOCATION_TO_GOOGLE_CODE[code] || normalizeAirportCode(code);
+  return skyscannerPlaceToGoogleFlightsCode(code) || normalizeAirportCode(code);
 }
 
 function normalizeSkyscannerGoogleLocation(value: string): string {
   const location = value.trim();
-  const mapped = GOOGLE_LOCATION_TO_SKYSCANNER_CODE[location];
-  if (mapped) return mapped;
-  const fallback = GOOGLE_LOCATION_TO_SKYSCANNER_AIRPORT_FALLBACK[location];
-  if (fallback) return fallback;
+  const mapped = googleFlightsPlaceToSkyscannerCode(location);
+  if (mapped) return mapped.code;
   const code = location.toUpperCase();
   return /^[A-Z0-9]{3,4}$/.test(code) ? code : "";
 }
