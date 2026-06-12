@@ -2463,6 +2463,7 @@ function applySearchBadges(): void {
     }
     const badge = reconcileSearchBadge(existingBadges.get(baselineParsed.rowKey), baselineParsed, best);
     const target = searchBadgeTarget(row, currentParsed);
+    badge.classList.toggle("moo-flights-search-badge-skyscanner", isCurrentSkyscannerSearchPage());
     if (target instanceof HTMLElement) {
       target.dataset.mooFlightsSearchBadgeTarget = "1";
       activeTargets.add(target);
@@ -2783,16 +2784,51 @@ function searchBadgeTarget(row: Element, parsed: SearchResult): Element {
 }
 
 function skyscannerSearchBadgeTarget(row: Element, parsed: SearchResult): Element {
+  const priceContainers = Array.from(
+    row.querySelectorAll(
+      [
+        '[class*="TicketStubPrice_priceWrapper"]',
+        '[class*="Price_mainPriceContainer"]',
+        '[class*="Price_ticketStubPrice"]',
+        '[class*="TicketStubContent_priceCluster"]',
+      ].join(", "),
+    ),
+  ).filter((element) => element instanceof HTMLElement && isVisibleElement(element));
+  const matchingPriceContainer = priceContainers.find((element) =>
+    searchTargetContainsPrice(element, parsed.priceText),
+  );
+  if (matchingPriceContainer) return skyscannerPriceBadgeTarget(matchingPriceContainer);
+
+  const visiblePriceContainer = priceContainers[0];
+  if (visiblePriceContainer) return skyscannerPriceBadgeTarget(visiblePriceContainer);
+
   const priceElement = Array.from(row.querySelectorAll("[aria-label], span, div, p")).find((element) => {
     if (element.closest(SEARCH_BADGE_SELECTOR)) return false;
-    return searchTargetContainsPrice(element, parsed.priceText);
+    if (element.closest('[class*="EcoTicket"]')) return false;
+    if (!isVisibleElement(element)) return false;
+    if (!searchTargetContainsPrice(element, parsed.priceText)) return false;
+    const text = normalizeText(textContentWithoutSearchBadges(element));
+    const ariaLabel = normalizeText(element.getAttribute("aria-label") || "");
+    const shortestMatch = [text, ariaLabel]
+      .filter((value) => value.includes(parsed.priceText))
+      .sort((left, right) => left.length - right.length)[0];
+    return Boolean(shortestMatch && shortestMatch.length <= parsed.priceText.length + 32);
   });
-  if (priceElement?.parentElement) return priceElement.parentElement;
+  if (priceElement) return skyscannerPriceBadgeTarget(priceElement);
   return row;
 }
 
 function priceBlockTarget(priceContainer: Element): Element {
   return priceContainer;
+}
+
+function skyscannerPriceBadgeTarget(priceElement: Element): Element {
+  return (
+    priceElement.closest('[class*="TicketStubPrice_priceWrapper"]') ||
+    priceElement.closest('[class*="TicketStubContent_priceCluster"]') ||
+    priceElement.parentElement ||
+    priceElement
+  );
 }
 
 function searchTargetContainsPrice(element: Element, priceText: string): boolean {
@@ -2898,6 +2934,12 @@ function ensureSearchBadgeStyles(): void {
     button.moo-flights-search-badge {
       pointer-events: auto !important;
       cursor: pointer !important;
+    }
+    .moo-flights-search-badge-skyscanner {
+      top: -18px !important;
+      right: 0 !important;
+      color: #6b7280 !important;
+      text-shadow: none !important;
     }
     .moo-flights-search-badge:hover {
       background: transparent !important;
