@@ -1494,8 +1494,9 @@ function renderSearchComparisonPanel(selectedCodes: string[]): string {
 }
 
 function countryComparisonDisplayCount(selectedCodes: string[]): number {
-  const baselineCountry = currentComparableCountryCode();
-  const includesBaseline = baselineCountry && currentVisibleCurrencyCode() && !selectedCodes.includes(baselineCountry);
+  const baselineCountry = currentCountryCode();
+  const includesBaseline =
+    isRealCountryCode(baselineCountry) && currentVisibleCurrencyCode() && !selectedCodes.includes(baselineCountry);
   return includesBaseline ? selectedCodes.length + 1 : selectedCodes.length;
 }
 
@@ -2183,8 +2184,21 @@ function inferSkyscannerCurrency(root: ParentNode): string {
 function skyscannerCurrencyFromText(value: string): string {
   return (
     normalizeGoogleFlightsCurrency(value.match(/\bPrices\s+in\s+([A-Z]{3})\b/i)?.[1]) ||
-    normalizeGoogleFlightsCurrency(value.match(/(?:^|[^A-Z])([A-Z]{3})\s*での価格/i)?.[1])
+    normalizeGoogleFlightsCurrency(value.match(/(?:^|[^A-Z])([A-Z]{3})\s*での価格/i)?.[1]) ||
+    skyscannerCurrencyFromPricePrefix(value)
   );
+}
+
+function skyscannerCurrencyFromPricePrefix(value: string): string {
+  if (/NT\$/i.test(value)) return "TWD";
+  if (/HK\$/i.test(value)) return "HKD";
+  if (/CA\$/i.test(value) || /(?:^|[^\p{L}\p{N}])C\$/iu.test(value)) return "CAD";
+  if (/AU\$/i.test(value) || /(?:^|[^\p{L}\p{N}])A\$/iu.test(value)) return "AUD";
+  if (/NZ\$/i.test(value)) return "NZD";
+  if (/US\$/i.test(value)) return "USD";
+  if (/(?:^|[^\p{L}\p{N}])S\$/iu.test(value)) return "SGD";
+  if (/\bRM\b/i.test(value)) return "MYR";
+  return "";
 }
 
 function visibleGoogleFlightsLocation(): string {

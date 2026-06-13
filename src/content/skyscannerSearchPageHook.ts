@@ -129,7 +129,10 @@ function postCapture(capture: CapturedSearchResponse): void {
     {
       source: MESSAGE_SOURCE,
       type: "search-response",
-      ...capture,
+      url: capture.url,
+      pageUrl: capture.pageUrl,
+      payload: capture.payload,
+      capturedAt: capture.capturedAt,
     },
     window.location.origin,
   );

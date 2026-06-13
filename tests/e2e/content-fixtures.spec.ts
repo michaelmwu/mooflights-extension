@@ -104,6 +104,23 @@ test("does not count the current country when currency is unavailable", async ({
   await expect(panel.getByRole("button", { name: "Compare (3)" })).not.toBeAttached();
 });
 
+test("does not count a non-country baseline when currency is available", async ({
+  context,
+  extensionServiceWorker,
+  page,
+}) => {
+  const pageUrl = "https://www.google.com/travel/flights/booking?tfs=e2e-fixture&curr=USD";
+  await setGoogleFlightsCountries(extensionServiceWorker, ["CA", "ZA"]);
+  await routeGoogleFlightsBookingFixtures(context);
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel).toBeAttached();
+  await expect(panel.getByRole("button", { name: "Compare (2)" })).toBeEnabled();
+  await expect(panel.getByRole("button", { name: "Compare (3)" })).not.toBeAttached();
+});
+
 test("orders the current Google Flights country before tied comparison countries", async ({
   context,
   extensionServiceWorker,
@@ -241,6 +258,25 @@ test("carries localized Skyscanner display currency into country comparison tabs
   const comparisonUrl = skyscannerTargetUrl(new URL((await comparisonTabPromise).url()));
   expect(comparisonUrl.searchParams.get("currency")).toBe("JPY");
   expect(comparisonUrl.searchParams.get("locale")).toBe("ja-JP");
+});
+
+test("infers Skyscanner display currency from RM fare text", async ({ context, page }) => {
+  const pageUrl =
+    "https://www.skyscanner.com.my/transport/flights/cju/nrt/260624/config/10562-2606241255--32128-0-14788-2606241525?adultsv2=1&cabinclass=economy&locale=en-US&market=MY";
+  await routeSkyscannerPricingFixtures(context, {
+    currencyLabel: null,
+    hiddenCurrencyName: null,
+    pricePrefix: "RM ",
+  });
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  const googleFlightsSearchLink = panel.getByRole("link", { name: "Search Google Flights" });
+  await expect(googleFlightsSearchLink).toBeVisible();
+  const googleFlightsSearchHref = await googleFlightsSearchLink.getAttribute("href");
+  expect(googleFlightsSearchHref).toEqual(expect.any(String));
+  expect(new URL(googleFlightsSearchHref as string).searchParams.get("curr")).toBe("MYR");
 });
 
 test("keeps the current Skyscanner price visible when comparing other countries", async ({
@@ -461,14 +497,17 @@ async function routeGoogleFlightsBookingFixtures(context: BrowserContext): Promi
   });
 }
 
-async function routeSkyscannerPricingFixtures(context: BrowserContext): Promise<void> {
+async function routeSkyscannerPricingFixtures(
+  context: BrowserContext,
+  options: { currencyLabel?: string | null; hiddenCurrencyName?: string | null; pricePrefix?: string } = {},
+): Promise<void> {
   await context.route(/https:\/\/(?:[^/]+\.)?skyscanner\.[^/]+(?:\.[^/]+)?\/.*/, async (route) => {
     const url = new URL(route.request().url());
     if (!isSkyscannerTransportPath(url.pathname)) {
       await route.continue();
       return;
     }
-    await route.fulfill({ contentType: "text/html", body: skyscannerPricingFixture(url.toString()) });
+    await route.fulfill({ contentType: "text/html", body: skyscannerPricingFixture(url.toString(), options) });
   });
 }
 
@@ -636,24 +675,46 @@ function isSkyscannerTransportPath(pathname: string): boolean {
   return pathname.startsWith("/transport/flights") || pathname.startsWith("/transport/d/");
 }
 
-function skyscannerPricingFixture(url: string): string {
+function skyscannerPricingFixture(
+  url: string,
+  options: { currencyLabel?: string | null; hiddenCurrencyName?: string | null; pricePrefix?: string } = {},
+): string {
   const parsedUrl = new URL(url);
   const country =
-    parsedUrl.hostname === "www.skyscanner.co.kr" || parsedUrl.searchParams.get("market") === "KR" ? "KR" : "US";
+    parsedUrl.hostname === "www.skyscanner.co.kr" || parsedUrl.searchParams.get("market") === "KR"
+      ? "KR"
+      : parsedUrl.hostname === "www.skyscanner.com.my" || parsedUrl.searchParams.get("market") === "MY"
+        ? "MY"
+        : "US";
   const displayCurrency = skyscannerFixtureDisplayCurrency(parsedUrl);
   const cheapest = country === "KR" ? 180 : 210;
   const second = cheapest + 12;
-  const currency = country === "KR" ? "Korean won" : "US dollars";
-  const symbol = country === "KR" ? "KRW " : "$";
+  const currency =
+    options.hiddenCurrencyName === undefined
+      ? country === "KR"
+        ? "Korean won"
+        : "US dollars"
+      : options.hiddenCurrencyName;
+  const symbol = options.pricePrefix ?? (country === "KR" ? "KRW " : "$");
+  const currencyLabel =
+    options.currencyLabel === undefined
+      ? skyscannerFixtureCurrencyLabel(displayCurrency, parsedUrl)
+      : options.currencyLabel;
+  const hiddenPriceText = (price: number): string =>
+    currency === null ? `${symbol}${price.toLocaleString()} total.` : `${price} ${currency} total.`;
   return htmlFixture(`
     <main>
       <h1>Skyscanner pricing fixture</h1>
-      <div class="ProviderListTitle_header__N2IzY">
-        <span class="ProviderListTitle_visuallyHidden__Mzg5M">${skyscannerFixtureCurrencyLabel(displayCurrency, parsedUrl)}</span>
-        <p class="ProviderListTitle_subHeaderContainer__OGY4N">
-          <span class="ProviderListTitle_subHeaderText__MmM2O">${skyscannerFixtureCurrencyLabel(displayCurrency, parsedUrl)}</span>
-        </p>
-      </div>
+      ${
+        currencyLabel === null
+          ? ""
+          : `<div class="ProviderListTitle_header__N2IzY">
+              <span class="ProviderListTitle_visuallyHidden__Mzg5M">${currencyLabel}</span>
+              <p class="ProviderListTitle_subHeaderContainer__OGY4N">
+                <span class="ProviderListTitle_subHeaderText__MmM2O">${currencyLabel}</span>
+              </p>
+            </div>`
+      }
       <ol role="list" class="PricingOptions_list__YTlkY">
         <li>
           <div data-testid="PricingItem" class="PricingItem_pricingItemContainer__Y2YwO">
@@ -663,7 +724,7 @@ function skyscannerPricingFixture(url: string): string {
             </div>
             <div data-testid="CtaSection">
               <div class="TotalPrice_totalPrice__ZGMwZ">
-                <p class="TotalPrice_visuallyHidden__NmEzM">${cheapest} ${currency} total.</p>
+                <p class="TotalPrice_visuallyHidden__NmEzM">${hiddenPriceText(cheapest)}</p>
                 <div class="Price_pricingItemPrice__ZjBkZ" aria-hidden="true">
                   <span>${symbol}${cheapest.toLocaleString()}</span>
                 </div>
@@ -679,7 +740,7 @@ function skyscannerPricingFixture(url: string): string {
               <h3>Option 2: Booking.com ${country}</h3>
             </div>
             <div data-testid="CtaSection">
-              <p class="TotalPrice_visuallyHidden__NmEzM">${second} ${currency} total.</p>
+              <p class="TotalPrice_visuallyHidden__NmEzM">${hiddenPriceText(second)}</p>
               <a href="/transport_deeplink/${country.toLowerCase()}/booking" aria-label="Select Booking.com ${country}." data-testid="pricing-item-redirect-button">Select</a>
             </div>
           </div>
