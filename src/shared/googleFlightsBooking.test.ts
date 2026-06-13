@@ -419,6 +419,21 @@ describe("Google Flights booking option parser", () => {
     );
   });
 
+  it("does not treat unresolved top-level Google Flights tfs shells as panel pages", () => {
+    const url =
+      "https://www.google.com/travel/flights?tfs=CBwQARoeEgoyMDI2LTA2LTI0agcIARIDQ0pVcgcIARIDTlJUGh4SCjIwMjYtMDYtMzBqBwgBEgNOUlRyBwgBEgNDSlVAAUgBcAGCAQsI____________AZgBAQ&tfu=KgIIAw";
+
+    expect(googleFlightsPanelPageKey(url, "US", true)).toBe("");
+  });
+
+  it("recognizes Google Flights search query pages before Google resolves tfs", () => {
+    const url = "https://www.google.com/travel/flights?curr=USD&gl=KR&hl=en-US&q=Flights+from+CJU+to+NRT+on+2026-06-24";
+
+    expect(googleFlightsPanelPageKey(url, "KR", true)).toBe(
+      "/travel/flights?q=Flights+from+CJU+to+NRT+on+2026-06-24&curr=USD&gl=KR",
+    );
+  });
+
   it("uses inferred currency in Google Flights panel page keys", () => {
     const url = "https://www.google.com/travel/flights/booking?tfs=abc&gl=TW";
 
@@ -738,6 +753,33 @@ describe("Google Flights booking option parser", () => {
           code: "USD",
         },
       },
+    });
+  });
+
+  it("parses route-only Google Flights tfs search URLs", () => {
+    const result = parseGoogleFlightsMatrixSearch(
+      "https://www.google.com/travel/flights/search?tfs=CBwQAhoeEgoyMDI2LTA2LTI0agcIARIDQ0pVcgcIARIDTlJUQAFIAXABggELCP___________wGYAQI",
+      "TWD",
+    );
+
+    expect(result).toMatchObject({
+      tripType: "one-way",
+      currency: "TWD",
+      carriers: [],
+      slices: [
+        {
+          origin: "CJU",
+          destination: "NRT",
+          departureDate: "2026-06-24",
+          segments: [
+            {
+              origin: "CJU",
+              destination: "NRT",
+              departureDate: "2026-06-24",
+            },
+          ],
+        },
+      ],
     });
   });
 

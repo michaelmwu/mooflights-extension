@@ -37,6 +37,16 @@ const entries = [
     format: "iife",
   },
   {
+    entryPoints: ["src/content/skyscannerSearchPageHook.ts"],
+    outfile: "content/skyscannerSearchPageHook.js",
+    format: "iife",
+  },
+  {
+    entryPoints: ["src/content/skyscannerSearchPageHookInjector.ts"],
+    outfile: "content/skyscannerSearchPageHookInjector.js",
+    format: "iife",
+  },
+  {
     entryPoints: ["src/background/serviceWorker.ts"],
     outfile: "background/serviceWorker.js",
     format: browser === "firefox" ? "iife" : "esm",
@@ -80,6 +90,10 @@ const staticFiles = [
   ["src/options/index.html", "options/index.html"],
 ];
 
+const mainContentScript = "content/googleFlightsContent.js";
+const skyscannerHookScript = "content/skyscannerSearchPageHook.js";
+const skyscannerHookInjectorScript = "content/skyscannerSearchPageHookInjector.js";
+
 async function copyStaticFiles() {
   const manifest = JSON.parse(await readFile(resolve(root, "src/manifest.json"), "utf8"));
   applyBrowserManifest(manifest);
@@ -114,9 +128,14 @@ async function copyStaticFiles() {
 }
 
 function applyBrowserManifest(manifest) {
-  const hostPermissions = Array.from(
-    new Set([...(manifest.host_permissions || []), ...(devBuild ? ["http://localhost/*", "http://127.0.0.1/*"] : [])]),
-  );
+  const skyscannerTransportMatches = skyscannerTransportMatchesFromManifest(manifest);
+  const skyscannerWebAccessibleMatches = skyscannerTransportMatches.map(skyscannerWebAccessibleMatch);
+  addSkyscannerMatchesToGeneratedManifest(manifest, skyscannerTransportMatches);
+
+  const hostPermissions = unique([
+    ...(manifest.host_permissions || []),
+    ...(devBuild ? ["http://localhost/*", "http://127.0.0.1/*"] : []),
+  ]);
   const webAccessibleResources = [
     {
       matches: ["https://matrix.itasoftware.com/*"],
@@ -137,12 +156,25 @@ function applyBrowserManifest(manifest) {
         "assets/extension-icons/icon-64.png",
       ],
     },
+    {
+      matches: skyscannerWebAccessibleMatches,
+      resources: [
+        ...(browser === "firefox" ? [skyscannerHookScript] : []),
+        "assets/extension-icons/icon-32.png",
+        "assets/extension-icons/icon-48.png",
+        "assets/extension-icons/icon-64.png",
+      ],
+    },
   ];
 
   manifest.host_permissions = hostPermissions;
   manifest.web_accessible_resources = webAccessibleResources;
 
   if (browser !== "firefox") return;
+
+  const hookScript = contentScriptForJs(manifest, skyscannerHookScript);
+  hookScript.js = [skyscannerHookInjectorScript];
+  for (const contentScript of manifest.content_scripts || []) delete contentScript.world;
 
   const browserAction = manifest.action;
   manifest.manifest_version = 2;
@@ -166,6 +198,52 @@ function applyBrowserManifest(manifest) {
       strict_min_version: "107.0",
     },
   };
+}
+
+function addSkyscannerMatchesToGeneratedManifest(manifest, skyscannerTransportMatches) {
+  const mainScript = contentScriptForJs(manifest, mainContentScript);
+  const hookScript = contentScriptForJs(manifest, skyscannerHookScript);
+
+  hookScript.matches = skyscannerTransportMatches;
+  mainScript.matches = unique([
+    ...(mainScript.matches || []).filter((match) => !isSkyscannerMatch(match)),
+    ...skyscannerTransportMatches,
+  ]);
+  manifest.host_permissions = unique([
+    ...(manifest.host_permissions || []).filter((match) => !isSkyscannerMatch(match)),
+    ...skyscannerTransportMatches,
+  ]);
+}
+
+function skyscannerTransportMatchesFromManifest(manifest) {
+  const hookScript = contentScriptForJs(manifest, skyscannerHookScript);
+  const matches = unique((hookScript.matches || []).filter(isSkyscannerTransportMatch));
+  if (matches.length === 0) {
+    throw new Error(`${skyscannerHookScript} must define at least one Skyscanner transport match pattern`);
+  }
+  return matches;
+}
+
+function contentScriptForJs(manifest, script) {
+  const contentScript = (manifest.content_scripts || []).find((candidate) => candidate.js?.includes(script));
+  if (!contentScript) throw new Error(`Missing content script entry for ${script}`);
+  return contentScript;
+}
+
+function isSkyscannerTransportMatch(match) {
+  return /^https:\/\/(?:[^/]+\.)?skyscanner\.[^/]+\/transport\/\*$/.test(match);
+}
+
+function isSkyscannerMatch(match) {
+  return /^https:\/\/(?:[^/]+\.)?skyscanner\.[^/]+\//.test(match);
+}
+
+function skyscannerWebAccessibleMatch(match) {
+  return match.replace(/\/transport\/\*$/, "/*");
+}
+
+function unique(values) {
+  return Array.from(new Set(values));
 }
 
 async function distPath() {

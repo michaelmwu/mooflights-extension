@@ -1,6 +1,6 @@
 {
   "name": "mooflights-extension",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "MooFlights Google Flights and ITA Matrix companion.",
   "license": "AGPL-3.0-only",
   "private": true,

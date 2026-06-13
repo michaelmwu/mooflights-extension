@@ -1,3 +1,5 @@
+import type { BookingOption, CountryResult, SearchCountryResult, SearchResult } from "./countryComparison";
+
 export const DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES = [
   "US",
   "CA",
@@ -33,50 +35,6 @@ const GOOGLE_FLIGHTS_CURRENCIES = new Set(
     " ",
   ),
 );
-
-export type GoogleFlightsBookingOption = {
-  provider: string;
-  price: number;
-  currency: string;
-  priceText: string;
-  isDirect: boolean;
-  bookingUrl?: string;
-};
-
-export type GoogleFlightsCountryResult = {
-  country: string;
-  url: string;
-  options: GoogleFlightsBookingOption[];
-  cheapest?: GoogleFlightsBookingOption;
-  direct?: GoogleFlightsBookingOption;
-  status: "ready" | "sparse" | "empty" | "error";
-  refreshed?: boolean;
-  error?: string;
-};
-
-export type GoogleFlightsSearchResult = {
-  rowKey: string;
-  matchKey: string;
-  rowIndex: number;
-  price: number;
-  currency: string;
-  priceText: string;
-  summaryText: string;
-  carrierText?: string;
-  timeText?: string;
-  durationText?: string;
-  stopsText?: string;
-  itineraryKey?: string;
-  matchConfidence: "high" | "medium";
-};
-
-export type GoogleFlightsSearchCountryResult = {
-  country: string;
-  url: string;
-  results: GoogleFlightsSearchResult[];
-  status: "ready" | "empty" | "error";
-  error?: string;
-};
 
 export type GoogleFlightsFlightSegment = {
   origin: string;
@@ -132,7 +90,9 @@ export function googleFlightsPanelPageKey(
   if (!isGoogleFlightsPanelPage(parsedUrl)) return "";
 
   const params = new URLSearchParams();
-  for (const key of ["tfs", "tfu"]) {
+  const tfs = parsedUrl.searchParams.get("tfs");
+  const keyNames = tfs ? ["tfs", "tfu"] : ["q", "origin", "destination", "depart", "return"];
+  for (const key of keyNames) {
     const value = parsedUrl.searchParams.get(key);
     if (value) params.set(key, value);
   }
@@ -153,11 +113,19 @@ export function isGoogleFlightsPanelPageUrl(url: string): boolean {
 
 function isGoogleFlightsPanelPage(url: URL): boolean {
   if (GOOGLE_FLIGHTS_BOOKING_PATH_RE.test(url.pathname)) return true;
+  if (url.pathname === GOOGLE_FLIGHTS_ITINERARY_PATH) {
+    return url.searchParams.get("source") === "ita_matrix" || hasGoogleFlightsSearchParams(url.searchParams);
+  }
   return (
-    (url.pathname === GOOGLE_FLIGHTS_ITINERARY_PATH || url.pathname.startsWith(`${GOOGLE_FLIGHTS_ITINERARY_PATH}/`)) &&
-    Boolean(url.searchParams.get("tfs")) &&
-    (url.searchParams.get("source") === "ita_matrix" || !GOOGLE_FLIGHTS_BOOKING_PATH_RE.test(url.pathname))
+    url.pathname.startsWith(`${GOOGLE_FLIGHTS_ITINERARY_PATH}/`) &&
+    (Boolean(url.searchParams.get("tfs")) || hasGoogleFlightsSearchParams(url.searchParams)) &&
+    !GOOGLE_FLIGHTS_BOOKING_PATH_RE.test(url.pathname)
   );
+}
+
+function hasGoogleFlightsSearchParams(params: URLSearchParams): boolean {
+  if (params.get("q")) return true;
+  return Boolean(params.get("origin") && params.get("destination") && params.get("depart"));
 }
 
 export function normalizeGoogleFlightsCountryCodes(
@@ -233,14 +201,10 @@ export function parseGoogleFlightsMatrixSearch(
   };
 }
 
-export function parseGoogleFlightsBookingOptions(
-  root: ParentNode,
-  country: string,
-  url: string,
-): GoogleFlightsCountryResult {
+export function parseBookingOptions(root: ParentNode, country: string, url: string): CountryResult {
   const options = Array.from(root.querySelectorAll(".gN1nAc"))
     .map((row) => parseBookingOption(row, url))
-    .filter((option): option is GoogleFlightsBookingOption => Boolean(option))
+    .filter((option): option is BookingOption => Boolean(option))
     .sort((left, right) => left.price - right.price || left.provider.localeCompare(right.provider));
 
   return {
@@ -253,15 +217,17 @@ export function parseGoogleFlightsBookingOptions(
   };
 }
 
-export function parseGoogleFlightsSearchResults(
+export const parseGoogleFlightsBookingOptions = parseBookingOptions;
+
+export function parseSearchResults(
   root: ParentNode,
   country: string,
   url: string,
   limit = Number.POSITIVE_INFINITY,
-): GoogleFlightsSearchCountryResult {
+): SearchCountryResult {
   const results = searchResultRows(root)
     .map((row, index) => parseSearchResultRow(row, index))
-    .filter((result): result is GoogleFlightsSearchResult => Boolean(result))
+    .filter((result): result is SearchResult => Boolean(result))
     .slice(0, limit);
 
   return {
@@ -271,6 +237,8 @@ export function parseGoogleFlightsSearchResults(
     status: results.length > 0 ? "ready" : "empty",
   };
 }
+
+export const parseGoogleFlightsSearchResults = parseSearchResults;
 
 export function searchResultRows(root: ParentNode): Element[] {
   const seen = new Set<Element>();
@@ -354,7 +322,34 @@ function parseGoogleFlightsTfsSliceSegments(value: string, group: number): Googl
     });
     match = pattern.exec(value);
   }
-  return segments;
+  return segments.length > 0 ? segments : parseGoogleFlightsTfsRouteOnlySegment(value, group, sliceDate);
+}
+
+function parseGoogleFlightsTfsRouteOnlySegment(
+  value: string,
+  group: number,
+  sliceDate: string | undefined,
+): GoogleFlightsFlightSegment[] {
+  if (!sliceDate) return [];
+  // Route-only Google Flights search URLs can encode just date + endpoints, without carrier or flight number fields.
+  // biome-ignore lint/complexity/useRegexLiterals: constructor keeps protobuf control markers out of a regex literal.
+  const routePattern = new RegExp(
+    "\\x12\\x0a(\\d{4}-\\d{2}-\\d{2}).*?\\x6a\\x07\\x08[\\x00-\\x04]\\x12\\x03([A-Z]{3}).*?\\x72\\x07\\x08[\\x00-\\x04]\\x12\\x03([A-Z]{3})",
+    "s",
+  );
+  const match = routePattern.exec(value);
+  if (!match) return [];
+  const [, departureDate, origin, destination] = match;
+  if (!origin || !destination) return [];
+  return [
+    {
+      origin,
+      destination,
+      departureDate: departureDate || sliceDate,
+      sliceDate,
+      sliceGroup: group,
+    },
+  ];
 }
 
 function parseGoogleFlightsTfsCabin(tfs: string): GoogleFlightsMatrixCabin {
@@ -603,7 +598,7 @@ function isString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
 }
 
-function parseSearchResultRow(row: Element, rowIndex: number): GoogleFlightsSearchResult | null {
+function parseSearchResultRow(row: Element, rowIndex: number): SearchResult | null {
   const price = parseSearchResultPrice(row);
   if (!price) return null;
 
@@ -860,7 +855,7 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function parseBookingOption(row: Element, pageUrl: string): GoogleFlightsBookingOption | null {
+function parseBookingOption(row: Element, pageUrl: string): BookingOption | null {
   const label = providerLabel(row);
   const price = providerPrice(row);
   if (!label || !price) return null;

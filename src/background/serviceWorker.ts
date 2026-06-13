@@ -1,9 +1,5 @@
 import "../shared/firefoxChromeCompat";
-import {
-  type GoogleFlightsCountryResult,
-  type GoogleFlightsSearchCountryResult,
-  googleFlightsCountryUrl,
-} from "../shared/googleFlightsBooking";
+import { type CountryResult, countryComparisonUrl, type SearchCountryResult } from "../shared/countryComparison";
 import type { RemoteProviderMetadata } from "../shared/types";
 
 type RuntimeMessage = {
@@ -124,7 +120,7 @@ async function compareGoogleFlightsCountries(payload: RuntimeMessage, progressTa
   const countries = Array.from(new Set((payload.countries || []).filter((country) => /^[A-Z]{2}$/.test(country))));
   const baselineOptionCount = payload.baselineOptionCount || 0;
   await mapWithConcurrency(countries, GOOGLE_FLIGHTS_COMPARE_CONCURRENCY, async (country) => {
-    const result = await compareGoogleFlightsCountry(baseUrl, country, baselineOptionCount);
+    const result = await compareBookingCountry(baseUrl, country, baselineOptionCount);
     sendGoogleFlightsCountryProgress(progressTabId, payload.requestId, result);
     return result;
   });
@@ -232,7 +228,7 @@ function tabMatchesMatrixUrl(tab: chrome.tabs.Tab, matrixUrl: string): boolean {
 function sendGoogleFlightsCountryProgress(
   tabId: number | undefined,
   requestId: string | undefined,
-  result: GoogleFlightsCountryResult,
+  result: CountryResult,
 ): void {
   if (typeof tabId !== "number" || !requestId) return;
   chrome.tabs.sendMessage(
@@ -271,7 +267,7 @@ function sendGoogleFlightsCountryComplete(
 function sendGoogleFlightsSearchProgress(
   tabId: number | undefined,
   requestId: string | undefined,
-  result: GoogleFlightsSearchCountryResult,
+  result: SearchCountryResult,
 ): void {
   if (typeof tabId !== "number" || !requestId) return;
   chrome.tabs.sendMessage(
@@ -306,23 +302,23 @@ function sendGoogleFlightsSearchComplete(
   );
 }
 
-async function compareGoogleFlightsCountry(
+async function compareBookingCountry(
   baseUrl: string,
   country: string,
   baselineOptionCount: number,
-): Promise<GoogleFlightsCountryResult> {
-  const url = googleFlightsCountryUrl(baseUrl, country);
+): Promise<CountryResult> {
+  const url = countryComparisonUrl(baseUrl, country);
   let tabId: number | undefined;
   try {
     const tab = await createInactiveTabPaced(url);
     tabId = tab.id;
     if (typeof tabId !== "number") throw new Error("Chrome did not provide a tab id.");
     await waitForTabComplete(tabId);
-    let result = await parseGoogleFlightsTab(tabId, country, url);
+    let result = await parseBookingComparisonTab(tabId, country, url);
     if (shouldRetrySparseResult(result, baselineOptionCount)) {
       await reloadTab(tabId);
       await waitForTabComplete(tabId);
-      result = await parseGoogleFlightsTab(tabId, country, url);
+      result = await parseBookingComparisonTab(tabId, country, url);
       result.refreshed = true;
       if (isSparseResult(result, baselineOptionCount)) result.status = "sparse";
     }
@@ -344,9 +340,9 @@ async function compareGoogleFlightsSearchCountry(
   baseUrl: string,
   country: string,
   baselineResultCount: number,
-  onProgress?: (result: GoogleFlightsSearchCountryResult) => void,
-): Promise<GoogleFlightsSearchCountryResult> {
-  const url = googleFlightsCountryUrl(baseUrl, country);
+  onProgress?: (result: SearchCountryResult) => void,
+): Promise<SearchCountryResult> {
+  const url = countryComparisonUrl(baseUrl, country);
   let tabId: number | undefined;
   let sentProgress = false;
   try {
@@ -375,7 +371,7 @@ async function compareGoogleFlightsSearchCountry(
       results: [],
       status: "error",
       error: error instanceof Error ? error.message : "Search country check failed.",
-    } satisfies GoogleFlightsSearchCountryResult;
+    } satisfies SearchCountryResult;
     if (!sentProgress) onProgress?.(result);
     return result;
   } finally {
@@ -399,23 +395,23 @@ function createInactiveTabPaced(url: string): Promise<chrome.tabs.Tab> {
   return scheduled;
 }
 
-function shouldRetrySparseResult(result: GoogleFlightsCountryResult, baselineOptionCount: number): boolean {
+function shouldRetrySparseResult(result: CountryResult, baselineOptionCount: number): boolean {
   return baselineOptionCount > 3 && result.status !== "error" && result.options.length <= 3 && !result.refreshed;
 }
 
-function isSparseResult(result: GoogleFlightsCountryResult, baselineOptionCount: number): boolean {
+function isSparseResult(result: CountryResult, baselineOptionCount: number): boolean {
   return (
     baselineOptionCount > 3 && result.status !== "error" && result.options.length > 0 && result.options.length <= 3
   );
 }
 
-async function parseGoogleFlightsTab(tabId: number, country: string, url: string): Promise<GoogleFlightsCountryResult> {
-  let latest: GoogleFlightsCountryResult | null = null;
+async function parseBookingComparisonTab(tabId: number, country: string, url: string): Promise<CountryResult> {
+  let latest: CountryResult | null = null;
   const deadline = Date.now() + 18000;
   while (Date.now() < deadline) {
     try {
-      latest = await sendTabMessage<GoogleFlightsCountryResult>(tabId, {
-        command: "parseGoogleFlightsBookingOptions",
+      latest = await sendTabMessage<CountryResult>(tabId, {
+        command: "parseBookingOptions",
       });
       if (latest.options.length > 0) return { ...latest, country, url };
     } catch {
@@ -427,12 +423,8 @@ async function parseGoogleFlightsTab(tabId: number, country: string, url: string
   return { country, url, options: [], status: "empty" };
 }
 
-async function parseGoogleFlightsSearchTab(
-  tabId: number,
-  country: string,
-  url: string,
-): Promise<GoogleFlightsSearchCountryResult> {
-  let latest: GoogleFlightsSearchCountryResult | null = null;
+async function parseGoogleFlightsSearchTab(tabId: number, country: string, url: string): Promise<SearchCountryResult> {
+  let latest: SearchCountryResult | null = null;
   const deadline = Date.now() + 18000;
   let expanded = false;
   while (Date.now() < deadline) {
@@ -440,8 +432,8 @@ async function parseGoogleFlightsSearchTab(
       if (!expanded) {
         expanded = await tryExpandGoogleFlightsSearchResults(tabId);
       }
-      latest = await sendTabMessage<GoogleFlightsSearchCountryResult>(tabId, {
-        command: "parseGoogleFlightsSearchResults",
+      latest = await sendTabMessage<SearchCountryResult>(tabId, {
+        command: "parseSearchResults",
       });
       if (latest.results.length > 0) return { ...latest, country, url };
     } catch {
@@ -458,10 +450,10 @@ async function waitForExpandedGoogleFlightsSearchTab(
   country: string,
   url: string,
   previousResultCount: number,
-): Promise<GoogleFlightsSearchCountryResult | null> {
+): Promise<SearchCountryResult | null> {
   if (previousResultCount <= 0) return null;
   const deadline = Date.now() + 6500;
-  let latest: GoogleFlightsSearchCountryResult | null = null;
+  let latest: SearchCountryResult | null = null;
   let expanded = false;
   while (Date.now() < deadline) {
     await delay(600);
@@ -469,8 +461,8 @@ async function waitForExpandedGoogleFlightsSearchTab(
       if (!expanded) {
         expanded = await tryExpandGoogleFlightsSearchResults(tabId);
       }
-      latest = await sendTabMessage<GoogleFlightsSearchCountryResult>(tabId, {
-        command: "parseGoogleFlightsSearchResults",
+      latest = await sendTabMessage<SearchCountryResult>(tabId, {
+        command: "parseSearchResults",
       });
       if (latest.results.length > previousResultCount) return { ...latest, country, url };
     } catch {
