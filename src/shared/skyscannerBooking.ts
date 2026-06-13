@@ -72,6 +72,13 @@ const SKYSCANNER_HOST_COUNTRIES = new Map([
   ["www.skyscanner.cn", "CN"] as const,
 ]);
 
+const SKYSCANNER_DEFAULT_COUNTRY_CURRENCIES: Record<string, string> = {
+  BR: "BRL",
+  CN: "CNY",
+  MY: "MYR",
+  ZA: "ZAR",
+};
+
 export function skyscannerCountryUrl(baseUrl: string, country: string, currency?: string): string {
   const url = new URL(baseUrl);
   const normalizedCountry = normalizeSkyscannerCountryCode(country) || "US";
@@ -166,7 +173,7 @@ function normalizeCurrencyCode(value: string): string {
 }
 
 export function parseSkyscannerPricingOptions(root: ParentNode, country: string, url: string): CountryResult {
-  const pageCurrency = skyscannerCurrencyFromUrl(url);
+  const pageCurrency = skyscannerCurrencyFromUrl(url) || defaultSkyscannerCurrencyForCountry(country);
   const options = Array.from(root.querySelectorAll('[data-testid="PricingItem"]'))
     .map((row) => parseSkyscannerPricingOption(row, url, pageCurrency))
     .filter((option): option is BookingOption => Boolean(option))
@@ -189,6 +196,10 @@ function skyscannerCurrencyFromUrl(url: string): string {
   } catch {
     return "";
   }
+}
+
+function defaultSkyscannerCurrencyForCountry(country: string): string {
+  return SKYSCANNER_DEFAULT_COUNTRY_CURRENCIES[normalizeSkyscannerCountryCode(country)] || "";
 }
 
 function parseSkyscannerPricingOption(row: Element, pageUrl: string, pageCurrency: string): BookingOption | null {
@@ -248,7 +259,10 @@ function skyscannerBookingOptionUrl(row: Element, pageUrl: string): string | und
 }
 
 export function parseSkyscannerSearchApiResponse(payload: unknown, country: string, url: string): SearchCountryResult {
-  const results = skyscannerSearchResults(payload, skyscannerCurrencyFromUrl(url));
+  const results = skyscannerSearchResults(
+    payload,
+    skyscannerCurrencyFromUrl(url) || defaultSkyscannerCurrencyForCountry(country),
+  );
   return {
     country,
     url,
@@ -262,7 +276,7 @@ export function parseSkyscannerSponsoredSearchRows(
   country: string,
   url: string,
 ): SearchCountryResult {
-  const pageCurrency = skyscannerCurrencyFromUrl(url);
+  const pageCurrency = skyscannerCurrencyFromUrl(url) || defaultSkyscannerCurrencyForCountry(country);
   const rows = Array.from(
     root.querySelectorAll('[class*="ItineraryInlinePlus_container"], [data-testid="inlineplus-link"]'),
   )
@@ -602,14 +616,16 @@ function currencyFromFormattedPrice(value: string): string {
   if (/(?:^|[^\p{L}\p{N}])S\$/iu.test(value) || /Singapore dollars?/i.test(value)) return "SGD";
   if (/(?:^|[^\p{L}\p{N}])C\$/iu.test(value)) return "CAD";
   if (/(?:^|[^\p{L}\p{N}])A\$/iu.test(value)) return "AUD";
+  if (/R\$/i.test(value) || /BRL|Brazilian real|reais?/i.test(value)) return "BRL";
   if (/\$/i.test(value)) return "USD";
   if (/€|euros?|EUR/i.test(value)) return "EUR";
   if (/£|pounds?|GBP/i.test(value)) return "GBP";
+  if (/yuan|CNY|RMB/i.test(value)) return "CNY";
   if (/¥|￥|Japanese yen|JPY|円|日圓|日元/i.test(value)) return "JPY";
   if (/₩|Korean won|KRW/i.test(value)) return "KRW";
   if (/฿|baht|THB/i.test(value)) return "THB";
   if (/\bRM\b|ringgit|MYR/i.test(value)) return "MYR";
-  if (/yuan|CNY|RMB/i.test(value)) return "CNY";
+  if (/ZAR|South African rands?|\brands?\b/i.test(value)) return "ZAR";
   if (/₹|rupees?|INR/i.test(value)) return "INR";
   return "";
 }

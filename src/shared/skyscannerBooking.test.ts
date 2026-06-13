@@ -198,9 +198,11 @@ describe("Skyscanner country comparison parser", () => {
   });
 
   it.each([
-    ["C$ 210 total.", "CAD"],
-    ["A$ 210 total.", "AUD"],
-  ])("parses %s as a prefixed dollar currency", (priceText, currency) => {
+    ["C$ 210 total.", "CAD", 210],
+    ["A$ 210 total.", "AUD", 210],
+    ["R$ 1.234 total.", "BRL", 1234],
+    ["ZAR 3,200 total.", "ZAR", 3200],
+  ])("parses %s as a supported Skyscanner currency", (priceText, currency, price) => {
     document.body.innerHTML = `
       <ol>
         <li>
@@ -223,9 +225,38 @@ describe("Skyscanner country comparison parser", () => {
 
     expect(result.cheapest).toMatchObject({
       provider: "Trip.com",
-      price: 210,
+      price,
       currency,
       priceText,
+    });
+  });
+
+  it("uses China-market CNY for bare yen-symbol Skyscanner prices", () => {
+    document.body.innerHTML = `
+      <ol>
+        <li>
+          <div data-testid="PricingItem">
+            <div class="AgentDetails_agentDetails__MGEyM"><p>Trip.com</p></div>
+            <div data-testid="CtaSection">
+              <p class="TotalPrice_visuallyHidden__NmEzM">¥3,200 total.</p>
+              <a href="/transport_deeplink/booking" aria-label="Select Trip.com." data-testid="pricing-item-redirect-button">Select</a>
+            </div>
+          </div>
+        </li>
+      </ol>
+    `;
+
+    const result = parseSkyscannerPricingOptions(
+      document,
+      "CN",
+      "https://cn.skyscanner.com/transport/flights/cju/nrt/260624/config/example",
+    );
+
+    expect(result.cheapest).toMatchObject({
+      provider: "Trip.com",
+      price: 3200,
+      currency: "CNY",
+      priceText: "¥3,200 total.",
     });
   });
 

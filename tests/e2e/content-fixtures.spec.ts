@@ -279,6 +279,25 @@ test("infers Skyscanner display currency from RM fare text", async ({ context, p
   expect(new URL(googleFlightsSearchHref as string).searchParams.get("curr")).toBe("MYR");
 });
 
+test("infers Skyscanner display currency from R$ fare text", async ({ context, page }) => {
+  const pageUrl =
+    "https://www.skyscanner.com.br/transport/flights/cju/nrt/260624/config/10562-2606241255--32128-0-14788-2606241525?adultsv2=1&cabinclass=economy&locale=en-US&market=BR";
+  await routeSkyscannerPricingFixtures(context, {
+    currencyLabel: null,
+    hiddenCurrencyName: null,
+    pricePrefix: "R$ ",
+  });
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  const googleFlightsSearchLink = panel.getByRole("link", { name: "Search Google Flights" });
+  await expect(googleFlightsSearchLink).toBeVisible();
+  const googleFlightsSearchHref = await googleFlightsSearchLink.getAttribute("href");
+  expect(googleFlightsSearchHref).toEqual(expect.any(String));
+  expect(new URL(googleFlightsSearchHref as string).searchParams.get("curr")).toBe("BRL");
+});
+
 test("keeps the current Skyscanner price visible when comparing other countries", async ({
   context,
   extensionServiceWorker,
@@ -685,7 +704,9 @@ function skyscannerPricingFixture(
       ? "KR"
       : parsedUrl.hostname === "www.skyscanner.com.my" || parsedUrl.searchParams.get("market") === "MY"
         ? "MY"
-        : "US";
+        : parsedUrl.hostname === "www.skyscanner.com.br" || parsedUrl.searchParams.get("market") === "BR"
+          ? "BR"
+          : "US";
   const displayCurrency = skyscannerFixtureDisplayCurrency(parsedUrl);
   const cheapest = country === "KR" ? 180 : 210;
   const second = cheapest + 12;

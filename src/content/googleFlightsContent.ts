@@ -2198,7 +2198,9 @@ function skyscannerCurrencyFromPricePrefix(value: string): string {
   if (/NZ\$/i.test(value)) return "NZD";
   if (/US\$/i.test(value)) return "USD";
   if (/(?:^|[^\p{L}\p{N}])S\$/iu.test(value)) return "SGD";
+  if (/R\$/i.test(value)) return "BRL";
   if (/\bRM\b/i.test(value)) return "MYR";
+  if (currentSkyscannerCountryCode() === "CN" && /[¥￥]/.test(value)) return "CNY";
   return "";
 }
 

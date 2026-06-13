@@ -42,6 +42,11 @@ const entries = [
     format: "iife",
   },
   {
+    entryPoints: ["src/content/skyscannerSearchPageHookInjector.ts"],
+    outfile: "content/skyscannerSearchPageHookInjector.js",
+    format: "iife",
+  },
+  {
     entryPoints: ["src/background/serviceWorker.ts"],
     outfile: "background/serviceWorker.js",
     format: browser === "firefox" ? "iife" : "esm",
@@ -87,6 +92,7 @@ const staticFiles = [
 
 const mainContentScript = "content/googleFlightsContent.js";
 const skyscannerHookScript = "content/skyscannerSearchPageHook.js";
+const skyscannerHookInjectorScript = "content/skyscannerSearchPageHookInjector.js";
 
 async function copyStaticFiles() {
   const manifest = JSON.parse(await readFile(resolve(root, "src/manifest.json"), "utf8"));
@@ -153,6 +159,7 @@ function applyBrowserManifest(manifest) {
     {
       matches: skyscannerWebAccessibleMatches,
       resources: [
+        ...(browser === "firefox" ? [skyscannerHookScript] : []),
         "assets/extension-icons/icon-32.png",
         "assets/extension-icons/icon-48.png",
         "assets/extension-icons/icon-64.png",
@@ -164,6 +171,10 @@ function applyBrowserManifest(manifest) {
   manifest.web_accessible_resources = webAccessibleResources;
 
   if (browser !== "firefox") return;
+
+  const hookScript = contentScriptForJs(manifest, skyscannerHookScript);
+  hookScript.js = [skyscannerHookInjectorScript];
+  for (const contentScript of manifest.content_scripts || []) delete contentScript.world;
 
   const browserAction = manifest.action;
   manifest.manifest_version = 2;
