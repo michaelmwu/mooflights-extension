@@ -411,7 +411,7 @@ async function parseBookingComparisonTab(tabId: number, country: string, url: st
   while (Date.now() < deadline) {
     try {
       latest = await sendTabMessage<CountryResult>(tabId, {
-        command: "parseGoogleFlightsBookingOptions",
+        command: "parseBookingOptions",
       });
       if (latest.options.length > 0) return { ...latest, country, url };
     } catch {
@@ -433,7 +433,7 @@ async function parseGoogleFlightsSearchTab(tabId: number, country: string, url: 
         expanded = await tryExpandGoogleFlightsSearchResults(tabId);
       }
       latest = await sendTabMessage<SearchCountryResult>(tabId, {
-        command: "parseGoogleFlightsSearchResults",
+        command: "parseSearchResults",
       });
       if (latest.results.length > 0) return { ...latest, country, url };
     } catch {
@@ -462,7 +462,7 @@ async function waitForExpandedGoogleFlightsSearchTab(
         expanded = await tryExpandGoogleFlightsSearchResults(tabId);
       }
       latest = await sendTabMessage<SearchCountryResult>(tabId, {
-        command: "parseGoogleFlightsSearchResults",
+        command: "parseSearchResults",
       });
       if (latest.results.length > previousResultCount) return { ...latest, country, url };
     } catch {

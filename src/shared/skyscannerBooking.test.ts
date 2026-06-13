@@ -463,4 +463,34 @@ describe("Skyscanner country comparison parser", () => {
       stopsText: "Direct",
     });
   });
+
+  it("parses visible sponsored row fare instead of earlier row numbers", () => {
+    document.body.innerHTML = `
+      <main>
+        <li>
+          <a data-testid="inlineplus-link" href="/transport/flights/cju/nrt/260624/config/example">
+            <span>Flight with Korean Air.</span>
+            <span>Departing from Jeju at 12:55 PM, arriving in Tokyo Narita at 3:25 PM.</span>
+            <span>Direct flight taking 2 hours 30 minutes.</span>
+            <span>17 deals from</span>
+            <span>$208</span>
+          </a>
+        </li>
+      </main>
+    `;
+
+    const parsed = parseSkyscannerSponsoredSearchRows(
+      document,
+      "US",
+      "https://www.skyscanner.com/transport/flights/cju/nrt/260624/",
+    );
+
+    expect(parsed.results).toHaveLength(1);
+    expect(parsed.results[0]).toMatchObject({
+      carrierText: "Korean Air",
+      price: 208,
+      priceText: "$208",
+      currency: "USD",
+    });
+  });
 });

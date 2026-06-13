@@ -536,7 +536,7 @@ function isSkyscannerComparableSearchRow(element: Element | null): element is El
 }
 
 function hasSkyscannerResultPrice(text: string): boolean {
-  return /(?:[$€£¥₹₩฿]\s*\d|\b(?:USD|EUR|GBP|JPY|KRW|INR|AUD|CAD|NZD|SGD|HKD|ZAR|THB|MYR|CNY|RMB|RM)\s*\d|\b\d+\s*(?:USD|EUR|GBP|JPY|KRW|INR|AUD|CAD|NZD|SGD|HKD|ZAR|THB|MYR|CNY|RMB|RM)\b|\b\d+\s+deals?\s+from\b)/i.test(
+  return /(?:[$€£¥₹₩฿]\s*\d|\b(?:USD|EUR|GBP|JPY|KRW|INR|AUD|CAD|NZD|SGD|HKD|ZAR|THB|MYR|CNY|RMB|RM|BRL|MXN)\s*\d|\b\d+\s*(?:USD|EUR|GBP|JPY|KRW|INR|AUD|CAD|NZD|SGD|HKD|ZAR|THB|MYR|CNY|RMB|RM|BRL|MXN)\b|\b\d+\s+deals?\s+from\b)/i.test(
     text,
   );
 }
@@ -561,18 +561,36 @@ function parsePriceText(
 }
 
 function parsePriceAmount(value: string): { price: number; currency: string; priceText: string } | null {
-  const amount = value.match(/([0-9][0-9.,\s'’]*[0-9]|[0-9])/);
+  const priceCandidate = currencyBearingPriceText(value);
+  if (!priceCandidate) return null;
+  const amount = priceCandidate.match(/([0-9][0-9.,\s'’]*[0-9]|[0-9])/);
   if (!amount) return null;
   const price = parseLocalizedNumber(amount[1]);
   if (!Number.isFinite(price)) return null;
-  const currency = currencyFromFormattedPrice(value);
-  const priceText = priceTextFromValue(value);
+  const currency = currencyFromFormattedPrice(priceCandidate) || currencyFromFormattedPrice(value);
+  const priceText = priceTextFromValue(value) || priceTextFromValue(priceCandidate);
   if (!currency && !priceText) return null;
   return {
     price,
     currency: currency || "UNKNOWN",
-    priceText: priceText || value,
+    priceText: priceText || priceCandidate,
   };
+}
+
+function currencyBearingPriceText(value: string): string {
+  const text = normalizedText(value);
+  const amount = String.raw`[0-9][0-9.,\s'’]*[0-9]|[0-9]`;
+  const prefixCurrency = String.raw`(?:NT\$|HK\$|CA\$|AU\$|NZ\$|MX\$|US\$|S\$|C\$|A\$|R\$|[$€£¥₹₩฿]|\b(?:USD|EUR|GBP|JPY|KRW|INR|AUD|CAD|NZD|SGD|HKD|ZAR|THB|MYR|CNY|RMB|RM|BRL|MXN)\b)`;
+  const suffixCurrency = String.raw`(?:USD|EUR|GBP|JPY|KRW|INR|AUD|CAD|NZD|SGD|HKD|ZAR|THB|MYR|CNY|RMB|BRL|MXN|Taiwan dollars?|Hong Kong dollars?|Canadian dollars?|Australian dollars?|New Zealand dollars?|US dollars?|Singapore dollars?|Brazilian real|reais?|Mexican pesos?|euros?|pounds?|yuan|Japanese yen|Korean won|baht|ringgit|South African rands?|\brands?\b|rupees?)`;
+  const patterns = [
+    new RegExp(`${prefixCurrency}\\s*(?:${amount})`, "iu"),
+    new RegExp(`(?:${amount})\\s*${suffixCurrency}`, "iu"),
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[0]) return match[0];
+  }
+  return "";
 }
 
 function parseLocalizedNumber(value: string): number {

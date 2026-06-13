@@ -16,10 +16,10 @@ import {
   inferGoogleFlightsCurrency,
   isGoogleFlightsPanelPageUrl,
   normalizeGoogleFlightsCurrency,
-  parseGoogleFlightsBookingOptions,
+  parseBookingOptions as parseGoogleFlightsBookingOptions,
   parseGoogleFlightsCountryInput,
   parseGoogleFlightsMatrixSearch,
-  parseGoogleFlightsSearchResults,
+  parseSearchResults as parseGoogleFlightsSearchResults,
   searchResultRows,
   stableHash as stableContentHash,
 } from "../shared/googleFlightsBooking";
@@ -611,11 +611,11 @@ chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) =
     error?: unknown;
     waitForExpansion?: unknown;
   };
-  if (payload.command === "parseGoogleFlightsBookingOptions") {
+  if (payload.command === "parseBookingOptions" || payload.command === "parseGoogleFlightsBookingOptions") {
     sendResponse(parseCurrentBookingPage());
     return false;
   }
-  if (payload.command === "parseGoogleFlightsSearchResults") {
+  if (payload.command === "parseSearchResults" || payload.command === "parseGoogleFlightsSearchResults") {
     sendResponse(parseCurrentSearchPage());
     return false;
   }
@@ -947,7 +947,9 @@ function installObserver(): void {
 }
 
 function invalidateInferredCurrencyCache(): void {
-  inferredCurrencyCache = null;
+  if (isCurrentSkyscannerPage() || inferredCurrencyCache?.currency) {
+    inferredCurrencyCache = null;
+  }
 }
 
 function isOwnSearchAnnotationMutation(mutation: MutationRecord): boolean {
