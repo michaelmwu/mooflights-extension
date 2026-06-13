@@ -87,6 +87,23 @@ test("opens Google Flights country comparison tabs from a routed US booking page
   ]);
 });
 
+test("does not count the current country when currency is unavailable", async ({
+  context,
+  extensionServiceWorker,
+  page,
+}) => {
+  const pageUrl = "https://www.google.com/travel/flights/booking?tfs=e2e-fixture&gl=US&barePriceFixture=1";
+  await setGoogleFlightsCountries(extensionServiceWorker, ["CA", "ZA"]);
+  await routeGoogleFlightsBookingFixtures(context);
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel).toBeAttached();
+  await expect(panel.getByRole("button", { name: "Compare (2)" })).toBeEnabled();
+  await expect(panel.getByRole("button", { name: "Compare (3)" })).not.toBeAttached();
+});
+
 test("orders the current Google Flights country before tied comparison countries", async ({
   context,
   extensionServiceWorker,
@@ -583,18 +600,23 @@ function googleFlightsBookingFixture(url: string): string {
   const parsedUrl = new URL(url);
   const country = parsedUrl.searchParams.get("gl") || "US";
   const countryFixture = googleFlightsCountryFixture(country, parsedUrl.searchParams.get("tieFixture") === "1");
+  const barePriceFixture = parsedUrl.searchParams.get("barePriceFixture") === "1";
+  const priceText = (value: number): string =>
+    barePriceFixture
+      ? `<span role="text">${value.toLocaleString()}</span>`
+      : `<span aria-label="${value} US dollars">$${value.toLocaleString()}</span>`;
 
   return htmlFixture(`
     <main>
       <h1>Google Flights booking fixture</h1>
       <a class="gN1nAc" href="https://book.example/${country.toLowerCase()}/cheap">
         <span class="ogfYpf">Book with ${countryFixture.provider}</span>
-        <span aria-label="${countryFixture.cheapest} US dollars">$${countryFixture.cheapest.toLocaleString()}</span>
+        ${priceText(countryFixture.cheapest)}
       </a>
       <a class="gN1nAc" href="https://airline.example/${country.toLowerCase()}">
         <span class="ogfYpf">Book with American</span>
         <span class="EA71Tc">Direct</span>
-        <span role="text">$${countryFixture.direct.toLocaleString()}</span>
+        ${priceText(countryFixture.direct)}
       </a>
     </main>
   `);

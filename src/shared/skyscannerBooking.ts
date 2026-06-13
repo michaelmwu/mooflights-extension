@@ -142,7 +142,7 @@ export function skyscannerCountryCodeFromUrl(url: string): string {
     const parsedUrl = new URL(url);
     const market = normalizeSkyscannerCountryCode(parsedUrl.searchParams.get("market"));
     if (market) return market;
-    return SKYSCANNER_HOST_COUNTRIES.get(parsedUrl.hostname) || "";
+    return SKYSCANNER_HOST_COUNTRIES.get(parsedUrl.hostname.toLowerCase()) || "";
   } catch {
     return "";
   }

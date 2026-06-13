@@ -1495,7 +1495,8 @@ function renderSearchComparisonPanel(selectedCodes: string[]): string {
 
 function countryComparisonDisplayCount(selectedCodes: string[]): number {
   const baselineCountry = currentComparableCountryCode();
-  return baselineCountry && !selectedCodes.includes(baselineCountry) ? selectedCodes.length + 1 : selectedCodes.length;
+  const includesBaseline = baselineCountry && currentVisibleCurrencyCode() && !selectedCodes.includes(baselineCountry);
+  return includesBaseline ? selectedCodes.length + 1 : selectedCodes.length;
 }
 
 function countryDropdownOptions(): Array<{ code: string; label: string; searchValue: string; aliases?: string[] }> {
