@@ -731,7 +731,7 @@ function requestSkyscannerMarketSearch(country: string): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const timeoutId = window.setTimeout(() => {
       pendingSkyscannerMarketSearches.delete(requestId);
-      reject(new Error(`Timed out checking ${country} Skyscanner market.`));
+      reject(new Error(t()("countryComparisonFailed")));
     }, 20000);
     pendingSkyscannerMarketSearches.set(requestId, { resolve, reject, timeoutId });
     window.postMessage(
@@ -3313,8 +3313,8 @@ function styles(): string {
       background: #ffffff;
       color: #334155;
       text-decoration: none;
-      font-weight: 650;
       font: inherit;
+      font-weight: 650;
     }
     .cross-search a:hover {
       background: #f8fafc;

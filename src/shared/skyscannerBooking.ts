@@ -599,6 +599,7 @@ function currencyFromFormattedPrice(value: string): string {
   if (/AU\$/i.test(value) || /Australian dollars?/i.test(value)) return "AUD";
   if (/NZ\$/i.test(value) || /New Zealand dollars?/i.test(value)) return "NZD";
   if (/US\$/i.test(value) || /US dollars?|USD/i.test(value)) return "USD";
+  if (/(?:^|[^\p{L}\p{N}])S\$/iu.test(value) || /Singapore dollars?/i.test(value)) return "SGD";
   if (/\$/i.test(value)) return "USD";
   if (/€|euros?|EUR/i.test(value)) return "EUR";
   if (/£|pounds?|GBP/i.test(value)) return "GBP";

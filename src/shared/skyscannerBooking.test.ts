@@ -165,6 +165,35 @@ describe("Skyscanner country comparison parser", () => {
     });
   });
 
+  it("parses S$ Skyscanner prices as Singapore dollars", () => {
+    document.body.innerHTML = `
+      <ol>
+        <li>
+          <div data-testid="PricingItem">
+            <div class="AgentDetails_agentDetails__MGEyM"><p>Trip.com</p></div>
+            <div data-testid="CtaSection">
+              <p class="TotalPrice_visuallyHidden__NmEzM">S$ 210 total.</p>
+              <a href="/transport_deeplink/booking" aria-label="Select Trip.com." data-testid="pricing-item-redirect-button">Select</a>
+            </div>
+          </div>
+        </li>
+      </ol>
+    `;
+
+    const result = parseSkyscannerPricingOptions(
+      document,
+      "SG",
+      "https://www.skyscanner.com.sg/transport/flights/cju/nrt/260624/config/example",
+    );
+
+    expect(result.cheapest).toMatchObject({
+      provider: "Trip.com",
+      price: 210,
+      currency: "SGD",
+      priceText: "S$ 210 total.",
+    });
+  });
+
   it("parses RM-prefixed Skyscanner final-page prices", () => {
     document.body.innerHTML = `
       <ol>
