@@ -26,6 +26,7 @@
     "lint": "biome lint .",
     "package": "bun run build && node scripts/package-extension.mjs",
     "package:firefox": "bun run build:firefox && node scripts/package-extension.mjs --browser=firefox",
+    "package:firefox:stable": "bun run build:firefox:stable && node scripts/package-extension.mjs --browser=firefox --stable-dist",
     "release:next-patch": "node scripts/prepare-next-release-version.mjs --next=patch",
     "release:next-minor": "node scripts/prepare-next-release-version.mjs --next=minor",
     "release:package:next-patch": "bun run release:next-patch && bun run package",

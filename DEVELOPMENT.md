@@ -84,10 +84,11 @@ For Firefox development packaging:
 
 ```sh
 bun run package:firefox
+bun run package:firefox:stable
 ```
 
-This writes `artifacts/mooflights-firefox-<version>.xpi`. The generated Firefox package is unsigned; release distribution
-still needs the Mozilla Add-ons signing flow.
+These write `artifacts/mooflights-firefox-<version>.xpi` in the workspace or canonical repo root, respectively. The
+generated Firefox package is unsigned; release distribution still needs the Mozilla Add-ons signing flow.
 
 To prepare the next unused patch release version from the latest local `vX.Y.Z` tag or checked-in version:
 
@@ -140,13 +141,16 @@ recreating workspaces, use the stable build targets:
 ```sh
 bun run dev:stable
 bun run dev:firefox:stable
+bun run package:firefox:stable
 ```
 
 In a linked worktree, these write to the canonical repo root `dist/` and `dist-firefox/` directories instead of the
 workspace-local build directories. Load the canonical `dist/` once in Chrome and the canonical `dist-firefox/` once in
-Firefox, then reload those extensions after workspace builds. The checked-in Conductor Run script uses
-`bun run dev:stable` and is marked non-concurrent so two workspaces do not race to write the same Chrome extension
-directory. Use the Firefox stable script with the same non-concurrent expectation if you add it to Conductor.
+Firefox through `about:debugging`, then reload those extensions after workspace builds. If Firefox expects a packed
+file, use the canonical `artifacts/mooflights-firefox-<version>.xpi` produced by `bun run package:firefox:stable`
+instead. The checked-in Conductor Run script uses `bun run dev:stable` and is marked non-concurrent so two workspaces do
+not race to write the same Chrome extension directory. Use the Firefox stable scripts with the same non-concurrent
+expectation if you add them to Conductor.
 
 ## Browser Extension Notes
 

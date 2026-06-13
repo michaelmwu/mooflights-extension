@@ -1,22 +1,27 @@
 import { execFile } from "node:child_process";
 import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const root = process.cwd();
 const browser = browserTarget();
-const artifacts = resolve(root, "artifacts");
+const stableDist =
+  process.argv.includes("--stable-dist") ||
+  process.env.MOOFLIGHTS_STABLE_EXTENSION_DIST === "1" ||
+  process.env.MU_TRAVEL_STABLE_EXTENSION_DIST === "1";
+const packageRoot = await packageRootPath();
+const artifacts = resolve(packageRoot, "artifacts");
 const packageVersion = await extensionVersion();
 const artifactBaseName =
   browser === "firefox" ? `mooflights-firefox-${packageVersion}` : `mooflights-${packageVersion}`;
 const zipPath = resolve(artifacts, `${artifactBaseName}.zip`);
 const crxPath = resolve(artifacts, `${artifactBaseName}.crx`);
 const xpiPath = resolve(artifacts, `${artifactBaseName}.xpi`);
-const generatedCrxPath = resolve(root, "dist.crx");
-const generatedPemPath = resolve(root, "dist.pem");
+const generatedCrxPath = resolve(packageRoot, "dist.crx");
+const generatedPemPath = resolve(packageRoot, "dist.pem");
 const providedCrxKeyPath = crxKeyPathEnv() ? resolve(crxKeyPathEnv()) : "";
-const dist = resolve(root, browser === "firefox" ? "dist-firefox" : "dist");
+const dist = resolve(packageRoot, browser === "firefox" ? "dist-firefox" : "dist");
 
 await mkdir(artifacts, { recursive: true });
 await removeExistingPackageArtifacts();
@@ -63,6 +68,23 @@ async function extensionVersion() {
   const version = String(packageJson.version || "").trim();
   if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`Invalid package.json version "${version}".`);
   return version;
+}
+
+async function packageRootPath() {
+  if (!stableDist) return root;
+
+  try {
+    const { stdout } = await execFileAsync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+    const commonGitDir = stdout.trim();
+    return basename(commonGitDir) === ".git" ? dirname(commonGitDir) : root;
+  } catch (error) {
+    console.warn(
+      `Could not resolve canonical repo root for --stable-dist; falling back to workspace package paths. ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    return root;
+  }
 }
 
 async function removeExistingPackageArtifacts() {
