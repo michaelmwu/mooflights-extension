@@ -39,21 +39,15 @@ Dev builds expose an options-page "Developer Backend" section for pointing the e
 For Firefox:
 
 ```sh
-bun run build:firefox
+bun run package:firefox
 ```
 
 Then open Firefox:
 
 1. Go to `about:debugging#/runtime/this-firefox`.
 2. Click "Load Temporary Add-on...".
-3. Select `dist-firefox/manifest.json`.
+3. Select `artifacts/mooflights-firefox-<version>.xpi`.
 4. Open `https://matrix.itasoftware.com/`.
-
-For a watch build, use:
-
-```sh
-bun run dev:firefox
-```
 
 Prefer a stable high port for the backend when you are not intentionally running multiple backend worktrees:
 
@@ -87,8 +81,9 @@ bun run package:firefox
 bun run package:firefox:stable
 ```
 
-These write `artifacts/mooflights-firefox-<version>.xpi` in the workspace or canonical repo root, respectively. The
-generated Firefox package is unsigned; release distribution still needs the Mozilla Add-ons signing flow.
+These write `artifacts/mooflights-firefox-<version>.xpi` in the workspace or canonical repo root, respectively. Firefox
+development loading should use the packed XPI, not an unpacked directory. The generated Firefox package is unsigned;
+release distribution still needs the Mozilla Add-ons signing flow.
 
 To prepare the next unused patch release version from the latest local `vX.Y.Z` tag or checked-in version:
 
@@ -136,27 +131,29 @@ Neither workflow needs backend secrets. The extension build must not read `.env`
 
 Browsers key unpacked-extension storage to the loaded extension identity, and loading a build directory from a different
 Conductor workspace can make the browser treat it as a different extension. To keep settings while archiving and
-recreating workspaces, use the stable build targets:
+recreating workspaces, use the stable targets:
 
 ```sh
 bun run dev:stable
-bun run dev:firefox:stable
 bun run package:firefox:stable
 ```
 
-In a linked worktree, these write to the canonical repo root `dist/` and `dist-firefox/` directories instead of the
-workspace-local build directories. Load the canonical `dist/` once in Chrome and the canonical `dist-firefox/` once in
-Firefox through `about:debugging`, then reload those extensions after workspace builds. If Firefox expects a packed
-file, use the canonical `artifacts/mooflights-firefox-<version>.xpi` produced by `bun run package:firefox:stable`
-instead. The checked-in Conductor Run script uses `bun run dev:stable` and is marked non-concurrent so two workspaces do
-not race to write the same Chrome extension directory. Use the Firefox stable scripts with the same non-concurrent
-expectation if you add them to Conductor.
+In a linked worktree, `bun run dev:stable` writes Chrome's unpacked build to the canonical repo root `dist/` directory
+instead of the workspace-local build directory. Load that canonical `dist/` once in Chrome and reload it after workspace
+builds.
+
+Firefox expects a packed file, including in development. Use `bun run package:firefox:stable` to write the canonical
+repo root `artifacts/mooflights-firefox-<version>.xpi`, then load that XPI through `about:debugging`.
+
+The checked-in Conductor Run script uses `bun run dev:stable` and is marked non-concurrent so two workspaces do not race
+to write the same Chrome extension directory. Use the Firefox stable package script with the same non-concurrent
+expectation if you add it to Conductor.
 
 ## Browser Extension Notes
 
 - `src/manifest.json` is the Chrome MV3 source manifest.
 - `bun run build` writes the Chrome MV3 build to `dist/`.
-- `bun run build:firefox` writes a Firefox build to `dist-firefox/`.
+- `bun run package:firefox` writes a packed Firefox XPI to `artifacts/`.
 - The Firefox build rewrites the manifest to MV2 with an event-page background script because Firefox continues to
   support MV2 and older local Firefox builds do not run Chrome-style MV3 background service workers.
 - Content scripts are bundled as IIFEs because Chrome loads them as plain files from the manifest.

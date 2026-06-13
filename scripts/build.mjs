@@ -167,7 +167,7 @@ function applyBrowserManifest(manifest) {
 async function distPath() {
   if (process.env.MOOFLIGHTS_DIST_DIR) return resolve(process.env.MOOFLIGHTS_DIST_DIR);
   if (process.env.MU_TRAVEL_DIST_DIR) return resolve(process.env.MU_TRAVEL_DIST_DIR);
-  const directoryName = browser === "firefox" ? "dist-firefox" : "dist";
+  const directoryName = browser === "firefox" ? ".context/firefox-build" : "dist";
   if (!stableDist) return resolve(root, directoryName);
 
   try {

@@ -1,6 +1,5 @@
 node_modules/
 dist/
-dist-firefox/
 artifacts/
 coverage/
 playwright-report/

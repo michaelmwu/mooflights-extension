@@ -35,18 +35,14 @@ bun run build
 
 Load `dist/` as an unpacked extension from `chrome://extensions`.
 
-For a local Firefox build:
-
-```sh
-bun run build:firefox
-```
-
-Load `dist-firefox/` as a temporary add-on from `about:debugging#/runtime/this-firefox`, or package it as an unsigned
-development XPI:
+For a local Firefox package:
 
 ```sh
 bun run package:firefox
 ```
+
+Load the generated `artifacts/mooflights-firefox-<version>.xpi` as a temporary add-on from
+`about:debugging#/runtime/this-firefox`. The XPI is unsigned; user distribution still requires Mozilla Add-ons signing.
 
 For development:
 

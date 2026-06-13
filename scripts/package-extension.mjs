@@ -21,7 +21,7 @@ const xpiPath = resolve(artifacts, `${artifactBaseName}.xpi`);
 const generatedCrxPath = resolve(packageRoot, "dist.crx");
 const generatedPemPath = resolve(packageRoot, "dist.pem");
 const providedCrxKeyPath = crxKeyPathEnv() ? resolve(crxKeyPathEnv()) : "";
-const dist = resolve(packageRoot, browser === "firefox" ? "dist-firefox" : "dist");
+const dist = distPath();
 
 await mkdir(artifacts, { recursive: true });
 await removeExistingPackageArtifacts();
@@ -85,6 +85,12 @@ async function packageRootPath() {
     );
     return root;
   }
+}
+
+function distPath() {
+  const override = process.env.MOOFLIGHTS_DIST_DIR || process.env.MU_TRAVEL_DIST_DIR || "";
+  if (override) return resolve(root, override);
+  return resolve(packageRoot, browser === "firefox" ? ".context/firefox-build" : "dist");
 }
 
 async function removeExistingPackageArtifacts() {
