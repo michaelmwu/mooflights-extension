@@ -133,13 +133,20 @@ Neither workflow needs backend secrets. The extension build must not read `.env`
 
 ## Stable Unpacked Extension Path
 
-Chrome keys unpacked-extension storage to the loaded extension identity, and loading `dist/` from a different Conductor workspace can make Chrome treat it as a different extension. To keep settings while archiving and recreating workspaces, use the stable build target:
+Browsers key unpacked-extension storage to the loaded extension identity, and loading a build directory from a different
+Conductor workspace can make the browser treat it as a different extension. To keep settings while archiving and
+recreating workspaces, use the stable build targets:
 
 ```sh
 bun run dev:stable
+bun run dev:firefox:stable
 ```
 
-In a linked worktree, this writes to the canonical repo root `dist/` instead of the workspace `dist/`. Load that canonical `dist/` once in Chrome's extension page and reload it after workspace builds. The checked-in Conductor Run script uses `bun run dev:stable` and is marked non-concurrent so two workspaces do not race to write the same extension directory.
+In a linked worktree, these write to the canonical repo root `dist/` and `dist-firefox/` directories instead of the
+workspace-local build directories. Load the canonical `dist/` once in Chrome and the canonical `dist-firefox/` once in
+Firefox, then reload those extensions after workspace builds. The checked-in Conductor Run script uses
+`bun run dev:stable` and is marked non-concurrent so two workspaces do not race to write the same Chrome extension
+directory. Use the Firefox stable script with the same non-concurrent expectation if you add it to Conductor.
 
 ## Browser Extension Notes
 
