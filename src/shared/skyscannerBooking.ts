@@ -75,6 +75,7 @@ const SKYSCANNER_HOST_COUNTRIES = new Map([
 const SKYSCANNER_DEFAULT_COUNTRY_CURRENCIES: Record<string, string> = {
   BR: "BRL",
   CN: "CNY",
+  MX: "MXN",
   MY: "MYR",
   ZA: "ZAR",
 };
@@ -612,6 +613,7 @@ function currencyFromFormattedPrice(value: string): string {
   if (/CA\$/i.test(value) || /Canadian dollars?/i.test(value)) return "CAD";
   if (/AU\$/i.test(value) || /Australian dollars?/i.test(value)) return "AUD";
   if (/NZ\$/i.test(value) || /New Zealand dollars?/i.test(value)) return "NZD";
+  if (/MX\$/i.test(value) || /MXN|Mexican pesos?/i.test(value)) return "MXN";
   if (/US\$/i.test(value) || /US dollars?|USD/i.test(value)) return "USD";
   if (/(?:^|[^\p{L}\p{N}])S\$/iu.test(value) || /Singapore dollars?/i.test(value)) return "SGD";
   if (/(?:^|[^\p{L}\p{N}])C\$/iu.test(value)) return "CAD";

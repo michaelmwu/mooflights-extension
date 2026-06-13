@@ -2196,6 +2196,7 @@ function skyscannerCurrencyFromPricePrefix(value: string): string {
   if (/CA\$/i.test(value) || /(?:^|[^\p{L}\p{N}])C\$/iu.test(value)) return "CAD";
   if (/AU\$/i.test(value) || /(?:^|[^\p{L}\p{N}])A\$/iu.test(value)) return "AUD";
   if (/NZ\$/i.test(value)) return "NZD";
+  if (/MX\$/i.test(value)) return "MXN";
   if (/US\$/i.test(value)) return "USD";
   if (/(?:^|[^\p{L}\p{N}])S\$/iu.test(value)) return "SGD";
   if (/R\$/i.test(value)) return "BRL";

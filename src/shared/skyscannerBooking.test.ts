@@ -201,6 +201,8 @@ describe("Skyscanner country comparison parser", () => {
     ["C$ 210 total.", "CAD", 210],
     ["A$ 210 total.", "AUD", 210],
     ["R$ 1.234 total.", "BRL", 1234],
+    ["MX$ 4,200 total.", "MXN", 4200],
+    ["4,200 Mexican pesos total.", "MXN", 4200],
     ["ZAR 3,200 total.", "ZAR", 3200],
   ])("parses %s as a supported Skyscanner currency", (priceText, currency, price) => {
     document.body.innerHTML = `
