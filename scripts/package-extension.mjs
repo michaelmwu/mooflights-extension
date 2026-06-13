@@ -5,14 +5,18 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const root = process.cwd();
+const browser = browserTarget();
 const artifacts = resolve(root, "artifacts");
 const packageVersion = await extensionVersion();
-const artifactBaseName = `mooflights-${packageVersion}`;
+const artifactBaseName =
+  browser === "firefox" ? `mooflights-firefox-${packageVersion}` : `mooflights-${packageVersion}`;
 const zipPath = resolve(artifacts, `${artifactBaseName}.zip`);
 const crxPath = resolve(artifacts, `${artifactBaseName}.crx`);
+const xpiPath = resolve(artifacts, `${artifactBaseName}.xpi`);
 const generatedCrxPath = resolve(root, "dist.crx");
 const generatedPemPath = resolve(root, "dist.pem");
 const providedCrxKeyPath = crxKeyPathEnv() ? resolve(crxKeyPathEnv()) : "";
+const dist = resolve(root, browser === "firefox" ? "dist-firefox" : "dist");
 
 await mkdir(artifacts, { recursive: true });
 await removeExistingPackageArtifacts();
@@ -23,8 +27,10 @@ try {
 } catch {
   throw new Error("The `zip` CLI is required to package the extension. Install zip or run `bun run build` only.");
 }
-await execFileAsync("zip", ["-r", zipPath, "."], { cwd: resolve(root, "dist") });
-console.log(`Wrote ${zipPath}`);
+await execFileAsync("zip", ["-r", browser === "firefox" ? xpiPath : zipPath, "."], { cwd: dist });
+console.log(`Wrote ${browser === "firefox" ? xpiPath : zipPath}`);
+
+if (browser === "firefox") process.exit(0);
 
 const chrome = await chromeExecutable();
 if (!chrome) {
@@ -39,7 +45,7 @@ if (!keyPath && (process.env.MOOFLIGHTS_REQUIRE_CRX_KEY === "1" || process.env.M
     "A stable CRX signing key is required for release packaging. Set MOOFLIGHTS_CRX_KEY_B64 or MOOFLIGHTS_CRX_KEY_PATH.",
   );
 }
-const args = [`--pack-extension=${resolve(root, "dist")}`, "--no-sandbox"];
+const args = [`--pack-extension=${dist}`, "--no-sandbox"];
 if (keyPath) args.push(`--pack-extension-key=${keyPath.path}`);
 
 try {
@@ -61,9 +67,13 @@ async function extensionVersion() {
 
 async function removeExistingPackageArtifacts() {
   const entries = await readdir(artifacts);
+  const packageArtifactPattern =
+    browser === "firefox"
+      ? /^mooflights-firefox-\d+\.\d+\.\d+\.xpi$/
+      : /^(?:mooflights|mu-travel-flights)(?:-\d+\.\d+\.\d+)?\.(zip|crx)$/;
   await Promise.all(
     entries
-      .filter((entry) => /^(?:mooflights|mu-travel-flights)(?:-\d+\.\d+\.\d+)?\.(zip|crx)$/.test(entry))
+      .filter((entry) => packageArtifactPattern.test(entry))
       .map((entry) => rm(resolve(artifacts, entry), { force: true })),
   );
 }
@@ -112,4 +122,11 @@ async function crxKeyPath() {
 
 function crxKeyPathEnv() {
   return process.env.MOOFLIGHTS_CRX_KEY_PATH || process.env.MU_TRAVEL_CRX_KEY_PATH || "";
+}
+
+function browserTarget() {
+  const browserArg = process.argv.find((arg) => arg.startsWith("--browser="));
+  const value = (browserArg ? browserArg.split("=", 2)[1] : process.env.MOOFLIGHTS_BROWSER || "chrome").toLowerCase();
+  if (value === "chrome" || value === "firefox") return value;
+  throw new Error(`Unsupported browser target "${value}". Expected "chrome" or "firefox".`);
 }

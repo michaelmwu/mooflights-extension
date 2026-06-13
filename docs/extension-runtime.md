@@ -1,8 +1,11 @@
 # Extension Runtime
 
-## Manifest
+## Manifests
 
-The extension targets Manifest V3 and currently requests:
+The Chrome build targets Manifest V3. The Firefox build is generated from the same source manifest as a Firefox MV2
+event-page extension so it can run on Firefox versions that do not support Chrome-style MV3 background service workers.
+
+Both generated manifests request:
 
 - `storage`
 - `clipboardWrite`
@@ -11,6 +14,9 @@ The extension targets Manifest V3 and currently requests:
   `https://google.com/travel/flights*`
 - required host access for daily cached public USD FX rates from `https://cdn.jsdelivr.net/*` and
   `https://api.fxratesapi.com/*`
+
+The Firefox build also requests `tabs` because its background script reads active tab URLs while coordinating ITA Matrix
+auto-open handoffs.
 
 Dev builds also add required host access for `http://localhost/*` and `http://127.0.0.1/*` so local backend metadata
 debugging can work without runtime permission prompts. Production builds do not fetch hosted backend metadata.
@@ -41,8 +47,9 @@ injects the visible panel on booking pages and on ITA Matrix handoff itinerary p
   visible currency from Google Flights price text before falling back to USD.
 - Shows the cheapest offer, direct-airline offer, option count, and sparse-result retry status by country.
 
-`src/background/serviceWorker.ts` runs the country checks with bounded concurrency, retries sparse country results once
-when the baseline page is dense, and closes temporary tabs after parsing.
+`src/background/serviceWorker.ts` is bundled as the Chrome MV3 service worker and as the Firefox MV2 event-page
+background script. It runs the country checks with bounded concurrency, retries sparse country results once when the
+baseline page is dense, and closes temporary tabs after parsing.
 
 ## Popup
 

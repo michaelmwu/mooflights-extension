@@ -7,6 +7,7 @@ import esbuild from "esbuild";
 const execFileAsync = promisify(execFile);
 const root = process.cwd();
 const watch = process.argv.includes("--watch");
+const browser = browserTarget();
 const stableDist =
   process.argv.includes("--stable-dist") ||
   process.env.MOOFLIGHTS_STABLE_EXTENSION_DIST === "1" ||
@@ -37,7 +38,7 @@ const entries = [
   {
     entryPoints: ["src/background/serviceWorker.ts"],
     outfile: "background/serviceWorker.js",
-    format: "esm",
+    format: browser === "firefox" ? "iife" : "esm",
   },
   {
     entryPoints: ["src/popup/main.tsx"],
@@ -63,7 +64,7 @@ async function buildEntry(entry) {
     bundle: true,
     sourcemap: devBuild,
     minify: !devBuild,
-    target: "chrome114",
+    target: browser === "firefox" ? "firefox107" : "chrome114",
     legalComments: "linked",
     define: {
       "process.env.NODE_ENV": JSON.stringify(devBuild ? "development" : "production"),
@@ -80,30 +81,7 @@ const staticFiles = [
 
 async function copyStaticFiles() {
   const manifest = JSON.parse(await readFile(resolve(root, "src/manifest.json"), "utf8"));
-  manifest.host_permissions = Array.from(
-    new Set([...(manifest.host_permissions || []), ...(devBuild ? ["http://localhost/*", "http://127.0.0.1/*"] : [])]),
-  );
-  manifest.web_accessible_resources = [
-    {
-      matches: ["https://matrix.itasoftware.com/*"],
-      resources: [
-        "content/itaMatrixPageBridge.js",
-        "assets/extension-icons/icon-32.png",
-        "assets/extension-icons/icon-48.png",
-        "assets/extension-icons/icon-64.png",
-      ],
-    },
-    {
-      // Chrome MV3 web_accessible_resources matches are origin-scoped; path-scoped
-      // Google Flights patterns are rejected as invalid match patterns.
-      matches: ["https://www.google.com/*", "https://google.com/*"],
-      resources: [
-        "assets/extension-icons/icon-32.png",
-        "assets/extension-icons/icon-48.png",
-        "assets/extension-icons/icon-64.png",
-      ],
-    },
-  ];
+  applyBrowserManifest(manifest);
   await writeFile(resolve(dist, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
 
   for (const [from, to] of staticFiles) {
@@ -134,31 +112,93 @@ async function copyStaticFiles() {
   );
 }
 
+function applyBrowserManifest(manifest) {
+  const hostPermissions = Array.from(
+    new Set([...(manifest.host_permissions || []), ...(devBuild ? ["http://localhost/*", "http://127.0.0.1/*"] : [])]),
+  );
+  const webAccessibleResources = [
+    {
+      matches: ["https://matrix.itasoftware.com/*"],
+      resources: [
+        "content/itaMatrixPageBridge.js",
+        "assets/extension-icons/icon-32.png",
+        "assets/extension-icons/icon-48.png",
+        "assets/extension-icons/icon-64.png",
+      ],
+    },
+    {
+      // Chrome MV3 web_accessible_resources matches are origin-scoped; path-scoped
+      // Google Flights patterns are rejected as invalid match patterns.
+      matches: ["https://www.google.com/*", "https://google.com/*"],
+      resources: [
+        "assets/extension-icons/icon-32.png",
+        "assets/extension-icons/icon-48.png",
+        "assets/extension-icons/icon-64.png",
+      ],
+    },
+  ];
+
+  manifest.host_permissions = hostPermissions;
+  manifest.web_accessible_resources = webAccessibleResources;
+
+  if (browser !== "firefox") return;
+
+  const browserAction = manifest.action;
+  manifest.manifest_version = 2;
+  delete manifest.action;
+  manifest.browser_action = browserAction;
+  manifest.background = {
+    scripts: ["background/serviceWorker.js"],
+    persistent: false,
+  };
+  manifest.permissions = Array.from(new Set([...(manifest.permissions || []), "tabs", ...hostPermissions]));
+  delete manifest.host_permissions;
+  manifest.web_accessible_resources = Array.from(
+    new Set(webAccessibleResources.flatMap((entry) => entry.resources || [])),
+  );
+  manifest.browser_specific_settings = {
+    gecko: {
+      id: "extension@mooflights.com",
+      strict_min_version: "107.0",
+    },
+  };
+}
+
 async function distPath() {
   if (process.env.MOOFLIGHTS_DIST_DIR) return resolve(process.env.MOOFLIGHTS_DIST_DIR);
   if (process.env.MU_TRAVEL_DIST_DIR) return resolve(process.env.MU_TRAVEL_DIST_DIR);
-  if (!stableDist) return resolve(root, "dist");
+  const directoryName = browser === "firefox" ? "dist-firefox" : "dist";
+  if (!stableDist) return resolve(root, directoryName);
 
   try {
     const { stdout } = await execFileAsync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
     const commonGitDir = stdout.trim();
     const repoRoot = basename(commonGitDir) === ".git" ? dirname(commonGitDir) : root;
-    return resolve(repoRoot, "dist");
+    return resolve(repoRoot, directoryName);
   } catch (error) {
     console.warn(
       `Could not resolve canonical repo root for --stable-dist; falling back to workspace dist. ${error instanceof Error ? error.message : String(error)}`,
     );
-    return resolve(root, "dist");
+    return resolve(root, directoryName);
   }
+}
+
+function browserTarget() {
+  const browserArg = process.argv.find((arg) => arg.startsWith("--browser="));
+  const value = (browserArg ? browserArg.split("=", 2)[1] : process.env.MOOFLIGHTS_BROWSER || "chrome").toLowerCase();
+  if (value === "chrome" || value === "firefox") return value;
+  throw new Error(`Unsupported browser target "${value}". Expected "chrome" or "firefox".`);
 }
 
 if (watch) {
   const contexts = await Promise.all(entries.map(async (entry) => esbuild.context(await buildEntry(entry))));
   await copyStaticFiles();
   await Promise.all(contexts.map((context) => context.watch()));
-  console.log(`Watching extension sources in dev-build mode. Load or reload the unpacked extension from ${dist}.`);
+  console.log(
+    `Watching ${browser} extension sources in dev-build mode. Load or reload the unpacked extension from ${dist}.`,
+  );
 } else {
   await Promise.all(entries.map(async (entry) => esbuild.build(await buildEntry(entry))));
   await copyStaticFiles();
-  console.log(`Wrote extension build to ${dist}`);
+  console.log(`Wrote ${browser} extension build to ${dist}`);
 }
