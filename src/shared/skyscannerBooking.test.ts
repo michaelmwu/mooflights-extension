@@ -197,6 +197,38 @@ describe("Skyscanner country comparison parser", () => {
     });
   });
 
+  it.each([
+    ["C$ 210 total.", "CAD"],
+    ["A$ 210 total.", "AUD"],
+  ])("parses %s as a prefixed dollar currency", (priceText, currency) => {
+    document.body.innerHTML = `
+      <ol>
+        <li>
+          <div data-testid="PricingItem">
+            <div class="AgentDetails_agentDetails__MGEyM"><p>Trip.com</p></div>
+            <div data-testid="CtaSection">
+              <p class="TotalPrice_visuallyHidden__NmEzM">${priceText}</p>
+              <a href="/transport_deeplink/booking" aria-label="Select Trip.com." data-testid="pricing-item-redirect-button">Select</a>
+            </div>
+          </div>
+        </li>
+      </ol>
+    `;
+
+    const result = parseSkyscannerPricingOptions(
+      document,
+      "US",
+      "https://www.skyscanner.com/transport/flights/cju/nrt/260624/config/example",
+    );
+
+    expect(result.cheapest).toMatchObject({
+      provider: "Trip.com",
+      price: 210,
+      currency,
+      priceText,
+    });
+  });
+
   it("parses RM-prefixed Skyscanner final-page prices", () => {
     document.body.innerHTML = `
       <ol>
