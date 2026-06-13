@@ -1154,7 +1154,12 @@ function currentPanelComparisonCacheKey(mode: "booking" | "search"): string {
 
 function currentSearchPageKey(includeCountry: boolean): string {
   if (isCurrentSkyscannerSearchPage()) {
-    return skyscannerPanelPageKey(window.location.href, currentComparableCountryCode(), includeCountry);
+    return skyscannerPanelPageKey(
+      window.location.href,
+      currentComparableCountryCode(),
+      includeCountry,
+      currentComparableCurrencyCode(),
+    );
   }
   if (!isGoogleFlightsPanelPageUrl(window.location.href)) return "";
   try {
@@ -1183,7 +1188,7 @@ function skyscannerSearchCaptureMatchesCurrentPage(capture: SkyscannerSearchCapt
       capture.pageUrl,
       skyscannerCountryCodeFromUrl(capture.pageUrl) || currentComparableCountryCode(),
       false,
-    ) === currentSearchPageKey(false)
+    ) === skyscannerPanelPageKey(window.location.href, currentComparableCountryCode(), false)
   );
 }
 
@@ -1202,7 +1207,12 @@ function currentGoogleFlightsPanelMode(): "booking" | "search" {
 
 function currentBookingPageKeyForCountry(includeCountry: boolean): string {
   if (isCurrentSkyscannerPanelPage()) {
-    return skyscannerPanelPageKey(window.location.href, currentComparableCountryCode(), includeCountry);
+    return skyscannerPanelPageKey(
+      window.location.href,
+      currentComparableCountryCode(),
+      includeCountry,
+      currentComparableCurrencyCode(),
+    );
   }
   if (!isGoogleFlightsPanelPageUrl(window.location.href)) return "";
   return googleFlightsPanelPageKey(
@@ -2202,6 +2212,9 @@ function skyscannerCurrencyFromPricePrefix(value: string): string {
   if (/US\$/i.test(value)) return "USD";
   if (/(?:^|[^\p{L}\p{N}])S\$/iu.test(value)) return "SGD";
   if (/R\$/i.test(value)) return "BRL";
+  if (/₱|PHP/i.test(value)) return "PHP";
+  if (/(?:^|[^\p{L}\p{N}])Rp\s*\d/iu.test(value) || /\bIDR\b/i.test(value)) return "IDR";
+  if (/₫|\bVND\b/i.test(value)) return "VND";
   if (/\bRM\b/i.test(value)) return "MYR";
   if (currentSkyscannerCountryCode() === "CN" && /[¥￥]/.test(value)) return "CNY";
   return "";

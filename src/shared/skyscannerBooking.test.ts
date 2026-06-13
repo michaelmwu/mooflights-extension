@@ -203,6 +203,9 @@ describe("Skyscanner country comparison parser", () => {
     ["R$ 1.234 total.", "BRL", 1234],
     ["MX$ 4,200 total.", "MXN", 4200],
     ["4,200 Mexican pesos total.", "MXN", 4200],
+    ["₱1,200 total.", "PHP", 1200],
+    ["Rp 2.000.000 total.", "IDR", 2000000],
+    ["₫3,000,000 total.", "VND", 3000000],
     ["ZAR 3,200 total.", "ZAR", 3200],
   ])("parses %s as a supported Skyscanner currency", (priceText, currency, price) => {
     document.body.innerHTML = `
@@ -260,6 +263,18 @@ describe("Skyscanner country comparison parser", () => {
       currency: "CNY",
       priceText: "¥3,200 total.",
     });
+  });
+
+  it("includes inferred currency in Skyscanner panel keys when the URL omits currency", () => {
+    const url =
+      "https://www.skyscanner.co.id/transport/flights/cju/nrt/260624/?adultsv2=1&cabinclass=economy&market=ID";
+
+    expect(skyscannerPanelPageKey(url, "ID", false, "IDR")).toBe(
+      "/transport/flights/cju/nrt/260624/?adultsv2=1&cabinclass=economy&currency=IDR",
+    );
+    expect(skyscannerPanelPageKey(`${url}&currency=USD`, "ID", false, "IDR")).toBe(
+      "/transport/flights/cju/nrt/260624/?adultsv2=1&cabinclass=economy&currency=USD",
+    );
   });
 
   it("parses RM-prefixed Skyscanner final-page prices", () => {

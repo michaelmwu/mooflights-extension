@@ -75,8 +75,11 @@ const SKYSCANNER_HOST_COUNTRIES = new Map([
 const SKYSCANNER_DEFAULT_COUNTRY_CURRENCIES: Record<string, string> = {
   BR: "BRL",
   CN: "CNY",
+  ID: "IDR",
   MX: "MXN",
   MY: "MYR",
+  PH: "PHP",
+  VN: "VND",
   ZA: "ZAR",
 };
 
@@ -89,7 +92,12 @@ export function skyscannerCountryUrl(baseUrl: string, country: string, currency?
   return url.toString();
 }
 
-export function skyscannerPanelPageKey(url: string, country: string, includeCountry: boolean): string {
+export function skyscannerPanelPageKey(
+  url: string,
+  country: string,
+  includeCountry: boolean,
+  currency?: string,
+): string {
   let parsedUrl: URL;
   try {
     parsedUrl = new URL(url);
@@ -103,6 +111,10 @@ export function skyscannerPanelPageKey(url: string, country: string, includeCoun
   params.delete("userSessionDataId");
   params.delete("_gl");
   if (includeCountry) params.set("market", skyscannerMarketCode(country));
+  if (!params.get("currency")) {
+    const normalizedCurrency = optionalCurrencyCode(currency || "");
+    if (normalizedCurrency) params.set("currency", normalizedCurrency);
+  }
   const query = params.toString();
   return query ? `${parsedUrl.pathname}?${query}` : parsedUrl.pathname;
 }
@@ -171,6 +183,11 @@ function skyscannerMarketCode(country: string): string {
 function normalizeCurrencyCode(value: string): string {
   const currency = value.trim().toUpperCase();
   return /^[A-Z]{3}$/.test(currency) ? currency : "USD";
+}
+
+function optionalCurrencyCode(value: string): string {
+  const currency = value.trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(currency) ? currency : "";
 }
 
 export function parseSkyscannerPricingOptions(root: ParentNode, country: string, url: string): CountryResult {
@@ -536,7 +553,7 @@ function isSkyscannerComparableSearchRow(element: Element | null): element is El
 }
 
 function hasSkyscannerResultPrice(text: string): boolean {
-  return /(?:[$€£¥₹₩฿]\s*\d|\b(?:USD|EUR|GBP|JPY|KRW|INR|AUD|CAD|NZD|SGD|HKD|ZAR|THB|MYR|CNY|RMB|RM|BRL|MXN)\s*\d|\b\d+\s*(?:USD|EUR|GBP|JPY|KRW|INR|AUD|CAD|NZD|SGD|HKD|ZAR|THB|MYR|CNY|RMB|RM|BRL|MXN)\b|\b\d+\s+deals?\s+from\b)/i.test(
+  return /(?:[$€£¥₹₩฿₱₫]\s*\d|\b(?:Rp|USD|EUR|GBP|JPY|KRW|INR|AUD|CAD|NZD|SGD|HKD|ZAR|THB|MYR|CNY|RMB|RM|BRL|MXN|PHP|IDR|VND)\s*\d|\b\d+\s*(?:USD|EUR|GBP|JPY|KRW|INR|AUD|CAD|NZD|SGD|HKD|ZAR|THB|MYR|CNY|RMB|RM|BRL|MXN|PHP|IDR|VND)\b|\b\d+\s+deals?\s+from\b)/i.test(
     text,
   );
 }
@@ -580,8 +597,8 @@ function parsePriceAmount(value: string): { price: number; currency: string; pri
 function currencyBearingPriceText(value: string): string {
   const text = normalizedText(value);
   const amount = String.raw`[0-9][0-9.,\s'’]*[0-9]|[0-9]`;
-  const prefixCurrency = String.raw`(?:NT\$|HK\$|CA\$|AU\$|NZ\$|MX\$|US\$|S\$|C\$|A\$|R\$|[$€£¥₹₩฿]|\b(?:USD|EUR|GBP|JPY|KRW|INR|AUD|CAD|NZD|SGD|HKD|ZAR|THB|MYR|CNY|RMB|RM|BRL|MXN)\b)`;
-  const suffixCurrency = String.raw`(?:USD|EUR|GBP|JPY|KRW|INR|AUD|CAD|NZD|SGD|HKD|ZAR|THB|MYR|CNY|RMB|BRL|MXN|Taiwan dollars?|Hong Kong dollars?|Canadian dollars?|Australian dollars?|New Zealand dollars?|US dollars?|Singapore dollars?|Brazilian real|reais?|Mexican pesos?|euros?|pounds?|yuan|Japanese yen|Korean won|baht|ringgit|South African rands?|\brands?\b|rupees?)`;
+  const prefixCurrency = String.raw`(?:NT\$|HK\$|CA\$|AU\$|NZ\$|MX\$|US\$|S\$|C\$|A\$|R\$|[$€£¥₹₩฿₱₫]|\b(?:Rp|USD|EUR|GBP|JPY|KRW|INR|AUD|CAD|NZD|SGD|HKD|ZAR|THB|MYR|CNY|RMB|RM|BRL|MXN|PHP|IDR|VND)\b)`;
+  const suffixCurrency = String.raw`(?:USD|EUR|GBP|JPY|KRW|INR|AUD|CAD|NZD|SGD|HKD|ZAR|THB|MYR|CNY|RMB|BRL|MXN|PHP|IDR|VND|Taiwan dollars?|Hong Kong dollars?|Canadian dollars?|Australian dollars?|New Zealand dollars?|US dollars?|Singapore dollars?|Brazilian real|reais?|Mexican pesos?|Philippine pesos?|Indonesian rupiah|rupiah|Vietnamese dong|dong|euros?|pounds?|yuan|Japanese yen|Korean won|baht|ringgit|South African rands?|\brands?\b|rupees?)`;
   const patterns = [
     new RegExp(`${prefixCurrency}\\s*(?:${amount})`, "iu"),
     new RegExp(`(?:${amount})\\s*${suffixCurrency}`, "iu"),
@@ -637,6 +654,9 @@ function currencyFromFormattedPrice(value: string): string {
   if (/(?:^|[^\p{L}\p{N}])C\$/iu.test(value)) return "CAD";
   if (/(?:^|[^\p{L}\p{N}])A\$/iu.test(value)) return "AUD";
   if (/R\$/i.test(value) || /BRL|Brazilian real|reais?/i.test(value)) return "BRL";
+  if (/₱|PHP|Philippine pesos?/i.test(value)) return "PHP";
+  if (/(?:^|[^\p{L}\p{N}])Rp\s*\d/iu.test(value) || /IDR|Indonesian rupiah|rupiah/i.test(value)) return "IDR";
+  if (/₫|VND|Vietnamese dong|dong/i.test(value)) return "VND";
   if (/\$/i.test(value)) return "USD";
   if (/€|euros?|EUR/i.test(value)) return "EUR";
   if (/£|pounds?|GBP/i.test(value)) return "GBP";
