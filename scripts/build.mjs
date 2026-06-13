@@ -3,6 +3,7 @@ import { copyFile, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { promisify } from "node:util";
 import esbuild from "esbuild";
+import { browserTarget } from "./browser-target.mjs";
 
 const execFileAsync = promisify(execFile);
 const root = process.cwd();
@@ -159,6 +160,9 @@ function applyBrowserManifest(manifest) {
   manifest.browser_specific_settings = {
     gecko: {
       id: "extension@mooflights.com",
+      data_collection_permissions: {
+        required: ["none"],
+      },
       strict_min_version: "107.0",
     },
   };
@@ -181,13 +185,6 @@ async function distPath() {
     );
     return resolve(root, directoryName);
   }
-}
-
-function browserTarget() {
-  const browserArg = process.argv.find((arg) => arg.startsWith("--browser="));
-  const value = (browserArg ? browserArg.split("=", 2)[1] : process.env.MOOFLIGHTS_BROWSER || "chrome").toLowerCase();
-  if (value === "chrome" || value === "firefox") return value;
-  throw new Error(`Unsupported browser target "${value}". Expected "chrome" or "firefox".`);
 }
 
 if (watch) {

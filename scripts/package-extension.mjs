@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { promisify } from "node:util";
+import { browserTarget } from "./browser-target.mjs";
 
 const execFileAsync = promisify(execFile);
 const root = process.cwd();
@@ -35,32 +36,32 @@ try {
 await execFileAsync("zip", ["-r", browser === "firefox" ? xpiPath : zipPath, "."], { cwd: dist });
 console.log(`Wrote ${browser === "firefox" ? xpiPath : zipPath}`);
 
-if (browser === "firefox") process.exit(0);
+if (browser !== "firefox") {
+  const chrome = await chromeExecutable();
+  if (!chrome) {
+    throw new Error(
+      "Chrome or Chromium is required to package the CRX. Set CHROME_BIN or install Google Chrome/Chromium.",
+    );
+  }
 
-const chrome = await chromeExecutable();
-if (!chrome) {
-  throw new Error(
-    "Chrome or Chromium is required to package the CRX. Set CHROME_BIN or install Google Chrome/Chromium.",
-  );
-}
+  const keyPath = await crxKeyPath();
+  if (!keyPath && (process.env.MOOFLIGHTS_REQUIRE_CRX_KEY === "1" || process.env.MU_TRAVEL_REQUIRE_CRX_KEY === "1")) {
+    throw new Error(
+      "A stable CRX signing key is required for release packaging. Set MOOFLIGHTS_CRX_KEY_B64 or MOOFLIGHTS_CRX_KEY_PATH.",
+    );
+  }
+  const args = [`--pack-extension=${dist}`, "--no-sandbox"];
+  if (keyPath) args.push(`--pack-extension-key=${keyPath.path}`);
 
-const keyPath = await crxKeyPath();
-if (!keyPath && (process.env.MOOFLIGHTS_REQUIRE_CRX_KEY === "1" || process.env.MU_TRAVEL_REQUIRE_CRX_KEY === "1")) {
-  throw new Error(
-    "A stable CRX signing key is required for release packaging. Set MOOFLIGHTS_CRX_KEY_B64 or MOOFLIGHTS_CRX_KEY_PATH.",
-  );
-}
-const args = [`--pack-extension=${dist}`, "--no-sandbox"];
-if (keyPath) args.push(`--pack-extension-key=${keyPath.path}`);
-
-try {
-  await execFileAsync(chrome, args);
-  await rename(generatedCrxPath, crxPath);
-  console.log(`Wrote ${crxPath}`);
-} finally {
-  if (keyPath?.temporary) await rm(keyPath.path, { force: true });
-  await rm(generatedCrxPath, { force: true });
-  if (!isProvidedCrxKeyPath(generatedPemPath)) await rm(generatedPemPath, { force: true });
+  try {
+    await execFileAsync(chrome, args);
+    await rename(generatedCrxPath, crxPath);
+    console.log(`Wrote ${crxPath}`);
+  } finally {
+    if (keyPath?.temporary) await rm(keyPath.path, { force: true });
+    await rm(generatedCrxPath, { force: true });
+    if (!isProvidedCrxKeyPath(generatedPemPath)) await rm(generatedPemPath, { force: true });
+  }
 }
 
 async function extensionVersion() {
@@ -150,11 +151,4 @@ async function crxKeyPath() {
 
 function crxKeyPathEnv() {
   return process.env.MOOFLIGHTS_CRX_KEY_PATH || process.env.MU_TRAVEL_CRX_KEY_PATH || "";
-}
-
-function browserTarget() {
-  const browserArg = process.argv.find((arg) => arg.startsWith("--browser="));
-  const value = (browserArg ? browserArg.split("=", 2)[1] : process.env.MOOFLIGHTS_BROWSER || "chrome").toLowerCase();
-  if (value === "chrome" || value === "firefox") return value;
-  throw new Error(`Unsupported browser target "${value}". Expected "chrome" or "firefox".`);
 }

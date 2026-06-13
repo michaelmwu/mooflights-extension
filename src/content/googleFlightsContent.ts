@@ -1,3 +1,4 @@
+import "../shared/firefoxChromeCompat";
 import { safeChromeCall, sendRuntimeMessage } from "../shared/chromeRuntime";
 import { createContentTranslator } from "../shared/contentI18n";
 import { flagEmoji } from "../shared/flags";

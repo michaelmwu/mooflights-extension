@@ -1,3 +1,4 @@
+import "../shared/firefoxChromeCompat";
 import { airportDistanceMiles } from "../shared/airportCoordinates";
 import {
   type AirportAreaOption,

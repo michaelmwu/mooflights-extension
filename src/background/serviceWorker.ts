@@ -1,3 +1,4 @@
+import "../shared/firefoxChromeCompat";
 import {
   type GoogleFlightsCountryResult,
   type GoogleFlightsSearchCountryResult,
