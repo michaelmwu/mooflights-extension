@@ -81,12 +81,15 @@ jobs:
       - name: Verify release version
         run: node scripts/verify-release-version.mjs "${RELEASE_TAG}"
 
-      - name: Package extension
+      - name: Package Chrome extension
         env:
           CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
           MOOFLIGHTS_CRX_KEY_B64: ${{ secrets.MOOFLIGHTS_CRX_KEY_B64 }}
           MOOFLIGHTS_REQUIRE_CRX_KEY: ${{ env.RELEASE_TAG != '' && '1' || '' }}
         run: bun run package
+
+      - name: Package Firefox extension
+        run: bun run package:firefox
 
       - name: Upload package artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -95,6 +98,7 @@ jobs:
           path: |
             artifacts/mooflights-*.zip
             artifacts/mooflights-*.crx
+            artifacts/mooflights-firefox-*.xpi
           if-no-files-found: error
 
       - name: Attach package to GitHub release
@@ -107,7 +111,7 @@ jobs:
           generated_notes="$(gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
             -f tag_name="${RELEASE_TAG}" \
             --jq '.body')"
-          release_notes=$'Chrome Web Store publishing is intentionally manual for now.\n\n'"${generated_notes}"
+          release_notes=$'Chrome Web Store publishing and Firefox Add-ons signing are intentionally manual for now. The Firefox XPI attached here is unsigned and intended for Mozilla Add-ons submission or developer testing.\n\n'"${generated_notes}"
           if gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
             edit_args=(
               "${RELEASE_TAG}"
@@ -126,7 +130,7 @@ jobs:
               edit_args+=(--prerelease=false)
             fi
             gh release edit "${edit_args[@]}"
-            gh release upload "${RELEASE_TAG}" artifacts/mooflights-*.zip artifacts/mooflights-*.crx \
+            gh release upload "${RELEASE_TAG}" artifacts/mooflights-*.zip artifacts/mooflights-*.crx artifacts/mooflights-firefox-*.xpi \
               --repo "${GITHUB_REPOSITORY}" \
               --clobber
           else
@@ -134,6 +138,7 @@ jobs:
               "${RELEASE_TAG}"
               artifacts/mooflights-*.zip
               artifacts/mooflights-*.crx
+              artifacts/mooflights-firefox-*.xpi
               --repo "${GITHUB_REPOSITORY}"
               --title "${RELEASE_TAG}"
               --notes "${release_notes}"

@@ -1,18 +1,28 @@
 import { execFile } from "node:child_process";
 import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { promisify } from "node:util";
+import { browserTarget } from "./browser-target.mjs";
 
 const execFileAsync = promisify(execFile);
 const root = process.cwd();
-const artifacts = resolve(root, "artifacts");
+const browser = browserTarget();
+const stableDist =
+  process.argv.includes("--stable-dist") ||
+  process.env.MOOFLIGHTS_STABLE_EXTENSION_DIST === "1" ||
+  process.env.MU_TRAVEL_STABLE_EXTENSION_DIST === "1";
+const packageRoot = await packageRootPath();
+const artifacts = resolve(packageRoot, "artifacts");
 const packageVersion = await extensionVersion();
-const artifactBaseName = `mooflights-${packageVersion}`;
+const artifactBaseName =
+  browser === "firefox" ? `mooflights-firefox-${packageVersion}` : `mooflights-${packageVersion}`;
 const zipPath = resolve(artifacts, `${artifactBaseName}.zip`);
 const crxPath = resolve(artifacts, `${artifactBaseName}.crx`);
-const generatedCrxPath = resolve(root, "dist.crx");
-const generatedPemPath = resolve(root, "dist.pem");
+const xpiPath = resolve(artifacts, `${artifactBaseName}.xpi`);
+const generatedCrxPath = resolve(packageRoot, "dist.crx");
+const generatedPemPath = resolve(packageRoot, "dist.pem");
 const providedCrxKeyPath = crxKeyPathEnv() ? resolve(crxKeyPathEnv()) : "";
+const dist = distPath();
 
 await mkdir(artifacts, { recursive: true });
 await removeExistingPackageArtifacts();
@@ -23,33 +33,35 @@ try {
 } catch {
   throw new Error("The `zip` CLI is required to package the extension. Install zip or run `bun run build` only.");
 }
-await execFileAsync("zip", ["-r", zipPath, "."], { cwd: resolve(root, "dist") });
-console.log(`Wrote ${zipPath}`);
+await execFileAsync("zip", ["-r", browser === "firefox" ? xpiPath : zipPath, "."], { cwd: dist });
+console.log(`Wrote ${browser === "firefox" ? xpiPath : zipPath}`);
 
-const chrome = await chromeExecutable();
-if (!chrome) {
-  throw new Error(
-    "Chrome or Chromium is required to package the CRX. Set CHROME_BIN or install Google Chrome/Chromium.",
-  );
-}
+if (browser !== "firefox") {
+  const chrome = await chromeExecutable();
+  if (!chrome) {
+    throw new Error(
+      "Chrome or Chromium is required to package the CRX. Set CHROME_BIN or install Google Chrome/Chromium.",
+    );
+  }
 
-const keyPath = await crxKeyPath();
-if (!keyPath && (process.env.MOOFLIGHTS_REQUIRE_CRX_KEY === "1" || process.env.MU_TRAVEL_REQUIRE_CRX_KEY === "1")) {
-  throw new Error(
-    "A stable CRX signing key is required for release packaging. Set MOOFLIGHTS_CRX_KEY_B64 or MOOFLIGHTS_CRX_KEY_PATH.",
-  );
-}
-const args = [`--pack-extension=${resolve(root, "dist")}`, "--no-sandbox"];
-if (keyPath) args.push(`--pack-extension-key=${keyPath.path}`);
+  const keyPath = await crxKeyPath();
+  if (!keyPath && (process.env.MOOFLIGHTS_REQUIRE_CRX_KEY === "1" || process.env.MU_TRAVEL_REQUIRE_CRX_KEY === "1")) {
+    throw new Error(
+      "A stable CRX signing key is required for release packaging. Set MOOFLIGHTS_CRX_KEY_B64 or MOOFLIGHTS_CRX_KEY_PATH.",
+    );
+  }
+  const args = [`--pack-extension=${dist}`, "--no-sandbox"];
+  if (keyPath) args.push(`--pack-extension-key=${keyPath.path}`);
 
-try {
-  await execFileAsync(chrome, args);
-  await rename(generatedCrxPath, crxPath);
-  console.log(`Wrote ${crxPath}`);
-} finally {
-  if (keyPath?.temporary) await rm(keyPath.path, { force: true });
-  await rm(generatedCrxPath, { force: true });
-  if (!isProvidedCrxKeyPath(generatedPemPath)) await rm(generatedPemPath, { force: true });
+  try {
+    await execFileAsync(chrome, args);
+    await rename(generatedCrxPath, crxPath);
+    console.log(`Wrote ${crxPath}`);
+  } finally {
+    if (keyPath?.temporary) await rm(keyPath.path, { force: true });
+    await rm(generatedCrxPath, { force: true });
+    if (!isProvidedCrxKeyPath(generatedPemPath)) await rm(generatedPemPath, { force: true });
+  }
 }
 
 async function extensionVersion() {
@@ -59,11 +71,38 @@ async function extensionVersion() {
   return version;
 }
 
+async function packageRootPath() {
+  if (!stableDist) return root;
+
+  try {
+    const { stdout } = await execFileAsync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+    const commonGitDir = stdout.trim();
+    return basename(commonGitDir) === ".git" ? dirname(commonGitDir) : root;
+  } catch (error) {
+    console.warn(
+      `Could not resolve canonical repo root for --stable-dist; falling back to workspace package paths. ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    return root;
+  }
+}
+
+function distPath() {
+  const override = process.env.MOOFLIGHTS_DIST_DIR || process.env.MU_TRAVEL_DIST_DIR || "";
+  if (override) return resolve(root, override);
+  return resolve(packageRoot, browser === "firefox" ? ".context/firefox-build" : "dist");
+}
+
 async function removeExistingPackageArtifacts() {
   const entries = await readdir(artifacts);
+  const packageArtifactPattern =
+    browser === "firefox"
+      ? /^mooflights-firefox-\d+\.\d+\.\d+\.xpi$/
+      : /^(?:mooflights|mu-travel-flights)(?:-\d+\.\d+\.\d+)?\.(zip|crx)$/;
   await Promise.all(
     entries
-      .filter((entry) => /^(?:mooflights|mu-travel-flights)(?:-\d+\.\d+\.\d+)?\.(zip|crx)$/.test(entry))
+      .filter((entry) => packageArtifactPattern.test(entry))
       .map((entry) => rm(resolve(artifacts, entry), { force: true })),
   );
 }

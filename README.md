@@ -1,6 +1,6 @@
 # MooFlights Extension
 
-MooFlights is a Chromium-compatible browser extension for mileage earning estimates, Google Flights country price checks, and ITA Matrix workflows.
+MooFlights is a Chrome and Firefox browser extension for mileage earning estimates, Google Flights country price checks, and ITA Matrix workflows.
 
 It helps with:
 
@@ -34,6 +34,15 @@ bun run build
 ```
 
 Load `dist/` as an unpacked extension from `chrome://extensions`.
+
+For a local Firefox package:
+
+```sh
+bun run package:firefox
+```
+
+Load the generated `artifacts/mooflights-firefox-<version>.xpi` as a temporary add-on from
+`about:debugging#/runtime/this-firefox`. The XPI is unsigned; user distribution still requires Mozilla Add-ons signing.
 
 For development:
 
@@ -70,6 +79,7 @@ bun run typecheck
 bun run test
 bun run test:e2e
 bun run package
+bun run package:firefox
 bun run release:package:next-patch
 bun run release:package:next-minor
 ```
@@ -89,6 +99,9 @@ The workflow defaults to `dry_run: true`, which packages the extension and print
 The refresh token must be authorized for the `https://www.googleapis.com/auth/chromewebstore` OAuth scope.
 
 By default, live submissions use `STAGED_PUBLISH`, so Chrome Web Store approval stages the update for a later manual release instead of immediately publishing it. Use `upload_only: true` to upload the package without submitting it for review.
+
+GitHub releases attach Chrome zip/CRX packages and the unsigned Firefox XPI for the same source version. Firefox user
+distribution still requires Mozilla Add-ons signing.
 
 ## Docs
 
