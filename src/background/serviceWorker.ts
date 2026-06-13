@@ -1,3 +1,4 @@
+import "../shared/firefoxChromeCompat";
 import { type CountryResult, countryComparisonUrl, type SearchCountryResult } from "../shared/countryComparison";
 import type { RemoteProviderMetadata } from "../shared/types";
 
