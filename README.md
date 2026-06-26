@@ -26,6 +26,8 @@ On ITA Matrix itinerary pages, the extension estimates mileage earning from the 
 
 ## Quickstart
 
+Install MooFlights from the [Chrome Web Store](https://chromewebstore.google.com/detail/mooflights/egnidmmimlldnapcakhoabcggfjnpioi).
+
 For manual Chrome installation, check the [latest release](../../releases/latest) and download the packaged extension.
 
 ```sh
