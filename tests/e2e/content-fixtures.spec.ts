@@ -216,6 +216,8 @@ test("uses newly rendered Google Flights JPY prices when booking URL omits curre
 
   const panel = page.locator("#mooflights-google-flights-panel");
   await expect(panel).toBeAttached();
+  await panel.getByRole("button", { name: /Compare/ }).click();
+  await expect(panel.getByText("Google Flights prices are still loading. Try again when prices appear.")).toBeVisible();
   await page.evaluate(() => {
     const prices = [
       { label: "21,000 Japanese yen", text: "¥21,000" },
@@ -771,6 +773,8 @@ async function enableGoogleFlightsDebugLog(page: Page): Promise<void> {
 async function replaceGoogleFlightsHistory(page: Page, url: string): Promise<void> {
   await page.evaluate((nextUrl) => {
     history.replaceState(null, "", nextUrl);
+    // Playwright runs this in the page world, while the content script wraps history in its isolated world.
+    // Emit the event the content script observes so the test exercises the debounced navigation path.
     window.dispatchEvent(new PopStateEvent("popstate"));
   }, url);
 }

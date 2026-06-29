@@ -64,6 +64,7 @@ type CompareState = {
   panelPosition: PanelPosition;
   panelCollapsePosition: PanelPosition | null;
   comparingRequestId: string;
+  comparingCacheKey: string;
   comparingCountryCodes: string[];
   progressCompleted: number;
   progressTotal: number;
@@ -170,6 +171,7 @@ const state: CompareState = {
   panelPosition: panelUi.position,
   panelCollapsePosition: panelUi.collapsePosition,
   comparingRequestId: "",
+  comparingCacheKey: "",
   comparingCountryCodes: [],
   progressCompleted: 0,
   progressTotal: 0,
@@ -1033,6 +1035,7 @@ function scheduleRender(): void {
     state.error = "";
     state.comparing = false;
     state.comparingRequestId = "";
+    state.comparingCacheKey = "";
     state.progressCompleted = 0;
     state.progressTotal = 0;
     state.searchBaseline = null;
@@ -1103,6 +1106,7 @@ function scheduleRender(): void {
     state.error = "";
     state.comparing = false;
     state.comparingRequestId = "";
+    state.comparingCacheKey = "";
     state.progressCompleted = 0;
     state.progressTotal = 0;
     state.searchBaseline = null;
@@ -2389,19 +2393,24 @@ async function compareCountries(): Promise<void> {
     render();
     return;
   }
+  const visibleCurrency = currentVisibleCurrencyCode();
+  if (!visibleCurrency) {
+    state.error = t()("googleFlightsCurrencyStillLoading");
+    render();
+    return;
+  }
   state.countryInput = selectedCountries.join(", ");
   state.comparing = true;
   state.comparingCountryCodes = selectedCountries;
   state.error = "";
   state.comparingRequestId = `${Date.now()}:${Math.random().toString(36).slice(2)}`;
+  state.comparingCacheKey = state.cacheKey || currentPanelComparisonCacheKey("booking");
   state.progressCompleted = 0;
   const previousResults = state.results;
-  const visibleCurrency = currentVisibleCurrencyCode();
-  const comparableCurrency = currentComparableCurrencyCode();
-  const hasComparableCurrency = Boolean(visibleCurrency);
+  const comparableCurrency = visibleCurrency;
   const comparePageKey = state.pageKey;
   const baseUrl = countryComparisonUrl(window.location.href, currentComparableCountryCode(), comparableCurrency);
-  const baselineCandidate = hasComparableCurrency ? parseCurrentBookingPage() : null;
+  const baselineCandidate = parseCurrentBookingPage();
   const baseline = baselineCandidate && isRealCountryCode(baselineCandidate.country) ? baselineCandidate : null;
   state.baseline = baseline;
   const countries = selectedCountries.filter((country) => country !== baseline?.country);
@@ -2431,6 +2440,7 @@ async function compareCountries(): Promise<void> {
     state.error = error instanceof Error ? error.message : t()("countryComparisonFailed");
     state.comparing = false;
     state.comparingRequestId = "";
+    state.comparingCacheKey = "";
     state.comparingCountryCodes = [];
     render();
   }
@@ -2458,6 +2468,7 @@ async function compareSearchRows(): Promise<void> {
   state.comparingCountryCodes = selectedCountries;
   state.error = "";
   state.comparingRequestId = `${Date.now()}:${Math.random().toString(36).slice(2)}`;
+  state.comparingCacheKey = state.cacheKey || currentPanelComparisonCacheKey("search");
   state.progressCompleted = 0;
   state.searchBaseline = baseline;
   state.searchResults = [];
@@ -2493,6 +2504,7 @@ async function compareSearchRows(): Promise<void> {
     state.error = error instanceof Error ? error.message : t()("countryComparisonFailed");
     state.comparing = false;
     state.comparingRequestId = "";
+    state.comparingCacheKey = "";
     state.comparingCountryCodes = [];
     render();
   }
@@ -2550,14 +2562,19 @@ function applyGoogleFlightsCountryComplete(payload: { requestId?: unknown; ok?: 
   if (typeof payload.requestId !== "string" || payload.requestId !== state.comparingRequestId) return;
   if (!payload.ok) {
     state.error = typeof payload.error === "string" ? payload.error : t()("countryComparisonFailed");
-  } else if (state.cacheKey || state.pageKey) {
+  } else if (state.comparingCacheKey || state.cacheKey || state.pageKey) {
     state.resultsCachedAt = Date.now();
     pruneExpiredResultCache();
-    void storeCachedResults(state.cacheKey || state.pageKey, state.results, state.resultsCachedAt);
+    void storeCachedResults(
+      state.comparingCacheKey || state.cacheKey || state.pageKey,
+      state.results,
+      state.resultsCachedAt,
+    );
   }
   state.progressCompleted = state.progressTotal;
   state.comparing = false;
   state.comparingRequestId = "";
+  state.comparingCacheKey = "";
   state.comparingCountryCodes = [];
   render();
 }
@@ -2584,13 +2601,18 @@ function applyGoogleFlightsSearchComplete(payload: { requestId?: unknown; ok?: u
   if (typeof payload.requestId !== "string" || payload.requestId !== state.comparingRequestId) return;
   if (!payload.ok) {
     state.error = typeof payload.error === "string" ? payload.error : t()("countryComparisonFailed");
-  } else if (state.cacheKey || state.pageKey) {
+  } else if (state.comparingCacheKey || state.cacheKey || state.pageKey) {
     state.resultsCachedAt = Date.now();
-    void storeSearchComparisonCache(state.cacheKey || state.pageKey, state.baselineSignature, state.resultsCachedAt);
+    void storeSearchComparisonCache(
+      state.comparingCacheKey || state.cacheKey || state.pageKey,
+      state.baselineSignature,
+      state.resultsCachedAt,
+    );
   }
   state.progressCompleted = state.progressTotal;
   state.comparing = false;
   state.comparingRequestId = "";
+  state.comparingCacheKey = "";
   state.comparingCountryCodes = [];
   state.searchBestByRowKey = bestPricesBySearchRow(state.searchBaseline, state.searchResults);
   render();
