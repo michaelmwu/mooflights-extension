@@ -150,7 +150,8 @@ test("keeps Google Flights comparison state through transient unresolved URLs", 
   context,
   extensionServiceWorker,
   page,
-}) => {
+}, testInfo) => {
+  testInfo.setTimeout(45_000);
   const pageUrl = "https://www.google.com/travel/flights/booking?tfs=e2e-fixture&curr=USD&gl=US";
   const transientUrl = "https://www.google.com/travel/flights?tfs=e2e-fixture&curr=USD&gl=US";
   await setGoogleFlightsCountries(extensionServiceWorker, ["US", "CA", "ZA"]);
@@ -160,12 +161,15 @@ test("keeps Google Flights comparison state through transient unresolved URLs", 
 
   const panel = page.locator("#mooflights-google-flights-panel");
   await expect(panel.getByRole("button", { name: "Compare (3)" })).toBeEnabled();
+  await page.waitForTimeout(10_100);
 
   const comparisonTabsPromise = Promise.all(["CA", "ZA"].map((country) => waitForComparisonTab(context, country)));
   await panel.getByRole("button", { name: "Compare (3)" }).click();
   await page.evaluate((url) => {
     history.replaceState(null, "", url);
   }, transientUrl);
+  // `installObserver()` debounces history changes by 250 ms. This wait must stay above that debounce
+  // so the test exercises the transient empty page-key render before restoring the booking URL.
   await page.waitForTimeout(400);
   await expect(panel.getByRole("button", { name: "Checking..." })).toBeVisible();
   await page.evaluate((url) => {
@@ -197,6 +201,8 @@ test("keeps Google Flights completed results through transient unresolved URLs",
   await page.evaluate((url) => {
     history.replaceState(null, "", url);
   }, transientUrl);
+  // `installObserver()` debounces history changes by 250 ms. This wait must stay above that debounce
+  // so the test verifies completed results survive the transient empty page-key render.
   await page.waitForTimeout(400);
 
   await expect(panel.getByText("South Africa", { exact: true })).toBeVisible();

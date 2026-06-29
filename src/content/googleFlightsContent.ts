@@ -142,7 +142,7 @@ let regionDisplayNames: Intl.DisplayNames | null | undefined;
 let countryCodeByDisplayName: Map<string, string> | null | undefined;
 let suppressPanelRestoreClick = false;
 let inferredCurrencyCache: { href: string; currency: string; cachedAt: number } | null = null;
-let lastNonEmptyPanelPageKeyAt = 0;
+let transientEmptyPageKeyStartedAt = 0;
 let transientEmptyPageKeyTimer: number | undefined;
 let highlightedSearchDeepLink = "";
 let latestSkyscannerSearchCapture: SkyscannerSearchCapture | null = null;
@@ -1001,7 +1001,7 @@ function scheduleRender(): void {
   const cacheKey = currentPanelComparisonCacheKey(mode);
   const pageKeyChanged = state.pageKey !== pageKey;
   if (pageKey) {
-    lastNonEmptyPanelPageKeyAt = Date.now();
+    transientEmptyPageKeyStartedAt = 0;
     clearTransientEmptyPageKeyTimer();
   }
   if (
@@ -1012,6 +1012,7 @@ function scheduleRender(): void {
     latestSkyscannerSearchCapture = null;
   }
   if (!pageKey) {
+    if (!transientEmptyPageKeyStartedAt) transientEmptyPageKeyStartedAt = Date.now();
     if (shouldKeepPanelDuringTransientEmptyPageKey()) {
       debugSearch("keep-state-during-transient-empty-page-key", {
         mode,
@@ -1164,8 +1165,8 @@ function scheduleRender(): void {
 }
 
 function shouldKeepPanelDuringTransientEmptyPageKey(now = Date.now()): boolean {
-  if (!state.pageKey || !hasComparisonStateToPreserve()) return false;
-  return now - lastNonEmptyPanelPageKeyAt <= TRANSIENT_EMPTY_PAGE_KEY_GRACE_MS;
+  if (!state.pageKey || !transientEmptyPageKeyStartedAt || !hasComparisonStateToPreserve()) return false;
+  return now - transientEmptyPageKeyStartedAt <= TRANSIENT_EMPTY_PAGE_KEY_GRACE_MS;
 }
 
 function hasComparisonStateToPreserve(): boolean {
@@ -1179,7 +1180,7 @@ function hasComparisonStateToPreserve(): boolean {
 
 function scheduleTransientEmptyPageKeyRecheck(now = Date.now()): void {
   clearTransientEmptyPageKeyTimer();
-  const elapsed = Math.max(0, now - lastNonEmptyPanelPageKeyAt);
+  const elapsed = Math.max(0, now - transientEmptyPageKeyStartedAt);
   const delayMs = Math.max(50, TRANSIENT_EMPTY_PAGE_KEY_GRACE_MS - elapsed + 50);
   transientEmptyPageKeyTimer = window.setTimeout(() => {
     transientEmptyPageKeyTimer = undefined;
