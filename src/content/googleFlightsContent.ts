@@ -64,6 +64,7 @@ type CompareState = {
   panelPosition: PanelPosition;
   panelCollapsePosition: PanelPosition | null;
   comparingRequestId: string;
+  comparingCacheKey: string;
   comparingCountryCodes: string[];
   progressCompleted: number;
   progressTotal: number;
@@ -106,6 +107,7 @@ type PanelPosition = {
 const PANEL_ID = "mooflights-google-flights-panel";
 const RESULT_CACHE_TTL_MS = 10 * 60 * 1000;
 const INFERRED_CURRENCY_CACHE_TTL_MS = 5000;
+const TRANSIENT_EMPTY_PAGE_KEY_GRACE_MS = 10000;
 const RESULT_CACHE_STORAGE_KEY = "muTravelGoogleFlightsCountryResults";
 const PANEL_UI_STORAGE_KEY = "muTravelGoogleFlightsPanelUi";
 const PANEL_SESSION_HIDE_STORAGE_KEY = "muTravelGoogleFlightsPanelHiddenForSession";
@@ -141,6 +143,8 @@ let regionDisplayNames: Intl.DisplayNames | null | undefined;
 let countryCodeByDisplayName: Map<string, string> | null | undefined;
 let suppressPanelRestoreClick = false;
 let inferredCurrencyCache: { href: string; currency: string; cachedAt: number } | null = null;
+let transientEmptyPageKeyStartedAt = 0;
+let transientEmptyPageKeyTimer: number | undefined;
 let highlightedSearchDeepLink = "";
 let latestSkyscannerSearchCapture: SkyscannerSearchCapture | null = null;
 const pendingSkyscannerMarketSearches = new Map<
@@ -167,6 +171,7 @@ const state: CompareState = {
   panelPosition: panelUi.position,
   panelCollapsePosition: panelUi.collapsePosition,
   comparingRequestId: "",
+  comparingCacheKey: "",
   comparingCountryCodes: [],
   progressCompleted: 0,
   progressTotal: 0,
@@ -818,7 +823,7 @@ function currentVisibleCurrencyCode(): string {
     return currency;
   }
   const currency = inferGoogleFlightsCurrency(document);
-  inferredCurrencyCache = { href: window.location.href, currency, cachedAt: now };
+  inferredCurrencyCache = currency ? { href: window.location.href, currency, cachedAt: now } : null;
   return currency;
 }
 
@@ -997,6 +1002,10 @@ function scheduleRender(): void {
   const pageKey = currentPanelPageKey(mode);
   const cacheKey = currentPanelComparisonCacheKey(mode);
   const pageKeyChanged = state.pageKey !== pageKey;
+  if (pageKey) {
+    transientEmptyPageKeyStartedAt = 0;
+    clearTransientEmptyPageKeyTimer();
+  }
   if (
     mode === "search" &&
     latestSkyscannerSearchCapture &&
@@ -1005,6 +1014,16 @@ function scheduleRender(): void {
     latestSkyscannerSearchCapture = null;
   }
   if (!pageKey) {
+    if (!transientEmptyPageKeyStartedAt) transientEmptyPageKeyStartedAt = Date.now();
+    if (shouldKeepPanelDuringTransientEmptyPageKey()) {
+      debugSearch("keep-state-during-transient-empty-page-key", {
+        mode,
+        previousPageKeyHash: stableContentHash(state.pageKey),
+      });
+      scheduleTransientEmptyPageKeyRecheck();
+      render();
+      return;
+    }
     if (!state.pageKey && !document.getElementById(PANEL_ID)) return;
     removePanel();
     state.pageKey = "";
@@ -1016,6 +1035,7 @@ function scheduleRender(): void {
     state.error = "";
     state.comparing = false;
     state.comparingRequestId = "";
+    state.comparingCacheKey = "";
     state.progressCompleted = 0;
     state.progressTotal = 0;
     state.searchBaseline = null;
@@ -1068,13 +1088,25 @@ function scheduleRender(): void {
     applyRequestedSearchHighlight(state.searchBaseline);
     return;
   }
-  if (pageKeyChanged) {
+  if (pageKeyChanged && shouldRekeyComparisonWithoutReset(pageKey)) {
+    debugSearch("rekey-comparison-same-itinerary", {
+      mode,
+      previousPageKeyHash: stableContentHash(state.pageKey),
+      nextPageKeyHash: stableContentHash(pageKey),
+      comparing: state.comparing,
+      resultCount: state.results.length,
+      comparedCountries: state.searchResults.map((result) => result.country),
+    });
+    state.pageKey = pageKey;
+    state.cacheKey = cacheKey;
+  } else if (pageKeyChanged) {
     state.pageKey = pageKey;
     state.cacheKey = cacheKey;
     state.baselineSignature = "";
     state.error = "";
     state.comparing = false;
     state.comparingRequestId = "";
+    state.comparingCacheKey = "";
     state.progressCompleted = 0;
     state.progressTotal = 0;
     state.searchBaseline = null;
@@ -1134,6 +1166,80 @@ function scheduleRender(): void {
   applySearchBadges();
   applyRequestedSearchHighlight(state.searchBaseline);
   if (mode === "search") void loadStoredSearchComparisonCache(cacheKey, baselineSignature);
+}
+
+function shouldKeepPanelDuringTransientEmptyPageKey(now = Date.now()): boolean {
+  if (!state.pageKey || !transientEmptyPageKeyStartedAt || !hasComparisonStateToPreserve()) return false;
+  return now - transientEmptyPageKeyStartedAt <= TRANSIENT_EMPTY_PAGE_KEY_GRACE_MS;
+}
+
+function hasComparisonStateToPreserve(): boolean {
+  return (
+    state.comparing ||
+    state.results.length > 0 ||
+    state.searchResults.length > 0 ||
+    Object.keys(state.searchBestByRowKey).length > 0
+  );
+}
+
+function scheduleTransientEmptyPageKeyRecheck(now = Date.now()): void {
+  clearTransientEmptyPageKeyTimer();
+  const elapsed = Math.max(0, now - transientEmptyPageKeyStartedAt);
+  const delayMs = Math.max(50, TRANSIENT_EMPTY_PAGE_KEY_GRACE_MS - elapsed + 50);
+  transientEmptyPageKeyTimer = window.setTimeout(() => {
+    transientEmptyPageKeyTimer = undefined;
+    scheduleRender();
+  }, delayMs);
+}
+
+function clearTransientEmptyPageKeyTimer(): void {
+  if (transientEmptyPageKeyTimer === undefined) return;
+  window.clearTimeout(transientEmptyPageKeyTimer);
+  transientEmptyPageKeyTimer = undefined;
+}
+
+// When a panel-page URL omits `curr`/`gl`, those segments of the page key are inferred from the
+// rendered DOM. That inference is unstable while the page is still painting localized prices (e.g. a
+// JPY booking page momentarily reads as the USD default), so the key can flip between two valid values
+// with no real navigation. Treat such a flip as a re-key of the same itinerary rather than a fresh page.
+function panelPageNavigationIdentity(pageKey: string): string {
+  const queryIndex = pageKey.indexOf("?");
+  if (queryIndex === -1) return pageKey;
+  const params = new URLSearchParams(pageKey.slice(queryIndex + 1));
+  params.delete("curr");
+  params.delete("gl");
+  params.sort();
+  return `${pageKey.slice(0, queryIndex)}?${params.toString()}`;
+}
+
+function shouldRekeyComparisonWithoutReset(nextPageKey: string): boolean {
+  if (!state.pageKey || !nextPageKey || !hasComparisonStateToPreserve()) return false;
+  if (explicitPanelMarketOrCurrencyChanged()) return false;
+  return panelPageNavigationIdentity(state.pageKey) === panelPageNavigationIdentity(nextPageKey);
+}
+
+function explicitPanelMarketOrCurrencyChanged(): boolean {
+  try {
+    const url = new URL(window.location.href);
+    const explicitCountry = normalizeOptionalUrlParam(url.searchParams.get("gl"));
+    const explicitCurrency = normalizeGoogleFlightsCurrency(url.searchParams.get("curr"));
+    return (
+      Boolean(explicitCountry && explicitCountry !== pageKeyParam(state.pageKey, "gl")) ||
+      Boolean(explicitCurrency && explicitCurrency !== pageKeyParam(state.pageKey, "curr"))
+    );
+  } catch {
+    return true;
+  }
+}
+
+function pageKeyParam(pageKey: string, key: string): string {
+  const queryIndex = pageKey.indexOf("?");
+  if (queryIndex === -1) return "";
+  return normalizeOptionalUrlParam(new URLSearchParams(pageKey.slice(queryIndex + 1)).get(key));
+}
+
+function normalizeOptionalUrlParam(value: string | null): string {
+  return (value || "").trim().toUpperCase();
 }
 
 function currentBookingPageKey(): string {
@@ -1234,7 +1340,7 @@ function render(): void {
   const matrixSearch = parseGoogleFlightsMatrixSearch(window.location.href, currentComparableCurrencyCode());
   const selectedCodes = selectedGoogleFlightsCountries();
   const translate = t();
-  const mode = currentGoogleFlightsPanelMode();
+  const mode = currentRenderPanelMode();
 
   shadow.innerHTML = `
     <style>${styles()}</style>
@@ -1385,6 +1491,12 @@ function render(): void {
 
 function t(): ReturnType<typeof createContentTranslator> {
   return createContentTranslator(state.language);
+}
+
+function currentRenderPanelMode(): "booking" | "search" {
+  const mode = currentGoogleFlightsPanelMode();
+  if (currentPanelPageKey(mode) || !hasComparisonStateToPreserve()) return mode;
+  return state.searchBaseline ? "search" : "booking";
 }
 
 function panelChromeLabels(): {
@@ -2281,19 +2393,24 @@ async function compareCountries(): Promise<void> {
     render();
     return;
   }
+  const visibleCurrency = currentVisibleCurrencyCode();
+  if (!visibleCurrency) {
+    state.error = t()("googleFlightsCurrencyStillLoading");
+    render();
+    return;
+  }
   state.countryInput = selectedCountries.join(", ");
   state.comparing = true;
   state.comparingCountryCodes = selectedCountries;
   state.error = "";
   state.comparingRequestId = `${Date.now()}:${Math.random().toString(36).slice(2)}`;
+  state.comparingCacheKey = state.cacheKey || currentPanelComparisonCacheKey("booking");
   state.progressCompleted = 0;
   const previousResults = state.results;
-  const visibleCurrency = currentVisibleCurrencyCode();
-  const comparableCurrency = currentComparableCurrencyCode();
-  const hasComparableCurrency = Boolean(visibleCurrency);
+  const comparableCurrency = visibleCurrency;
   const comparePageKey = state.pageKey;
   const baseUrl = countryComparisonUrl(window.location.href, currentComparableCountryCode(), comparableCurrency);
-  const baselineCandidate = hasComparableCurrency ? parseCurrentBookingPage() : null;
+  const baselineCandidate = parseCurrentBookingPage();
   const baseline = baselineCandidate && isRealCountryCode(baselineCandidate.country) ? baselineCandidate : null;
   state.baseline = baseline;
   const countries = selectedCountries.filter((country) => country !== baseline?.country);
@@ -2323,6 +2440,7 @@ async function compareCountries(): Promise<void> {
     state.error = error instanceof Error ? error.message : t()("countryComparisonFailed");
     state.comparing = false;
     state.comparingRequestId = "";
+    state.comparingCacheKey = "";
     state.comparingCountryCodes = [];
     render();
   }
@@ -2350,6 +2468,7 @@ async function compareSearchRows(): Promise<void> {
   state.comparingCountryCodes = selectedCountries;
   state.error = "";
   state.comparingRequestId = `${Date.now()}:${Math.random().toString(36).slice(2)}`;
+  state.comparingCacheKey = state.cacheKey || currentPanelComparisonCacheKey("search");
   state.progressCompleted = 0;
   state.searchBaseline = baseline;
   state.searchResults = [];
@@ -2385,6 +2504,7 @@ async function compareSearchRows(): Promise<void> {
     state.error = error instanceof Error ? error.message : t()("countryComparisonFailed");
     state.comparing = false;
     state.comparingRequestId = "";
+    state.comparingCacheKey = "";
     state.comparingCountryCodes = [];
     render();
   }
@@ -2442,14 +2562,19 @@ function applyGoogleFlightsCountryComplete(payload: { requestId?: unknown; ok?: 
   if (typeof payload.requestId !== "string" || payload.requestId !== state.comparingRequestId) return;
   if (!payload.ok) {
     state.error = typeof payload.error === "string" ? payload.error : t()("countryComparisonFailed");
-  } else if (state.cacheKey || state.pageKey) {
+  } else if (state.comparingCacheKey || state.cacheKey || state.pageKey) {
     state.resultsCachedAt = Date.now();
     pruneExpiredResultCache();
-    void storeCachedResults(state.cacheKey || state.pageKey, state.results, state.resultsCachedAt);
+    void storeCachedResults(
+      state.comparingCacheKey || state.cacheKey || state.pageKey,
+      state.results,
+      state.resultsCachedAt,
+    );
   }
   state.progressCompleted = state.progressTotal;
   state.comparing = false;
   state.comparingRequestId = "";
+  state.comparingCacheKey = "";
   state.comparingCountryCodes = [];
   render();
 }
@@ -2476,13 +2601,18 @@ function applyGoogleFlightsSearchComplete(payload: { requestId?: unknown; ok?: u
   if (typeof payload.requestId !== "string" || payload.requestId !== state.comparingRequestId) return;
   if (!payload.ok) {
     state.error = typeof payload.error === "string" ? payload.error : t()("countryComparisonFailed");
-  } else if (state.cacheKey || state.pageKey) {
+  } else if (state.comparingCacheKey || state.cacheKey || state.pageKey) {
     state.resultsCachedAt = Date.now();
-    void storeSearchComparisonCache(state.cacheKey || state.pageKey, state.baselineSignature, state.resultsCachedAt);
+    void storeSearchComparisonCache(
+      state.comparingCacheKey || state.cacheKey || state.pageKey,
+      state.baselineSignature,
+      state.resultsCachedAt,
+    );
   }
   state.progressCompleted = state.progressTotal;
   state.comparing = false;
   state.comparingRequestId = "";
+  state.comparingCacheKey = "";
   state.comparingCountryCodes = [];
   state.searchBestByRowKey = bestPricesBySearchRow(state.searchBaseline, state.searchResults);
   render();

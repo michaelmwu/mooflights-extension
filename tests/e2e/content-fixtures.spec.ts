@@ -146,6 +146,123 @@ test("orders the current Google Flights country before tied comparison countries
   expect(resultHeadings[1]).toContain("South Africa");
 });
 
+test("keeps Google Flights comparison state through transient unresolved URLs", async ({
+  context,
+  extensionServiceWorker,
+  page,
+}, testInfo) => {
+  testInfo.setTimeout(45_000);
+  const pageUrl = "https://www.google.com/travel/flights/booking?tfs=e2e-fixture&curr=USD&gl=US";
+  const transientUrl = "https://www.google.com/travel/flights?tfs=e2e-fixture&curr=USD&gl=US";
+  await setGoogleFlightsCountries(extensionServiceWorker, ["US", "CA", "ZA"]);
+  await routeGoogleFlightsBookingFixtures(context);
+
+  await page.goto(pageUrl);
+  await enableGoogleFlightsDebugLog(page);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel.getByRole("button", { name: "Compare (3)" })).toBeEnabled();
+  await page.waitForTimeout(10_100);
+
+  const comparisonTabsPromise = Promise.all(["CA", "ZA"].map((country) => waitForComparisonTab(context, country)));
+  await panel.getByRole("button", { name: "Compare (3)" }).click();
+  await replaceGoogleFlightsHistory(page, transientUrl);
+  await waitForGoogleFlightsDebugEvent(page, "keep-state-during-transient-empty-page-key");
+  await expect(panel.getByRole("button", { name: "Checking..." })).toBeVisible();
+  await replaceGoogleFlightsHistory(page, pageUrl);
+
+  await comparisonTabsPromise;
+  await expect(panel.getByText("South Africa", { exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(panel.getByText("Canada", { exact: true })).toBeVisible();
+  await expect(panel.getByText(/United States/)).toBeVisible();
+  await expect(panel.getByText("Cached country comparison from just now.")).toBeVisible();
+});
+
+test("keeps Google Flights completed results through transient unresolved URLs", async ({
+  context,
+  extensionServiceWorker,
+  page,
+}) => {
+  const pageUrl = "https://www.google.com/travel/flights/booking?tfs=e2e-fixture&curr=USD&gl=US";
+  const transientUrl = "https://www.google.com/travel/flights?tfs=e2e-fixture&curr=USD&gl=US";
+  await setGoogleFlightsCachedResults(extensionServiceWorker, pageUrl);
+  await routeGoogleFlightsBookingFixtures(context);
+
+  await page.goto(pageUrl);
+  await enableGoogleFlightsDebugLog(page);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel.getByText("Cached country comparison from just now.")).toBeVisible();
+  await expect(panel.getByText("South Africa", { exact: true })).toBeVisible({ timeout: 20_000 });
+  await replaceGoogleFlightsHistory(page, transientUrl);
+  await waitForGoogleFlightsDebugEvent(page, "keep-state-during-transient-empty-page-key");
+
+  await expect(panel.getByText("South Africa", { exact: true })).toBeVisible();
+  await expect(panel.getByText("Canada", { exact: true })).toBeVisible();
+  await expect(panel.getByText("Cached country comparison from just now.")).toBeVisible();
+});
+
+test("uses newly rendered Google Flights JPY prices when booking URL omits currency", async ({
+  context,
+  extensionServiceWorker,
+  page,
+}) => {
+  const pageUrl =
+    "https://www.google.com/travel/flights/booking?tfs=CDIQAho_EgoyMDI2LTA4LTI3Ih8KA0hLRxIKMjAyNi0wOC0yNxoDVFBFKgJKWDIDMjM2agcIARIDSEtHcgcIARIDVFBFQAFIAZgBAg&gl=JP&noPriceFixture=1";
+  await setGoogleFlightsCountries(extensionServiceWorker, ["CA"]);
+  await routeGoogleFlightsBookingFixtures(context);
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel).toBeAttached();
+  await panel.getByRole("button", { name: /Compare/ }).click();
+  await expect(panel.getByText("Google Flights prices are still loading. Try again when prices appear.")).toBeVisible();
+  await page.evaluate(() => {
+    const prices = [
+      { label: "21,000 Japanese yen", text: "¥21,000" },
+      { label: "24,000 Japanese yen", text: "¥24,000" },
+    ];
+    document.querySelectorAll(".gN1nAc").forEach((anchor, index) => {
+      const price = prices[index] || prices[0];
+      const span = document.createElement("span");
+      span.setAttribute("aria-label", price.label);
+      span.setAttribute("role", "text");
+      span.textContent = price.text;
+      anchor.append(span);
+    });
+  });
+
+  const skyscannerSearchLink = panel.getByRole("link", { name: "Search Skyscanner" });
+  await expect(skyscannerSearchLink).toHaveAttribute("href", /currency=JPY/);
+  const comparisonTabPromise = waitForComparisonTab(context, "CA");
+  await panel.getByRole("button", { name: /Compare/ }).click();
+
+  const comparisonTab = await comparisonTabPromise;
+  expect(new URL(comparisonTab.url()).searchParams.get("curr")).toBe("JPY");
+});
+
+test("resets Google Flights comparison state for explicit currency changes", async ({
+  context,
+  extensionServiceWorker,
+  page,
+}) => {
+  const pageUrl = "https://www.google.com/travel/flights/booking?tfs=e2e-fixture&curr=USD&gl=US";
+  const nextCurrencyUrl = "https://www.google.com/travel/flights/booking?tfs=e2e-fixture&curr=JPY&gl=US";
+  await setGoogleFlightsCachedResults(extensionServiceWorker, pageUrl);
+  await routeGoogleFlightsBookingFixtures(context);
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel.getByText("Cached country comparison from just now.")).toBeVisible();
+  await expect(panel.getByText("South Africa", { exact: true })).toBeVisible();
+  await replaceGoogleFlightsHistory(page, nextCurrencyUrl);
+
+  await expect(panel.getByText("Cached country comparison from just now.")).not.toBeVisible();
+  await expect(panel.getByText("South Africa", { exact: true })).not.toBeVisible();
+});
+
 test("does not show the Google Flights comparison panel on unresolved top-level tfs pages", async ({
   context,
   page,
@@ -646,6 +763,37 @@ async function setGoogleFlightsCachedResults(extensionServiceWorker: Worker, pag
   );
 }
 
+async function enableGoogleFlightsDebugLog(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    localStorage.setItem("mooFlightsDebug", "1");
+    sessionStorage.removeItem("mooFlightsGoogleFlightsDebugLog");
+  });
+}
+
+async function replaceGoogleFlightsHistory(page: Page, url: string): Promise<void> {
+  await page.evaluate((nextUrl) => {
+    history.replaceState(null, "", nextUrl);
+    // Playwright runs this in the page world, while the content script wraps history in its isolated world.
+    // Emit the event the content script observes so the test exercises the debounced navigation path.
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }, url);
+}
+
+async function waitForGoogleFlightsDebugEvent(page: Page, eventName: string): Promise<void> {
+  await expect
+    .poll(async () => {
+      return page.evaluate((event) => {
+        try {
+          const log = JSON.parse(sessionStorage.getItem("mooFlightsGoogleFlightsDebugLog") || "[]");
+          return Array.isArray(log) && log.some((entry) => entry?.event === event);
+        } catch {
+          return false;
+        }
+      }, eventName);
+    })
+    .toBe(true);
+}
+
 function countryUrl(pageUrl: string, country: string): string {
   const url = new URL(pageUrl);
   url.searchParams.set("gl", country);
@@ -678,10 +826,13 @@ function googleFlightsBookingFixture(url: string): string {
   const country = parsedUrl.searchParams.get("gl") || "US";
   const countryFixture = googleFlightsCountryFixture(country, parsedUrl.searchParams.get("tieFixture") === "1");
   const barePriceFixture = parsedUrl.searchParams.get("barePriceFixture") === "1";
+  const noPriceFixture = parsedUrl.searchParams.get("noPriceFixture") === "1";
   const priceText = (value: number): string =>
-    barePriceFixture
-      ? `<span role="text">${value.toLocaleString()}</span>`
-      : `<span aria-label="${value} US dollars">$${value.toLocaleString()}</span>`;
+    noPriceFixture
+      ? ""
+      : barePriceFixture
+        ? `<span role="text">${value.toLocaleString()}</span>`
+        : `<span aria-label="${value} US dollars">$${value.toLocaleString()}</span>`;
 
   return htmlFixture(`
     <main>
