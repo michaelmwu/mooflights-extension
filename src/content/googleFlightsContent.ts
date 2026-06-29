@@ -1084,7 +1084,18 @@ function scheduleRender(): void {
     applyRequestedSearchHighlight(state.searchBaseline);
     return;
   }
-  if (pageKeyChanged) {
+  if (pageKeyChanged && shouldRekeyComparisonWithoutReset(pageKey)) {
+    debugSearch("rekey-comparison-same-itinerary", {
+      mode,
+      previousPageKeyHash: stableContentHash(state.pageKey),
+      nextPageKeyHash: stableContentHash(pageKey),
+      comparing: state.comparing,
+      resultCount: state.results.length,
+      comparedCountries: state.searchResults.map((result) => result.country),
+    });
+    state.pageKey = pageKey;
+    state.cacheKey = cacheKey;
+  } else if (pageKeyChanged) {
     state.pageKey = pageKey;
     state.cacheKey = cacheKey;
     state.baselineSignature = "";
@@ -1180,6 +1191,25 @@ function clearTransientEmptyPageKeyTimer(): void {
   if (transientEmptyPageKeyTimer === undefined) return;
   window.clearTimeout(transientEmptyPageKeyTimer);
   transientEmptyPageKeyTimer = undefined;
+}
+
+// When a panel-page URL omits `curr`/`gl`, those segments of the page key are inferred from the
+// rendered DOM. That inference is unstable while the page is still painting localized prices (e.g. a
+// JPY booking page momentarily reads as the USD default), so the key can flip between two valid values
+// with no real navigation. Treat such a flip as a re-key of the same itinerary rather than a fresh page.
+function panelPageNavigationIdentity(pageKey: string): string {
+  const queryIndex = pageKey.indexOf("?");
+  if (queryIndex === -1) return pageKey;
+  const params = new URLSearchParams(pageKey.slice(queryIndex + 1));
+  params.delete("curr");
+  params.delete("gl");
+  params.sort();
+  return `${pageKey.slice(0, queryIndex)}?${params.toString()}`;
+}
+
+function shouldRekeyComparisonWithoutReset(nextPageKey: string): boolean {
+  if (!state.pageKey || !nextPageKey || !hasComparisonStateToPreserve()) return false;
+  return panelPageNavigationIdentity(state.pageKey) === panelPageNavigationIdentity(nextPageKey);
 }
 
 function currentBookingPageKey(): string {
