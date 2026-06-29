@@ -1005,6 +1005,14 @@ function scheduleRender(): void {
     latestSkyscannerSearchCapture = null;
   }
   if (!pageKey) {
+    if (state.comparing && state.pageKey) {
+      debugSearch("keep-state-during-transient-empty-page-key", {
+        mode,
+        previousPageKeyHash: stableContentHash(state.pageKey),
+      });
+      render();
+      return;
+    }
     if (!state.pageKey && !document.getElementById(PANEL_ID)) return;
     removePanel();
     state.pageKey = "";
@@ -1234,7 +1242,7 @@ function render(): void {
   const matrixSearch = parseGoogleFlightsMatrixSearch(window.location.href, currentComparableCurrencyCode());
   const selectedCodes = selectedGoogleFlightsCountries();
   const translate = t();
-  const mode = currentGoogleFlightsPanelMode();
+  const mode = currentRenderPanelMode();
 
   shadow.innerHTML = `
     <style>${styles()}</style>
@@ -1385,6 +1393,12 @@ function render(): void {
 
 function t(): ReturnType<typeof createContentTranslator> {
   return createContentTranslator(state.language);
+}
+
+function currentRenderPanelMode(): "booking" | "search" {
+  const mode = currentGoogleFlightsPanelMode();
+  if (currentPanelPageKey(mode) || !state.comparing) return mode;
+  return state.searchBaseline ? "search" : "booking";
 }
 
 function panelChromeLabels(): {

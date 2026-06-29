@@ -146,6 +146,39 @@ test("orders the current Google Flights country before tied comparison countries
   expect(resultHeadings[1]).toContain("South Africa");
 });
 
+test("keeps Google Flights comparison state through transient unresolved URLs", async ({
+  context,
+  extensionServiceWorker,
+  page,
+}) => {
+  const pageUrl = "https://www.google.com/travel/flights/booking?tfs=e2e-fixture&curr=USD&gl=US";
+  const transientUrl = "https://www.google.com/travel/flights?tfs=e2e-fixture&curr=USD&gl=US";
+  await setGoogleFlightsCountries(extensionServiceWorker, ["US", "CA", "ZA"]);
+  await routeGoogleFlightsBookingFixtures(context);
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel.getByRole("button", { name: "Compare (3)" })).toBeEnabled();
+
+  const comparisonTabsPromise = Promise.all(["CA", "ZA"].map((country) => waitForComparisonTab(context, country)));
+  await panel.getByRole("button", { name: "Compare (3)" }).click();
+  await page.evaluate((url) => {
+    history.replaceState(null, "", url);
+  }, transientUrl);
+  await page.waitForTimeout(400);
+  await expect(panel.getByRole("button", { name: "Checking..." })).toBeVisible();
+  await page.evaluate((url) => {
+    history.replaceState(null, "", url);
+  }, pageUrl);
+
+  await comparisonTabsPromise;
+  await expect(panel.getByText("South Africa", { exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(panel.getByText("Canada", { exact: true })).toBeVisible();
+  await expect(panel.getByText(/United States/)).toBeVisible();
+  await expect(panel.getByText("Cached country comparison from just now.")).toBeVisible();
+});
+
 test("does not show the Google Flights comparison panel on unresolved top-level tfs pages", async ({
   context,
   page,
