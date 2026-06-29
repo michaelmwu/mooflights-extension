@@ -158,6 +158,7 @@ test("keeps Google Flights comparison state through transient unresolved URLs", 
   await routeGoogleFlightsBookingFixtures(context);
 
   await page.goto(pageUrl);
+  await enableGoogleFlightsDebugLog(page);
 
   const panel = page.locator("#mooflights-google-flights-panel");
   await expect(panel.getByRole("button", { name: "Compare (3)" })).toBeEnabled();
@@ -165,16 +166,10 @@ test("keeps Google Flights comparison state through transient unresolved URLs", 
 
   const comparisonTabsPromise = Promise.all(["CA", "ZA"].map((country) => waitForComparisonTab(context, country)));
   await panel.getByRole("button", { name: "Compare (3)" }).click();
-  await page.evaluate((url) => {
-    history.replaceState(null, "", url);
-  }, transientUrl);
-  // `installObserver()` debounces history changes by 250 ms. This wait must stay above that debounce
-  // so the test exercises the transient empty page-key render before restoring the booking URL.
-  await page.waitForTimeout(400);
+  await replaceGoogleFlightsHistory(page, transientUrl);
+  await waitForGoogleFlightsDebugEvent(page, "keep-state-during-transient-empty-page-key");
   await expect(panel.getByRole("button", { name: "Checking..." })).toBeVisible();
-  await page.evaluate((url) => {
-    history.replaceState(null, "", url);
-  }, pageUrl);
+  await replaceGoogleFlightsHistory(page, pageUrl);
 
   await comparisonTabsPromise;
   await expect(panel.getByText("South Africa", { exact: true })).toBeVisible({ timeout: 20_000 });
@@ -194,16 +189,13 @@ test("keeps Google Flights completed results through transient unresolved URLs",
   await routeGoogleFlightsBookingFixtures(context);
 
   await page.goto(pageUrl);
+  await enableGoogleFlightsDebugLog(page);
 
   const panel = page.locator("#mooflights-google-flights-panel");
   await expect(panel.getByText("Cached country comparison from just now.")).toBeVisible();
   await expect(panel.getByText("South Africa", { exact: true })).toBeVisible({ timeout: 20_000 });
-  await page.evaluate((url) => {
-    history.replaceState(null, "", url);
-  }, transientUrl);
-  // `installObserver()` debounces history changes by 250 ms. This wait must stay above that debounce
-  // so the test verifies completed results survive the transient empty page-key render.
-  await page.waitForTimeout(400);
+  await replaceGoogleFlightsHistory(page, transientUrl);
+  await waitForGoogleFlightsDebugEvent(page, "keep-state-during-transient-empty-page-key");
 
   await expect(panel.getByText("South Africa", { exact: true })).toBeVisible();
   await expect(panel.getByText("Canada", { exact: true })).toBeVisible();
@@ -246,6 +238,27 @@ test("uses newly rendered Google Flights JPY prices when booking URL omits curre
 
   const comparisonTab = await comparisonTabPromise;
   expect(new URL(comparisonTab.url()).searchParams.get("curr")).toBe("JPY");
+});
+
+test("resets Google Flights comparison state for explicit currency changes", async ({
+  context,
+  extensionServiceWorker,
+  page,
+}) => {
+  const pageUrl = "https://www.google.com/travel/flights/booking?tfs=e2e-fixture&curr=USD&gl=US";
+  const nextCurrencyUrl = "https://www.google.com/travel/flights/booking?tfs=e2e-fixture&curr=JPY&gl=US";
+  await setGoogleFlightsCachedResults(extensionServiceWorker, pageUrl);
+  await routeGoogleFlightsBookingFixtures(context);
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel.getByText("Cached country comparison from just now.")).toBeVisible();
+  await expect(panel.getByText("South Africa", { exact: true })).toBeVisible();
+  await replaceGoogleFlightsHistory(page, nextCurrencyUrl);
+
+  await expect(panel.getByText("Cached country comparison from just now.")).not.toBeVisible();
+  await expect(panel.getByText("South Africa", { exact: true })).not.toBeVisible();
 });
 
 test("does not show the Google Flights comparison panel on unresolved top-level tfs pages", async ({
@@ -746,6 +759,35 @@ async function setGoogleFlightsCachedResults(extensionServiceWorker: Worker, pag
       },
     },
   );
+}
+
+async function enableGoogleFlightsDebugLog(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    localStorage.setItem("mooFlightsDebug", "1");
+    sessionStorage.removeItem("mooFlightsGoogleFlightsDebugLog");
+  });
+}
+
+async function replaceGoogleFlightsHistory(page: Page, url: string): Promise<void> {
+  await page.evaluate((nextUrl) => {
+    history.replaceState(null, "", nextUrl);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }, url);
+}
+
+async function waitForGoogleFlightsDebugEvent(page: Page, eventName: string): Promise<void> {
+  await expect
+    .poll(async () => {
+      return page.evaluate((event) => {
+        try {
+          const log = JSON.parse(sessionStorage.getItem("mooFlightsGoogleFlightsDebugLog") || "[]");
+          return Array.isArray(log) && log.some((entry) => entry?.event === event);
+        } catch {
+          return false;
+        }
+      }, eventName);
+    })
+    .toBe(true);
 }
 
 function countryUrl(pageUrl: string, country: string): string {

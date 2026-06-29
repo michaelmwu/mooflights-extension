@@ -1210,7 +1210,32 @@ function panelPageNavigationIdentity(pageKey: string): string {
 
 function shouldRekeyComparisonWithoutReset(nextPageKey: string): boolean {
   if (!state.pageKey || !nextPageKey || !hasComparisonStateToPreserve()) return false;
+  if (explicitPanelMarketOrCurrencyChanged()) return false;
   return panelPageNavigationIdentity(state.pageKey) === panelPageNavigationIdentity(nextPageKey);
+}
+
+function explicitPanelMarketOrCurrencyChanged(): boolean {
+  try {
+    const url = new URL(window.location.href);
+    const explicitCountry = normalizeOptionalUrlParam(url.searchParams.get("gl"));
+    const explicitCurrency = normalizeGoogleFlightsCurrency(url.searchParams.get("curr"));
+    return (
+      Boolean(explicitCountry && explicitCountry !== pageKeyParam(state.pageKey, "gl")) ||
+      Boolean(explicitCurrency && explicitCurrency !== pageKeyParam(state.pageKey, "curr"))
+    );
+  } catch {
+    return true;
+  }
+}
+
+function pageKeyParam(pageKey: string, key: string): string {
+  const queryIndex = pageKey.indexOf("?");
+  if (queryIndex === -1) return "";
+  return normalizeOptionalUrlParam(new URLSearchParams(pageKey.slice(queryIndex + 1)).get(key));
+}
+
+function normalizeOptionalUrlParam(value: string | null): string {
+  return (value || "").trim().toUpperCase();
 }
 
 function currentBookingPageKey(): string {
@@ -1466,7 +1491,7 @@ function t(): ReturnType<typeof createContentTranslator> {
 
 function currentRenderPanelMode(): "booking" | "search" {
   const mode = currentGoogleFlightsPanelMode();
-  if (currentPanelPageKey(mode) || !state.comparing) return mode;
+  if (currentPanelPageKey(mode) || !hasComparisonStateToPreserve()) return mode;
   return state.searchBaseline ? "search" : "booking";
 }
 
