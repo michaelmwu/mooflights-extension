@@ -106,6 +106,7 @@ type PanelPosition = {
 const PANEL_ID = "mooflights-google-flights-panel";
 const RESULT_CACHE_TTL_MS = 10 * 60 * 1000;
 const INFERRED_CURRENCY_CACHE_TTL_MS = 5000;
+const TRANSIENT_EMPTY_PAGE_KEY_GRACE_MS = 10000;
 const RESULT_CACHE_STORAGE_KEY = "muTravelGoogleFlightsCountryResults";
 const PANEL_UI_STORAGE_KEY = "muTravelGoogleFlightsPanelUi";
 const PANEL_SESSION_HIDE_STORAGE_KEY = "muTravelGoogleFlightsPanelHiddenForSession";
@@ -141,6 +142,8 @@ let regionDisplayNames: Intl.DisplayNames | null | undefined;
 let countryCodeByDisplayName: Map<string, string> | null | undefined;
 let suppressPanelRestoreClick = false;
 let inferredCurrencyCache: { href: string; currency: string; cachedAt: number } | null = null;
+let lastNonEmptyPanelPageKeyAt = 0;
+let transientEmptyPageKeyTimer: number | undefined;
 let highlightedSearchDeepLink = "";
 let latestSkyscannerSearchCapture: SkyscannerSearchCapture | null = null;
 const pendingSkyscannerMarketSearches = new Map<
@@ -818,7 +821,7 @@ function currentVisibleCurrencyCode(): string {
     return currency;
   }
   const currency = inferGoogleFlightsCurrency(document);
-  inferredCurrencyCache = { href: window.location.href, currency, cachedAt: now };
+  inferredCurrencyCache = currency ? { href: window.location.href, currency, cachedAt: now } : null;
   return currency;
 }
 
@@ -997,6 +1000,10 @@ function scheduleRender(): void {
   const pageKey = currentPanelPageKey(mode);
   const cacheKey = currentPanelComparisonCacheKey(mode);
   const pageKeyChanged = state.pageKey !== pageKey;
+  if (pageKey) {
+    lastNonEmptyPanelPageKeyAt = Date.now();
+    clearTransientEmptyPageKeyTimer();
+  }
   if (
     mode === "search" &&
     latestSkyscannerSearchCapture &&
@@ -1005,11 +1012,12 @@ function scheduleRender(): void {
     latestSkyscannerSearchCapture = null;
   }
   if (!pageKey) {
-    if (state.comparing && state.pageKey) {
+    if (shouldKeepPanelDuringTransientEmptyPageKey()) {
       debugSearch("keep-state-during-transient-empty-page-key", {
         mode,
         previousPageKeyHash: stableContentHash(state.pageKey),
       });
+      scheduleTransientEmptyPageKeyRecheck();
       render();
       return;
     }
@@ -1142,6 +1150,36 @@ function scheduleRender(): void {
   applySearchBadges();
   applyRequestedSearchHighlight(state.searchBaseline);
   if (mode === "search") void loadStoredSearchComparisonCache(cacheKey, baselineSignature);
+}
+
+function shouldKeepPanelDuringTransientEmptyPageKey(now = Date.now()): boolean {
+  if (!state.pageKey || !hasComparisonStateToPreserve()) return false;
+  return now - lastNonEmptyPanelPageKeyAt <= TRANSIENT_EMPTY_PAGE_KEY_GRACE_MS;
+}
+
+function hasComparisonStateToPreserve(): boolean {
+  return (
+    state.comparing ||
+    state.results.length > 0 ||
+    state.searchResults.length > 0 ||
+    Object.keys(state.searchBestByRowKey).length > 0
+  );
+}
+
+function scheduleTransientEmptyPageKeyRecheck(now = Date.now()): void {
+  clearTransientEmptyPageKeyTimer();
+  const elapsed = Math.max(0, now - lastNonEmptyPanelPageKeyAt);
+  const delayMs = Math.max(50, TRANSIENT_EMPTY_PAGE_KEY_GRACE_MS - elapsed + 50);
+  transientEmptyPageKeyTimer = window.setTimeout(() => {
+    transientEmptyPageKeyTimer = undefined;
+    scheduleRender();
+  }, delayMs);
+}
+
+function clearTransientEmptyPageKeyTimer(): void {
+  if (transientEmptyPageKeyTimer === undefined) return;
+  window.clearTimeout(transientEmptyPageKeyTimer);
+  transientEmptyPageKeyTimer = undefined;
 }
 
 function currentBookingPageKey(): string {

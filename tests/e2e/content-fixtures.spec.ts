@@ -179,6 +179,69 @@ test("keeps Google Flights comparison state through transient unresolved URLs", 
   await expect(panel.getByText("Cached country comparison from just now.")).toBeVisible();
 });
 
+test("keeps Google Flights completed results through transient unresolved URLs", async ({
+  context,
+  extensionServiceWorker,
+  page,
+}) => {
+  const pageUrl = "https://www.google.com/travel/flights/booking?tfs=e2e-fixture&curr=USD&gl=US";
+  const transientUrl = "https://www.google.com/travel/flights?tfs=e2e-fixture&curr=USD&gl=US";
+  await setGoogleFlightsCachedResults(extensionServiceWorker, pageUrl);
+  await routeGoogleFlightsBookingFixtures(context);
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel.getByText("Cached country comparison from just now.")).toBeVisible();
+  await expect(panel.getByText("South Africa", { exact: true })).toBeVisible({ timeout: 20_000 });
+  await page.evaluate((url) => {
+    history.replaceState(null, "", url);
+  }, transientUrl);
+  await page.waitForTimeout(400);
+
+  await expect(panel.getByText("South Africa", { exact: true })).toBeVisible();
+  await expect(panel.getByText("Canada", { exact: true })).toBeVisible();
+  await expect(panel.getByText("Cached country comparison from just now.")).toBeVisible();
+});
+
+test("uses newly rendered Google Flights JPY prices when booking URL omits currency", async ({
+  context,
+  extensionServiceWorker,
+  page,
+}) => {
+  const pageUrl =
+    "https://www.google.com/travel/flights/booking?tfs=CDIQAho_EgoyMDI2LTA4LTI3Ih8KA0hLRxIKMjAyNi0wOC0yNxoDVFBFKgJKWDIDMjM2agcIARIDSEtHcgcIARIDVFBFQAFIAZgBAg&gl=JP&noPriceFixture=1";
+  await setGoogleFlightsCountries(extensionServiceWorker, ["CA"]);
+  await routeGoogleFlightsBookingFixtures(context);
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel).toBeAttached();
+  await page.evaluate(() => {
+    const prices = [
+      { label: "21,000 Japanese yen", text: "¥21,000" },
+      { label: "24,000 Japanese yen", text: "¥24,000" },
+    ];
+    document.querySelectorAll(".gN1nAc").forEach((anchor, index) => {
+      const price = prices[index] || prices[0];
+      const span = document.createElement("span");
+      span.setAttribute("aria-label", price.label);
+      span.setAttribute("role", "text");
+      span.textContent = price.text;
+      anchor.append(span);
+    });
+  });
+
+  const skyscannerSearchLink = panel.getByRole("link", { name: "Search Skyscanner" });
+  await expect(skyscannerSearchLink).toHaveAttribute("href", /currency=JPY/);
+  const comparisonTabPromise = waitForComparisonTab(context, "CA");
+  await panel.getByRole("button", { name: /Compare/ }).click();
+
+  const comparisonTab = await comparisonTabPromise;
+  expect(new URL(comparisonTab.url()).searchParams.get("curr")).toBe("JPY");
+});
+
 test("does not show the Google Flights comparison panel on unresolved top-level tfs pages", async ({
   context,
   page,
@@ -711,10 +774,13 @@ function googleFlightsBookingFixture(url: string): string {
   const country = parsedUrl.searchParams.get("gl") || "US";
   const countryFixture = googleFlightsCountryFixture(country, parsedUrl.searchParams.get("tieFixture") === "1");
   const barePriceFixture = parsedUrl.searchParams.get("barePriceFixture") === "1";
+  const noPriceFixture = parsedUrl.searchParams.get("noPriceFixture") === "1";
   const priceText = (value: number): string =>
-    barePriceFixture
-      ? `<span role="text">${value.toLocaleString()}</span>`
-      : `<span aria-label="${value} US dollars">$${value.toLocaleString()}</span>`;
+    noPriceFixture
+      ? ""
+      : barePriceFixture
+        ? `<span role="text">${value.toLocaleString()}</span>`
+        : `<span aria-label="${value} US dollars">$${value.toLocaleString()}</span>`;
 
   return htmlFixture(`
     <main>
