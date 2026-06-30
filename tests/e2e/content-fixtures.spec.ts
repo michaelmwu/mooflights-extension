@@ -75,6 +75,7 @@ test("opens Google Flights country comparison tabs from a routed US booking page
   expect(skyscannerSearchUrl.hostname).toBe("www.skyscanner.com");
   expect(skyscannerSearchUrl.searchParams.get("currency")).toBe("USD");
   expect(skyscannerSearchUrl.searchParams.get("market")).toBe("US");
+  await expect(panel.getByText("3 compared")).toBeVisible();
   await expect(panel.getByRole("button", { name: "Compare (3)" })).toBeEnabled();
 
   const comparisonTabsPromise = Promise.all(["CA", "ZA"].map((country) => waitForComparisonTab(context, country)));
@@ -85,6 +86,23 @@ test("opens Google Flights country comparison tabs from a routed US booking page
     "CA",
     "ZA",
   ]);
+});
+
+test("shows the current Google Flights country in the selector comparison count", async ({
+  context,
+  extensionServiceWorker,
+  page,
+}) => {
+  const pageUrl = "https://www.google.com/travel/flights/booking?tfs=e2e-fixture&curr=USD&gl=US";
+  await setGoogleFlightsCountries(extensionServiceWorker, ["CA", "ZA"]);
+  await routeGoogleFlightsBookingFixtures(context);
+
+  await page.goto(pageUrl);
+
+  const panel = page.locator("#mooflights-google-flights-panel");
+  await expect(panel).toBeAttached();
+  await expect(panel.getByText("3 compared")).toBeVisible();
+  await expect(panel.getByRole("button", { name: "Compare (3)" })).toBeEnabled();
 });
 
 test("does not count the current country when currency is unavailable", async ({
@@ -100,6 +118,7 @@ test("does not count the current country when currency is unavailable", async ({
 
   const panel = page.locator("#mooflights-google-flights-panel");
   await expect(panel).toBeAttached();
+  await expect(panel.getByText("2 compared")).toBeVisible();
   await expect(panel.getByRole("button", { name: "Compare (2)" })).toBeEnabled();
   await expect(panel.getByRole("button", { name: "Compare (3)" })).not.toBeAttached();
 });
@@ -117,6 +136,7 @@ test("does not count a non-country baseline when currency is available", async (
 
   const panel = page.locator("#mooflights-google-flights-panel");
   await expect(panel).toBeAttached();
+  await expect(panel.getByText("2 compared")).toBeVisible();
   await expect(panel.getByRole("button", { name: "Compare (2)" })).toBeEnabled();
   await expect(panel.getByRole("button", { name: "Compare (3)" })).not.toBeAttached();
 });
@@ -448,6 +468,7 @@ test("keeps the current Skyscanner price visible when comparing other countries"
 
   const panel = page.locator("#mooflights-google-flights-panel");
   await expect(panel).toBeAttached();
+  await expect(panel.getByText("2 compared")).toBeVisible();
   await expect(panel.getByRole("button", { name: "Compare (2)" })).toBeEnabled();
 
   await panel.getByRole("button", { name: "Compare (2)" }).click();
@@ -489,9 +510,10 @@ test("renders Skyscanner search row comparison badges from captured API response
   await countrySearch.press("Enter");
   await countrySearch.fill("KR");
   await countrySearch.press("Enter");
-  await expect(panel.getByRole("button", { name: "Compare rows (2)" })).toBeEnabled();
+  await expect(panel.getByText("3 compared")).toBeVisible();
+  await expect(panel.getByRole("button", { name: "Compare rows (3)" })).toBeEnabled();
 
-  await panel.getByRole("button", { name: "Compare rows (2)" }).click();
+  await panel.getByRole("button", { name: "Compare rows (3)" }).click();
   await expect(page.locator("[data-moo-flights-search-badge]", { hasText: "South Korea $180" })).toBeVisible();
 
   const koreanAirCard = page.locator('[data-testid="itinerary-card"]', { hasText: "Korean Air" });
