@@ -1356,7 +1356,7 @@ function render(): void {
                 : `${renderCrossProviderSearchAction()}
                   ${renderMilesEstimatePrompt(matrixSearch)}
                   <div class="section-heading">${escapeHtml(translate("compareCountryPricing"))}</div>
-                  ${renderCountrySelect(selectedCodes)}
+                  ${renderCountrySelect(selectedCodes, countryComparisonDisplayCount(selectedCodes))}
                   <div class="actions">
                     <button type="button" class="wide" ${state.comparing || selectedCodes.length === 0 ? "disabled" : ""} data-action="compare-countries">
                       ${escapeHtml(
@@ -1533,7 +1533,7 @@ function minimizePanel(root: ShadowRoot): void {
   render();
 }
 
-function renderCountrySelect(selectedCodes: string[]): string {
+function renderCountrySelect(selectedCodes: string[], comparisonDisplayCount: number): string {
   const dropdownOptions = countryDropdownOptions();
   const disabled = state.comparing ? "disabled" : "";
   const translate = t();
@@ -1541,7 +1541,7 @@ function renderCountrySelect(selectedCodes: string[]): string {
     <div class="country-select">
       <div class="country-head">
         <span>${escapeHtml(translate("countries"))}</span>
-        <small>${escapeHtml(translate("selectedShort", { count: selectedCodes.length }))}</small>
+        <small>${escapeHtml(translate("comparedShort", { count: comparisonDisplayCount }))}</small>
       </div>
       <div class="country-combo">
         <input type="search" data-role="country-search" aria-label="${escapeHtml(translate("addCountry"))}" placeholder="${escapeHtml(translate("addCountryPlaceholder"))}" autocomplete="off" spellcheck="false" value="${escapeHtml(state.countrySearch)}" ${disabled}>
@@ -1595,15 +1595,16 @@ function renderCrossProviderSearchAction(): string {
 function renderSearchComparisonPanel(selectedCodes: string[]): string {
   const translate = t();
   const visibleRows = state.searchBaseline?.results.length || parseCurrentSearchPage().results.length;
+  const comparisonDisplayCount = countryComparisonDisplayCount(selectedCodes);
   const emptyRowsMessage = isCurrentSkyscannerSearchPage()
     ? translate("noSkyscannerSearchApiResponse")
     : translate("noVisibleGoogleFlightsRows");
   return `
     <div class="section-heading">${escapeHtml(translate("compareVisibleFlightRows"))}</div>
-    ${renderCountrySelect(selectedCodes)}
+    ${renderCountrySelect(selectedCodes, comparisonDisplayCount)}
     <div class="actions">
       <button type="button" class="wide" ${state.comparing || selectedCodes.length === 0 || visibleRows === 0 ? "disabled" : ""} data-action="compare-search-rows">
-        ${escapeHtml(state.comparing ? translate("checking") : translate("compareRowsCount", { count: selectedCodes.length }))}
+        ${escapeHtml(state.comparing ? translate("checking") : translate("compareRowsCount", { count: comparisonDisplayCount }))}
       </button>
     </div>
     ${state.error ? `<p class="error">${escapeHtml(state.error)}</p>` : ""}
@@ -1619,6 +1620,7 @@ function renderSearchComparisonPanel(selectedCodes: string[]): string {
 }
 
 function countryComparisonDisplayCount(selectedCodes: string[]): number {
+  if (selectedCodes.length === 0) return 0;
   const baselineCountry = currentCountryCode();
   const includesBaseline =
     isRealCountryCode(baselineCountry) && currentVisibleCurrencyCode() && !selectedCodes.includes(baselineCountry);
