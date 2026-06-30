@@ -103,6 +103,10 @@ test("shows the current Google Flights country in the selector comparison count"
   await expect(panel).toBeAttached();
   await expect(panel.getByText("3 compared")).toBeVisible();
   await expect(panel.getByRole("button", { name: "Compare (3)" })).toBeEnabled();
+
+  await panel.getByRole("button", { name: "Clear" }).click();
+  await expect(panel.getByText("0 compared")).toBeVisible();
+  await expect(panel.getByRole("button", { name: "Compare (0)" })).toBeDisabled();
 });
 
 test("does not count the current country when currency is unavailable", async ({
@@ -505,6 +509,8 @@ test("renders Skyscanner search row comparison badges from captured API response
   expect(googleFlightsSearchUrl.searchParams.get("hl")).toBe("en-US");
   expect(googleFlightsSearchUrl.searchParams.get("q")).toBe("Flights from CJU to NRT on 2026-06-24 one way");
   await panel.getByRole("button", { name: "Clear" }).click();
+  await expect(panel.getByText("0 compared")).toBeVisible();
+  await expect(panel.getByRole("button", { name: "Compare rows (0)" })).toBeDisabled();
   const countrySearch = panel.locator('[data-role="country-search"]');
   await countrySearch.fill("US");
   await countrySearch.press("Enter");

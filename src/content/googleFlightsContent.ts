@@ -1620,6 +1620,7 @@ function renderSearchComparisonPanel(selectedCodes: string[]): string {
 }
 
 function countryComparisonDisplayCount(selectedCodes: string[]): number {
+  if (selectedCodes.length === 0) return 0;
   const baselineCountry = currentCountryCode();
   const includesBaseline =
     isRealCountryCode(baselineCountry) && currentVisibleCurrencyCode() && !selectedCodes.includes(baselineCountry);
