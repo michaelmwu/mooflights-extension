@@ -8,19 +8,47 @@ export type UsdCurrencyRates = {
 
 const CACHE_KEY = "muTravelUsdCurrencyRates";
 const TTL_MS = 24 * 60 * 60 * 1000;
+const ATTEMPT_KEY = "muTravelUsdCurrencyRatesLastAttempt";
+const RETRY_BACKOFF_MS = 30 * 60 * 1000;
+const FETCH_TIMEOUT_MS = 5000;
+let inFlight: Promise<UsdCurrencyRates | null> | undefined;
+let lastAttempt = -Infinity;
 const PRIMARY_URL = "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json";
 const FALLBACK_URL = "https://api.fxratesapi.com/latest?base=USD";
 
 export async function loadUsdCurrencyRates(now = Date.now()): Promise<UsdCurrencyRates | null> {
-  const cached = await readCachedRates();
-  if (cached && now - cached.fetchedAt < TTL_MS) return cached;
+  if (inFlight) return inFlight;
+  const operation = loadRates(now);
+  inFlight = operation;
+  try {
+    return await operation;
+  } finally {
+    inFlight = undefined;
+  }
+}
 
+async function loadRates(now: number): Promise<UsdCurrencyRates | null> {
+  const cached = await readCachedRates();
+  if (cached && now >= cached.fetchedAt && now - cached.fetchedAt < TTL_MS) return cached;
+  try {
+    const stored = await chrome.storage.local.get(ATTEMPT_KEY);
+    const attempt = stored[ATTEMPT_KEY];
+    if (typeof attempt === "number" && Number.isFinite(attempt)) lastAttempt = Math.max(lastAttempt, attempt);
+  } catch {
+    /* The per-page attempt remains a fallback when storage is unavailable. */
+  }
+  if (now >= lastAttempt && now - lastAttempt < RETRY_BACKOFF_MS) return cached;
+  lastAttempt = now;
+  try {
+    await chrome.storage.local.set({ [ATTEMPT_KEY]: now });
+  } catch {
+    /* Best effort. */
+  }
   const fetched = await fetchUsdCurrencyRates(now);
   if (fetched) {
     await writeCachedRates(fetched);
     return fetched;
   }
-
   return cached;
 }
 
@@ -37,12 +65,16 @@ async function fetchAndParseRates(
   parser: (body: unknown, fetchedAt: number, source: string) => UsdCurrencyRates | null,
   now: number,
 ): Promise<UsdCurrencyRates | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const response = await fetch(url, { headers: { Accept: "application/json" } });
+    const response = await fetch(url, { headers: { Accept: "application/json" }, signal: controller.signal });
     if (!response.ok) return null;
     return parser(await response.json(), now, source);
   } catch {
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -89,7 +121,13 @@ async function writeCachedRates(rates: UsdCurrencyRates): Promise<void> {
 }
 
 function normalizeCachedRates(value: unknown): UsdCurrencyRates | null {
-  if (!isRecord(value) || !isRecord(value.rates) || typeof value.fetchedAt !== "number") return null;
+  if (
+    !isRecord(value) ||
+    !isRecord(value.rates) ||
+    typeof value.fetchedAt !== "number" ||
+    !Number.isFinite(value.fetchedAt)
+  )
+    return null;
   return normalizeRates(
     value.rates,
     value.fetchedAt,
