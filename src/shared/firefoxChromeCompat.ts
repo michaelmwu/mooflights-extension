@@ -3,6 +3,7 @@ type BrowserApi = {
   runtime?: Record<string, unknown>;
   storage?: {
     local?: Record<string, unknown>;
+    session?: Record<string, unknown>;
   };
 };
 
@@ -25,6 +26,8 @@ function installFirefoxChromePromiseCompat(): void {
   wrapPromiseMethod(chromeApi.storage?.local, browserApi.storage?.local, "set");
   wrapPromiseMethod(chromeApi.storage?.local, browserApi.storage?.local, "remove");
   wrapPromiseMethod(chromeApi.storage?.local, browserApi.storage?.local, "clear");
+  for (const method of ["get", "set", "remove", "clear"])
+    wrapPromiseMethod(chromeApi.storage?.session, browserApi.storage?.session, method);
 }
 
 function wrapPromiseMethod(

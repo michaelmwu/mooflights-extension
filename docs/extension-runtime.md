@@ -83,3 +83,19 @@ It is used to show rough earning estimates such as:
 This snapshot should be generated only from approved airline/program public earning charts, licensed datasets, or curated
 MooTravel reference data. Where to Credit should be treated as an outbound lookup destination, not as the source copied
 into the extension. Snapshot refresh automation is tracked in GitHub issue #7.
+
+## Comparison Lifecycle And Rendering
+
+The background acknowledges a comparison immediately. Results and completion arrive through progress messages; a content-side watchdog clears an idle run after 120 seconds without progress, including recovery on focus after timer throttling. Renderer messages have five-second deadlines and can be aborted with their run.
+
+The worker records temporary tab ownership in `chrome.storage.session`, with local-storage fallback where session storage is unavailable. Each temporary tab starts at a uniquely marked blank URL, is registered, and then navigates to its marked destination. Startup sweeps recorded leftovers, validating markers before closing tabs so reused IDs cannot close unrelated pages. Removing a source tab cancels its run. Comparison tabs answer parse/expansion messages without installing the panel, observers, navigation polling or historical-fare requests; expansion cannot re-enable UI work.
+
+The worker serializes read-modify-write operations for comparison caches and Matrix auto-open tickets, and skips unchanged ticket writes. Provider-metadata fetches have a five-second deadline and a persisted five-minute retry interval. Local feature behavior remains the fallback.
+
+Google Flights rendering uses a debounce with a one-second maximum wait, a cheap URL-change poll for isolated-world SPA navigation, and one parsed search snapshot per render tick. Badges, historical previews and cache restoration reuse that snapshot. Cache misses are memoized and invalidated by relevant storage changes. Debug-detail factories do no work when debugging is disabled. The stylesheet and delegated root handlers survive content renders.
+
+## Worker Bundle Boundary
+
+The background imports consent settings through `communitySettings.ts`; importing the complete settings/provider registry would pull airport and mileage datasets into every worker wake. Keep those datasets in content/UI entrypoints that need them.
+
+Use `bun run build -- --metafile` (or add `--metafile` to a dev build) to write esbuild input metadata next to each generated JavaScript entry as `.meta.json`. Inspect the worker inputs when changing shared imports. In the reviewed development build, removing the heavy settings import reduced the worker from 910,189 to 79,630 bytes; neither `airports.json` nor `mileage-earning.json` is a worker input.

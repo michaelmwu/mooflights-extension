@@ -18,6 +18,10 @@ import {
   prioritizeSearchCountries,
   recordUsage,
 } from "./communityHistory";
+import { updateComparisonCache } from "./comparisonCache";
+import { ComparisonTabRegistry, workerTabUrls } from "./comparisonTabs";
+import { fetchProviderMetadataWithCache } from "./providerMetadata";
+import { createSerialQueue } from "./serialQueue";
 import { sendTabMessage } from "./tabMessaging";
 
 type RuntimeMessage = {
@@ -45,6 +49,8 @@ type GoogleFlightsSearchExpansionResult = {
 };
 
 type GoogleFlightsComparisonRun = {
+  sourceTabId: number;
+  requestId: string;
   controller: AbortController;
   activeTabIds: Set<number>;
   closedTabIds: Set<number>;
@@ -59,6 +65,21 @@ const MATRIX_AUTO_OPEN_TTL_MS = 5 * 60 * 1000;
 let tabCreateQueue = Promise.resolve();
 let lastTabCreatedAt = 0;
 const activeGoogleFlightsComparisonRuns = new Map<string, GoogleFlightsComparisonRun>();
+const serializeWorkerStorage = createSerialQueue();
+const comparisonTabs = new ComparisonTabRegistry(
+  chrome.storage.session || chrome.storage.local,
+  getTabOrNull,
+  removeTab,
+);
+void comparisonTabs.ready.catch(() => undefined);
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  for (const run of activeGoogleFlightsComparisonRuns.values()) {
+    if (run.sourceTabId === tabId) cancelGoogleFlightsComparison(run);
+    else if (run.activeTabIds.delete(tabId)) run.closedTabIds.add(tabId);
+  }
+  void comparisonTabs.forget(tabId).catch(() => undefined);
+});
 
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === "install") {
@@ -67,7 +88,30 @@ chrome.runtime.onInstalled.addListener((details) => {
 });
 
 chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
+  if (!message || typeof message !== "object") return false;
   const payload = message as RuntimeMessage;
+  if (payload.command === "updateComparisonCache") {
+    void updateComparisonCache(message)
+      .then(() => sendResponse({ ok: true }))
+      .catch(() => sendResponse({ ok: false }));
+    return true;
+  }
+  if (payload.command === "getComparisonWorkerContext") {
+    const tabId = sender.tab?.id;
+    if (typeof tabId !== "number") {
+      sendResponse({ worker: false });
+      return false;
+    }
+    void comparisonTabs
+      .context(tabId, sender.url || sender.tab?.url)
+      .then((record) =>
+        sendResponse(
+          record ? { worker: true, sourceTabId: record.sourceTabId, requestId: record.requestId } : { worker: false },
+        ),
+      )
+      .catch(() => sendResponse({ worker: false }));
+    return true;
+  }
   if (payload.command === "recordUsageEvent") {
     const signal = validatedUsageSignal(payload.usageSignal);
     if (
@@ -134,17 +178,18 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
       return false;
     }
     const run = startGoogleFlightsComparison(progressTabId, payload.requestId);
-    void compareGoogleFlightsCountries(payload, progressTabId, run)
-      .then(() => sendResponse({ ok: true }))
+    void comparisonTabs.ready
+      .then(() => compareGoogleFlightsCountries(payload, progressTabId, run))
       .catch((error) => {
+        finishGoogleFlightsComparison(run);
         const message = error instanceof Error ? error.message : "Compare failed.";
         sendGoogleFlightsCountryComplete(progressTabId, payload.requestId, {
           ok: false,
           error: message,
         });
-        sendResponse({ ok: false, error: message });
       });
-    return true;
+    sendResponse({ ok: true, accepted: true });
+    return false;
   }
 
   if (payload.command === "compareGoogleFlightsSearchCountries") {
@@ -158,17 +203,18 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
       return false;
     }
     const run = startGoogleFlightsComparison(progressTabId, payload.requestId);
-    void compareGoogleFlightsSearchCountries(payload, progressTabId, run)
-      .then(() => sendResponse({ ok: true }))
+    void comparisonTabs.ready
+      .then(() => compareGoogleFlightsSearchCountries(payload, progressTabId, run))
       .catch((error) => {
+        finishGoogleFlightsComparison(run);
         const message = error instanceof Error ? error.message : "Search comparison failed.";
         sendGoogleFlightsSearchComplete(progressTabId, payload.requestId, {
           ok: false,
           error: message,
         });
-        sendResponse({ ok: false, error: message });
       });
-    return true;
+    sendResponse({ ok: true, accepted: true });
+    return false;
   }
 
   if (payload.command === "cancelGoogleFlightsComparison") {
@@ -258,7 +304,7 @@ async function compareGoogleFlightsCountries(
       durationMs: Math.min(86400000, Math.max(0, Math.round(performance.now() - usageStartedAt))),
       outcome: usageOutcome,
     });
-    activeGoogleFlightsComparisonRuns.delete(googleFlightsComparisonRunKey(progressTabId, payload.requestId || ""));
+    finishGoogleFlightsComparison(run);
   }
 }
 
@@ -321,17 +367,29 @@ async function compareGoogleFlightsSearchCountries(
       durationMs: Math.min(86400000, Math.max(0, Math.round(performance.now() - usageStartedAt))),
       outcome: usageOutcome,
     });
-    activeGoogleFlightsComparisonRuns.delete(googleFlightsComparisonRunKey(progressTabId, payload.requestId || ""));
+    finishGoogleFlightsComparison(run);
   }
 }
 
 function startGoogleFlightsComparison(tabId: number, requestId: string): GoogleFlightsComparisonRun {
   const key = googleFlightsComparisonRunKey(tabId, requestId);
-  const existing = activeGoogleFlightsComparisonRuns.get(key);
-  if (existing) cancelGoogleFlightsComparison(existing);
-  const run = { controller: new AbortController(), activeTabIds: new Set<number>(), closedTabIds: new Set<number>() };
+  for (const existing of activeGoogleFlightsComparisonRuns.values()) {
+    if (existing.sourceTabId === tabId) cancelGoogleFlightsComparison(existing);
+  }
+  const run = {
+    sourceTabId: tabId,
+    requestId,
+    controller: new AbortController(),
+    activeTabIds: new Set<number>(),
+    closedTabIds: new Set<number>(),
+  };
   activeGoogleFlightsComparisonRuns.set(key, run);
   return run;
+}
+
+function finishGoogleFlightsComparison(run: GoogleFlightsComparisonRun): void {
+  const key = googleFlightsComparisonRunKey(run.sourceTabId, run.requestId);
+  if (activeGoogleFlightsComparisonRuns.get(key) === run) activeGoogleFlightsComparisonRuns.delete(key);
 }
 
 function googleFlightsComparisonRunKey(tabId: number, requestId: string): string {
@@ -344,7 +402,9 @@ function cancelGoogleFlightsComparison(run: GoogleFlightsComparisonRun): void {
   for (const tabId of run.activeTabIds) {
     run.activeTabIds.delete(tabId);
     run.closedTabIds.add(tabId);
-    void removeTab(tabId);
+    void removeTab(tabId)
+      .then(() => comparisonTabs.forget(tabId))
+      .catch(() => undefined);
   }
 }
 
@@ -365,7 +425,11 @@ function googleFlightsComparisonCancelledError(): Error {
 
 async function openMatrixWithAutoOpen(matrixUrl: string, openedByPage = false, sourceWindowId?: number): Promise<void> {
   const url = validatedMatrixUrl(matrixUrl);
-  await chrome.storage.local.remove(LEGACY_MATRIX_AUTO_OPEN_UNTIL_STORAGE_KEY);
+  await serializeWorkerStorage(async () => {
+    const stored = await chrome.storage.local.get(LEGACY_MATRIX_AUTO_OPEN_UNTIL_STORAGE_KEY);
+    if (stored[LEGACY_MATRIX_AUTO_OPEN_UNTIL_STORAGE_KEY] !== undefined)
+      await chrome.storage.local.remove(LEGACY_MATRIX_AUTO_OPEN_UNTIL_STORAGE_KEY);
+  });
   if (openedByPage) {
     const tab = await findPageOpenedMatrixTab(url, sourceWindowId);
     if (typeof tab?.id === "number") await rememberMatrixAutoOpenTab(tab.id);
@@ -391,23 +455,28 @@ async function findPageOpenedMatrixTab(matrixUrl: string, sourceWindowId?: numbe
 }
 
 async function rememberMatrixAutoOpenTab(tabId: number): Promise<void> {
-  const existing = await chrome.storage.local.get(MATRIX_AUTO_OPEN_TABS_STORAGE_KEY);
-  const tabs = autoOpenTabMap(existing[MATRIX_AUTO_OPEN_TABS_STORAGE_KEY]);
-  tabs[String(tabId)] = Date.now() + MATRIX_AUTO_OPEN_TTL_MS;
-  pruneAutoOpenTabMap(tabs);
-  await chrome.storage.local.set({ [MATRIX_AUTO_OPEN_TABS_STORAGE_KEY]: tabs });
+  await serializeWorkerStorage(async () => {
+    const existing = await chrome.storage.local.get(MATRIX_AUTO_OPEN_TABS_STORAGE_KEY);
+    const tabs = autoOpenTabMap(existing[MATRIX_AUTO_OPEN_TABS_STORAGE_KEY]);
+    tabs[String(tabId)] = Date.now() + MATRIX_AUTO_OPEN_TTL_MS;
+    pruneAutoOpenTabMap(tabs);
+    await chrome.storage.local.set({ [MATRIX_AUTO_OPEN_TABS_STORAGE_KEY]: tabs });
+  });
 }
 
 async function consumeMatrixAutoOpenForTab(tabId: number | undefined): Promise<boolean> {
   if (typeof tabId !== "number") return false;
-  const existing = await chrome.storage.local.get(MATRIX_AUTO_OPEN_TABS_STORAGE_KEY);
-  const tabs = autoOpenTabMap(existing[MATRIX_AUTO_OPEN_TABS_STORAGE_KEY]);
-  pruneAutoOpenTabMap(tabs);
-  const tabKey = String(tabId);
-  const authorized = Boolean(tabs[tabKey] && tabs[tabKey] >= Date.now());
-  if (authorized) delete tabs[tabKey];
-  await chrome.storage.local.set({ [MATRIX_AUTO_OPEN_TABS_STORAGE_KEY]: tabs });
-  return authorized;
+  return serializeWorkerStorage(async () => {
+    const existing = await chrome.storage.local.get(MATRIX_AUTO_OPEN_TABS_STORAGE_KEY);
+    const tabs = autoOpenTabMap(existing[MATRIX_AUTO_OPEN_TABS_STORAGE_KEY]);
+    const before = JSON.stringify(tabs);
+    pruneAutoOpenTabMap(tabs);
+    const tabKey = String(tabId);
+    const authorized = Boolean(tabs[tabKey] && tabs[tabKey] >= Date.now());
+    if (authorized) delete tabs[tabKey];
+    if (JSON.stringify(tabs) !== before) await chrome.storage.local.set({ [MATRIX_AUTO_OPEN_TABS_STORAGE_KEY]: tabs });
+    return authorized;
+  });
 }
 
 function validatedMatrixUrl(value: string): string {
@@ -563,6 +632,7 @@ async function compareBookingCountry(
     if (typeof tabId === "number") {
       run.activeTabIds.delete(tabId);
       if (!run.closedTabIds.delete(tabId)) await removeTab(tabId);
+      await comparisonTabs.forget(tabId);
     }
   }
 }
@@ -622,24 +692,37 @@ async function compareGoogleFlightsSearchCountry(
     if (typeof tabId === "number") {
       run.activeTabIds.delete(tabId);
       if (!run.closedTabIds.delete(tabId)) await removeTab(tabId);
+      await comparisonTabs.forget(tabId);
     }
   }
 }
 
 function createInactiveTabPaced(url: string, run: GoogleFlightsComparisonRun): Promise<chrome.tabs.Tab> {
   const scheduled = tabCreateQueue.then(async () => {
+    await comparisonTabs.ready;
     throwIfGoogleFlightsComparisonCancelled(run);
     const elapsed = Date.now() - lastTabCreatedAt;
     const waitMs = Math.max(0, GOOGLE_FLIGHTS_TAB_CREATE_SPACING_MS - elapsed);
     if (waitMs > 0) await delay(waitMs, run.controller.signal);
     throwIfGoogleFlightsComparisonCancelled(run);
-    const tab = await createInactiveTab(url);
+    const workerUrls = workerTabUrls(url);
+    const tab = await createInactiveTab(workerUrls.stagingUrl);
     lastTabCreatedAt = Date.now();
-    if (run.controller.signal.aborted) {
-      if (typeof tab.id === "number") await removeTab(tab.id);
-      throw googleFlightsComparisonCancelledError();
+    const tabId = tab.id;
+    if (typeof tabId !== "number") throw new Error("Chrome did not provide a tab id.");
+    run.activeTabIds.add(tabId);
+    try {
+      await comparisonTabs.remember(tabId, { sourceTabId: run.sourceTabId, requestId: run.requestId, ...workerUrls });
+      throwIfGoogleFlightsComparisonCancelled(run);
+      await navigateTab(tabId, workerUrls.url);
+      throwIfGoogleFlightsComparisonCancelled(run);
+      return tab;
+    } catch (error) {
+      run.activeTabIds.delete(tabId);
+      if (!run.closedTabIds.delete(tabId)) await removeTab(tabId);
+      await comparisonTabs.forget(tabId);
+      throw error;
     }
-    return tab;
   });
   tabCreateQueue = scheduled.then(
     () => undefined,
@@ -669,9 +752,14 @@ async function parseBookingComparisonTab(
   while (Date.now() < deadline) {
     throwIfAborted(signal);
     try {
-      latest = await sendTabMessage<CountryResult>(tabId, {
-        command: "parseBookingOptions",
-      });
+      latest = await sendTabMessage<CountryResult>(
+        tabId,
+        {
+          command: "parseBookingOptions",
+        },
+        signal,
+        Math.min(5000, deadline - Date.now()),
+      );
       if (latest.options.length > 0) return { ...latest, country, url };
     } catch {
       // The content script may not be ready immediately after the tab completes.
@@ -695,11 +783,16 @@ async function parseGoogleFlightsSearchTab(
     throwIfAborted(signal);
     try {
       if (!expanded) {
-        expanded = await tryExpandGoogleFlightsSearchResults(tabId);
+        expanded = await tryExpandGoogleFlightsSearchResults(tabId, signal, Math.min(5000, deadline - Date.now()));
       }
-      latest = await sendTabMessage<SearchCountryResult>(tabId, {
-        command: "parseSearchResults",
-      });
+      latest = await sendTabMessage<SearchCountryResult>(
+        tabId,
+        {
+          command: "parseSearchResults",
+        },
+        signal,
+        Math.min(5000, deadline - Date.now()),
+      );
       if (latest.results.length > 0) return { ...latest, country, url };
     } catch {
       // The content script may not be ready immediately after the tab completes.
@@ -726,11 +819,16 @@ async function waitForExpandedGoogleFlightsSearchTab(
     throwIfAborted(signal);
     try {
       if (!expanded) {
-        expanded = await tryExpandGoogleFlightsSearchResults(tabId);
+        expanded = await tryExpandGoogleFlightsSearchResults(tabId, signal, Math.min(5000, deadline - Date.now()));
       }
-      latest = await sendTabMessage<SearchCountryResult>(tabId, {
-        command: "parseSearchResults",
-      });
+      latest = await sendTabMessage<SearchCountryResult>(
+        tabId,
+        {
+          command: "parseSearchResults",
+        },
+        signal,
+        Math.min(5000, deadline - Date.now()),
+      );
       if (latest.results.length > previousResultCount) return { ...latest, country, url };
     } catch {
       // Google may still be mutating the result list after View more is clicked.
@@ -739,42 +837,26 @@ async function waitForExpandedGoogleFlightsSearchTab(
   return latest && latest.results.length > previousResultCount ? { ...latest, country, url } : null;
 }
 
-async function tryExpandGoogleFlightsSearchResults(tabId: number): Promise<boolean> {
-  const result = await sendTabMessage<GoogleFlightsSearchExpansionResult>(tabId, {
-    command: "expandGoogleFlightsSearchResults",
-    waitForExpansion: false,
-  });
+async function tryExpandGoogleFlightsSearchResults(
+  tabId: number,
+  signal?: AbortSignal,
+  timeoutMs = 5000,
+): Promise<boolean> {
+  const result = await sendTabMessage<GoogleFlightsSearchExpansionResult>(
+    tabId,
+    {
+      command: "expandGoogleFlightsSearchResults",
+      waitForExpansion: false,
+    },
+    signal,
+    timeoutMs,
+  );
   return result.clicked === true;
 }
 
 async function fetchProviderMetadata(baseUrl: string): Promise<RemoteProviderMetadata[]> {
   if (typeof __MOOFLIGHTS_DEV_BUILD__ !== "undefined" && !__MOOFLIGHTS_DEV_BUILD__) return [];
-  if (!baseUrl) return [];
-  const origin = hostPermissionOrigin(baseUrl);
-  if (origin && !(await hasHostPermission(origin))) return [];
-
-  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/extension/v1/providers`, {
-    headers: {
-      Accept: "application/json",
-    },
-  });
-  if (!response.ok) return [];
-  const body = (await response.json()) as { providers?: RemoteProviderMetadata[] };
-  return Array.isArray(body.providers) ? body.providers : [];
-}
-
-async function hasHostPermission(origin: string): Promise<boolean> {
-  if (!chrome.permissions?.contains) return false;
-  return chrome.permissions.contains({ origins: [origin] });
-}
-
-function hostPermissionOrigin(baseUrl: string): string {
-  try {
-    const url = new URL(baseUrl);
-    return `${url.origin}/*`;
-  } catch {
-    return "";
-  }
+  return fetchProviderMetadataWithCache(baseUrl);
 }
 
 function openOptionsPage(): void {
@@ -826,6 +908,20 @@ function createInactiveTab(url: string): Promise<chrome.tabs.Tab> {
   });
 }
 
+function getTabOrNull(tabId: number): Promise<chrome.tabs.Tab | null> {
+  return new Promise((resolve) => chrome.tabs.get(tabId, (tab) => resolve(chrome.runtime.lastError ? null : tab)));
+}
+
+function navigateTab(tabId: number, url: string): Promise<void> {
+  return new Promise((resolve, reject) =>
+    chrome.tabs.update(tabId, { url }, () => {
+      const error = chrome.runtime.lastError;
+      if (error) reject(new Error(error.message));
+      else resolve();
+    }),
+  );
+}
+
 function createActiveTab(url: string): Promise<chrome.tabs.Tab> {
   return new Promise((resolve, reject) => {
     chrome.tabs.create({ url, active: true }, (tab) => {
@@ -867,7 +963,10 @@ function reloadTab(tabId: number): Promise<void> {
 
 function removeTab(tabId: number): Promise<void> {
   return new Promise((resolve) => {
-    chrome.tabs.remove(tabId, () => resolve());
+    chrome.tabs.remove(tabId, () => {
+      void chrome.runtime.lastError;
+      resolve();
+    });
   });
 }
 

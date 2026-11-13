@@ -224,8 +224,9 @@ export function parseSearchResults(
   country: string,
   url: string,
   limit = Number.POSITIVE_INFINITY,
+  rows = searchResultRows(root),
 ): SearchCountryResult {
-  const results = searchResultRows(root)
+  const results = rows
     .map((row, index) => parseSearchResultRow(row, index))
     .filter((result): result is SearchResult => Boolean(result))
     .slice(0, limit);
