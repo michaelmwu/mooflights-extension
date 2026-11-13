@@ -1502,7 +1502,7 @@ test("previews uncertain fare-class earnings locally and removes the UI when sha
       contentType: "text/html",
       body: htmlFixture(`
       <style>body{font-family:Arial;margin:32px}.pIav2d{display:flex;justify-content:space-between;max-width:760px;border:1px solid #ddd;border-radius:12px;padding:20px;overflow:hidden}.U3gSDe{max-width:260px}</style>
-      <button aria-label="1 adult">1</button>
+      
       <h1>Bangkok to Tokyo</h1><ul><li class="pIav2d"><div><div class="wtdjmc">7:00 AM - 3:00 PM</div>
       <div class="sSHqwe">Thai Airways</div><div>6 hr Nonstop</div></div><div class="U3gSDe"><span class="YMlIz FpEdX" role="text">$200</span></div>
       <span data-travelimpactmodelwebsiteurl="https://www.google.com/travel/impact?itinerary=BKK-NRT-TG-640-20270101"></span></li>
@@ -1515,10 +1515,27 @@ test("previews uncertain fare-class earnings locally and removes the UI when sha
   const segment = "\x0a\x03BKK\x12\x0a2027-01-01\x1a\x03NRT\x2a\x02TG\x32\x03640";
   const tfs = Buffer.from(`\x1a${String.fromCharCode(segment.length)}${segment}`, "binary").toString("base64url");
   await page.goto(`https://www.google.com/travel/flights/search?tfs=${tfs}&curr=USD&gl=US`);
+  // Passenger controls may arrive after otherwise unchanged search results.
+  await expect(page.locator("#mooflights-google-flights-panel")).toBeAttached();
+  await expect(page.locator("[data-moo-flights-fare-estimate]")).toHaveCount(0);
+  await page.evaluate(() => {
+    const passenger = document.createElement("button");
+    passenger.setAttribute("aria-label", "1 adult");
+    passenger.textContent = "1";
+    document.body.prepend(passenger);
+  });
   const preview = page.locator("[data-moo-flights-fare-estimate]").first();
   const otherPreview = page.locator("[data-moo-flights-fare-estimate]").nth(1);
   await expect(preview.getByText("Estimated class W / Y", { exact: true })).toBeVisible();
   await expect(preview.getByText("United MileagePlus: 722–2,889 estimated miles", { exact: true })).toBeVisible();
+  // Equivalent replacement rows must recover their cached hints.
+  await page.evaluate(() => {
+    const original = document.querySelector(".pIav2d");
+    const replacement = original?.cloneNode(true) as HTMLElement;
+    replacement.querySelector("[data-moo-flights-fare-estimate]")?.remove();
+    original?.replaceWith(replacement);
+  });
+  await expect(page.locator("[data-moo-flights-fare-estimate]")).toHaveCount(2);
   const compare = preview.getByRole("button", { name: "Compare classes" });
   await compare.click();
   const dialog = page.getByRole("dialog", { name: "Booking class earnings preview" });

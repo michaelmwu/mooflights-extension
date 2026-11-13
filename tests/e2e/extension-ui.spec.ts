@@ -85,3 +85,36 @@ test("accepts explicit localhost ports for development API permissions", async (
   );
   expect(allowed).toBe(true);
 });
+
+test("preserves preferences changed while contribution deletion is pending", async ({
+  openExtensionPage,
+  extensionServiceWorker,
+}) => {
+  await extensionServiceWorker.evaluate(async () => {
+    await chrome.storage.local.set({
+      muTravelSettings: {
+        communityHistory: { enabled: false, baseUrl: "https://app.mooflights.com", consentVersion: "" },
+      },
+    });
+  });
+  const page = await openExtensionPage("options/index.html");
+  await page.evaluate(() => {
+    chrome.runtime.sendMessage = (() =>
+      new Promise((resolve) => {
+        (window as any).finishDeletion = () => resolve({ ok: true });
+      })) as typeof chrome.runtime.sendMessage;
+  });
+  await page.getByRole("button", { name: "Turn off sharing and delete my contributions" }).click();
+  await expect.poll(() => page.evaluate(() => typeof (window as any).finishDeletion)).toBe("function");
+  await page.getByLabel("Add country").fill("FR");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Remove FR" })).toBeVisible();
+  await page.evaluate(() => (window as any).finishDeletion());
+  await expect(page.getByRole("button", { name: "Turn off sharing and delete my contributions" })).toBeDisabled();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Remove FR" })).toBeVisible();
+  const saved = await extensionServiceWorker.evaluate(
+    async () => (await chrome.storage.local.get("muTravelSettings")).muTravelSettings,
+  );
+  expect(saved.communityHistory).toEqual({ enabled: false, consentVersion: "", baseUrl: "" });
+});

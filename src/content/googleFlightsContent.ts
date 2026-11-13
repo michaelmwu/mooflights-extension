@@ -1085,6 +1085,7 @@ function scheduleRender(): void {
     if (mode === "search") {
       updateSearchBaselineDuringComparison();
       applySearchBadges();
+      applyHistoricalFareEstimates();
       applyRequestedSearchHighlight(state.searchBaseline);
     }
     return;
@@ -1119,6 +1120,7 @@ function scheduleRender(): void {
       comparedCountries: state.searchResults.map((result) => result.country),
     });
     applySearchBadges();
+    applyHistoricalFareEstimates();
     applyRequestedSearchHighlight(state.searchBaseline);
     return;
   }
@@ -1189,6 +1191,7 @@ function scheduleRender(): void {
 
   if (!pageKeyChanged && state.baselineSignature === baselineSignature) {
     applySearchBadges();
+    applyHistoricalFareEstimates();
     applyRequestedSearchHighlight(searchBaseline);
     if (mode === "search" && state.searchResults.length === 0)
       void loadStoredSearchComparisonCache(cacheKey, baselineSignature);

@@ -7,41 +7,59 @@ import {
   orderHistoricalCountries,
   validatedFareEstimate,
 } from "../shared/communityHistory";
+import { hasCommunityPermission } from "../shared/communityPermissions";
 import { COMMUNITY_CONSENT_VERSION, historyBaseUrl, loadCommunitySettings } from "../shared/communitySettings";
 
 const SESSION_KEY = "mooFlightsHistoryContributorSessions";
 const controllers = new Set<AbortController>();
 const sessionRequests = new Map<string, Promise<string>>();
 const synchronizedConsents = new Map<string, string>();
+let consentGeneration = 0;
+type RequestContext = { url: string; generation: number };
 
 // Consent changes cancel outstanding reads/writes; there is no upload outbox.
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area !== "local" || !changes.muTravelSettings) return;
+function invalidateConsent(): void {
+  consentGeneration += 1;
   for (const controller of controllers) controller.abort();
   synchronizedConsents.clear();
+}
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local" || !changes.muTravelSettings) return;
+  invalidateConsent();
+  void synchronizeStoredConsent().catch(() => undefined);
+});
+chrome.permissions.onRemoved?.addListener(() => {
+  invalidateConsent();
   void synchronizeStoredConsent().catch(() => undefined);
 });
 
-async function configuredUrl(purpose: "history" | "analytics" | "consent" = "history"): Promise<string> {
+async function configuredUrl(purpose: "history" | "analytics" | "consent" = "history"): Promise<RequestContext | null> {
+  const generation = consentGeneration;
   const { communityHistory } = await loadCommunitySettings();
-  if (purpose !== "consent" && !communityHistory.enabled) return "";
+  if (purpose !== "consent" && !communityHistory.enabled) return null;
   const url = historyBaseUrl(communityHistory.baseUrl);
-  if (!url || !(await chrome.permissions.contains({ origins: [`${url}/*`] }))) return "";
-  return url;
+  if (!url) return null;
+  const permitted =
+    purpose === "consent"
+      ? await chrome.permissions.contains({ origins: [`${url}/*`] })
+      : await hasCommunityPermission(url);
+  if (!permitted) return null;
+  return generation === consentGeneration ? { url, generation } : null;
 }
 
 async function request(
-  baseUrl: string,
+  context: RequestContext,
   path: string,
   method: string,
   body?: unknown,
   token?: string,
 ): Promise<unknown> {
+  if (context.generation !== consentGeneration) throw new Error("Sharing settings changed.");
   const controller = new AbortController();
   controllers.add(controller);
   const timeout = setTimeout(() => controller.abort(), 2500);
   try {
-    const response = await fetch(`${baseUrl}/api/extension/v1/${path}`, {
+    const response = await fetch(`${context.url}/api/extension/v1/${path}`, {
       method,
       signal: controller.signal,
       credentials: "omit",
@@ -59,46 +77,55 @@ async function request(
 
 async function consentPayload() {
   const { communityHistory } = await loadCommunitySettings();
+  const enabled = communityHistory.enabled && (await hasCommunityPermission(communityHistory.baseUrl));
   return {
-    historyEnabled: communityHistory.enabled,
-    analyticsEnabled: communityHistory.enabled,
-    analyticsConsentVersion: communityHistory.enabled ? ANALYTICS_CONSENT_VERSION : null,
+    historyEnabled: enabled,
+    analyticsEnabled: enabled,
+    analyticsConsentVersion: enabled ? ANALYTICS_CONSENT_VERSION : null,
   };
 }
 
 async function synchronizeStoredConsent(): Promise<void> {
-  const url = await configuredUrl("consent");
-  if (!url) return;
+  const context = await configuredUrl("consent");
+  if (!context) return;
   const stored = await chrome.storage.local.get(SESSION_KEY);
   const sessions = stored[SESSION_KEY] as Record<string, unknown> | undefined;
-  if (typeof sessions?.[url] !== "string") return;
-  await contributorToken(url, "consent");
+  if (typeof sessions?.[context.url] !== "string") return;
+  await contributorToken(context, "consent");
 }
 
 async function contributorToken(
-  url: string,
+  context: RequestContext,
   purpose: "history" | "analytics" | "consent" = "history",
 ): Promise<string> {
+  const { url } = context;
   const pending = sessionRequests.get(url);
   if (pending) {
-    await pending;
-    return contributorToken(url, purpose);
+    try {
+      await pending;
+    } catch (error) {
+      // Revocation still needs to run after the request it cancelled rejects.
+      if (purpose !== "consent") throw error;
+    }
+    return contributorToken(context, purpose);
   }
   const promise = (async () => {
     const stored = await chrome.storage.local.get(SESSION_KEY);
     const sessions = (stored[SESSION_KEY] || {}) as Record<string, string>;
-    if ((await configuredUrl(purpose)) !== url) throw new Error("Sharing disabled.");
+    const current = await configuredUrl(purpose);
+    if (!current || current.url !== url || current.generation !== context.generation)
+      throw new Error("Sharing settings changed.");
     const consent = await consentPayload();
     const signature = JSON.stringify(consent);
     if (typeof sessions[url] === "string") {
       if (synchronizedConsents.get(url) !== signature) {
-        await request(url, "contributor-sessions/current", "PUT", consent, sessions[url]);
+        await request(context, "contributor-sessions/current", "PUT", consent, sessions[url]);
         synchronizedConsents.set(url, signature);
       }
       return sessions[url];
     }
     if (purpose === "consent") throw new Error("No contributor credential.");
-    const result = await request(url, "contributor-sessions", "POST", {
+    const result = await request(context, "contributor-sessions", "POST", {
       consentVersion: COMMUNITY_CONSENT_VERSION,
       ...consent,
     });
@@ -121,10 +148,9 @@ async function contributorToken(
 export async function recordUsage(signal: UsageSignal): Promise<void> {
   const occurredAt = new Date().toISOString();
   try {
-    const url = await configuredUrl("analytics");
-    if (!url) return;
-    const token = await contributorToken(url, "analytics");
-    if ((await configuredUrl("analytics")) !== url) return;
+    const context = await configuredUrl("analytics");
+    if (!context) return;
+    const token = await contributorToken(context, "analytics");
     const manifest = chrome.runtime.getManifest();
     const event: UsageEvent = {
       ...signal,
@@ -134,7 +160,7 @@ export async function recordUsage(signal: UsageSignal): Promise<void> {
       browser: manifest.manifest_version === 2 ? "firefox" : "chrome",
       occurredAt,
     };
-    await request(url, "usage-events", "POST", event, token);
+    await request(context, "usage-events", "POST", event, token);
   } catch {
     /* Analytics is best-effort and has no persistent queue. */
   }
@@ -146,11 +172,10 @@ export async function contributeHistory(
 ): Promise<void> {
   if (!observation) return;
   try {
-    const url = await configuredUrl();
-    if (!url) return;
-    const token = await contributorToken(url);
-    if ((await configuredUrl()) !== url) return;
-    await request(url, `${kind}-observations`, "POST", observation, token);
+    const context = await configuredUrl();
+    if (!context) return;
+    const token = await contributorToken(context);
+    await request(context, `${kind}-observations`, "POST", observation, token);
   } catch {
     /* Sharing failure must not affect local features. */
   }
@@ -159,9 +184,9 @@ export async function contributeHistory(
 export async function prioritizeCountries(query: MarketQuery | null, countries: string[]): Promise<string[]> {
   if (!query) return countries;
   try {
-    const url = await configuredUrl();
-    if (!url) return countries;
-    const response = await request(url, "market-recommendations", "POST", query);
+    const context = await configuredUrl();
+    if (!context) return countries;
+    const response = await request(context, "market-recommendations", "POST", query);
     return orderHistoricalCountries(countries, response);
   } catch {
     return countries;
@@ -170,8 +195,8 @@ export async function prioritizeCountries(query: MarketQuery | null, countries: 
 
 export async function estimateFare(query: FareQuery): Promise<ReturnType<typeof validatedFareEstimate>> {
   try {
-    const url = await configuredUrl();
-    if (url) return validatedFareEstimate(await request(url, "fare-estimates", "POST", query));
+    const context = await configuredUrl();
+    if (context) return validatedFareEstimate(await request(context, "fare-estimates", "POST", query));
   } catch {
     /* No estimate is a valid offline fallback. */
   }
@@ -188,7 +213,13 @@ export async function deleteSharedHistory(baseUrl: string): Promise<void> {
   const stored = await chrome.storage.local.get(SESSION_KEY);
   const sessions = (stored[SESSION_KEY] || {}) as Record<string, string>;
   if (typeof sessions[url] !== "string") return;
-  await request(url, "contributor-sessions/current", "DELETE", undefined, sessions[url]);
+  await request(
+    { url, generation: consentGeneration },
+    "contributor-sessions/current",
+    "DELETE",
+    undefined,
+    sessions[url],
+  );
   delete sessions[url];
   synchronizedConsents.delete(url);
   await chrome.storage.local.set({ [SESSION_KEY]: sessions });
@@ -196,12 +227,12 @@ export async function deleteSharedHistory(baseUrl: string): Promise<void> {
 
 export async function prioritizeSearchCountries(queries: MarketQuery[], countries: string[]): Promise<string[]> {
   try {
-    const url = await configuredUrl();
-    if (!url || !queries.length) return countries;
+    const context = await configuredUrl();
+    if (!context || !queries.length) return countries;
     const responses = await Promise.all(
       queries.slice(0, 3).map(async (query) => {
         try {
-          return await request(url, "market-recommendations", "POST", query);
+          return await request(context, "market-recommendations", "POST", query);
         } catch {
           return null;
         }

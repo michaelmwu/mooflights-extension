@@ -1,6 +1,6 @@
 import "../shared/firefoxChromeCompat";
 import type React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   airportAreaFromSearchValue,
@@ -9,6 +9,7 @@ import {
   countryDisplayName,
 } from "../shared/airports";
 import { COMMUNITY_CONSENT_VERSION, DEFAULT_HISTORY_API_ORIGIN, historyBaseUrl } from "../shared/communityHistory";
+import { communityPermissions, supportsNativeDataConsent } from "../shared/communityPermissions";
 import { flagEmoji } from "../shared/flags";
 import { DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES, parseGoogleFlightsCountryInput } from "../shared/googleFlightsBooking";
 import {
@@ -31,11 +32,14 @@ import "./options.css";
 
 function Options(): React.ReactElement {
   const [settings, setSettings] = useState<ExtensionSettings>(DEFAULT_SETTINGS);
+  const latestSettings = useRef(settings);
   const [programSearch, setProgramSearch] = useState("");
   const [googleFlightsCountrySearch, setGoogleFlightsCountrySearch] = useState("");
   const [historyUrl, setHistoryUrl] = useState(DEFAULT_HISTORY_API_ORIGIN);
   const [historyStatus, setHistoryStatus] = useState("");
   const [historyBusy, setHistoryBusy] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [nativeDataConsent, setNativeDataConsent] = useState(false);
   const [saved, setSaved] = useState(false);
   const t = useMemo(() => createTranslator(settings.language), [settings.language]);
   const airportAreas = useMemo(() => airportAreaOptions(settings.language), [settings.language]);
@@ -52,9 +56,12 @@ function Options(): React.ReactElement {
   );
 
   useEffect(() => {
-    void loadSettings().then((next) => {
+    void Promise.all([loadSettings(), supportsNativeDataConsent()]).then(([next, nativeConsent]) => {
+      setNativeDataConsent(nativeConsent);
+      latestSettings.current = next;
       setSettings(next);
       setHistoryUrl(next.communityHistory.baseUrl || DEFAULT_HISTORY_API_ORIGIN);
+      setHistoryLoaded(true);
     });
   }, []);
 
@@ -64,6 +71,7 @@ function Options(): React.ReactElement {
   }, [settings.language, t]);
 
   async function persist(next: ExtensionSettings): Promise<void> {
+    latestSettings.current = next;
     setSettings(next);
     await saveSettings(next);
     setSaved(true);
@@ -82,13 +90,13 @@ function Options(): React.ReactElement {
       return;
     }
     try {
-      const granted = await chrome.permissions.request({ origins: [`${baseUrl}/*`] });
+      const granted = await chrome.permissions.request(communityPermissions(baseUrl, nativeDataConsent));
       if (!granted) {
         setHistoryStatus(t("historyPermissionDenied"));
         return;
       }
       await persist({
-        ...settings,
+        ...latestSettings.current,
         communityHistory: { enabled: true, consentVersion: COMMUNITY_CONSENT_VERSION, baseUrl },
       });
     } catch {
@@ -106,7 +114,10 @@ function Options(): React.ReactElement {
         baseUrl: settings.communityHistory.baseUrl,
       });
       if (result?.ok)
-        await persist({ ...settings, communityHistory: { enabled: false, consentVersion: "", baseUrl: "" } });
+        await persist({
+          ...latestSettings.current,
+          communityHistory: { enabled: false, consentVersion: "", baseUrl: "" },
+        });
       setHistoryStatus(t(result?.ok ? "historyDeleted" : "historyDeleteFailed"));
     } catch {
       setHistoryStatus(t("historyDeleteFailed"));
@@ -227,7 +238,7 @@ function Options(): React.ReactElement {
             <input
               type="url"
               value={historyUrl}
-              disabled={!!settings.communityHistory.baseUrl || historyBusy}
+              disabled={!historyLoaded || !!settings.communityHistory.baseUrl || historyBusy}
               onChange={(event) => setHistoryUrl(event.currentTarget.value)}
               placeholder="https://…"
             />
@@ -237,14 +248,14 @@ function Options(): React.ReactElement {
           <input
             type="checkbox"
             checked={settings.communityHistory.enabled}
-            disabled={historyBusy}
+            disabled={!historyLoaded || historyBusy}
             onChange={(event) => void enableHistory(event.currentTarget.checked)}
           />
           {t("historyConsent")}
         </label>
         <button
           type="button"
-          disabled={historyBusy || !settings.communityHistory.baseUrl}
+          disabled={!historyLoaded || historyBusy || !settings.communityHistory.baseUrl}
           onClick={() => void deleteHistory()}
         >
           {t("historyDelete")}

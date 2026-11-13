@@ -192,6 +192,7 @@ function applyBrowserManifest(manifest) {
       id: "extension@mooflights.com",
       data_collection_permissions: {
         required: ["none"],
+        optional: ["websiteContent", "searchTerms", "technicalAndInteraction"],
       },
       strict_min_version: "107.0",
     },

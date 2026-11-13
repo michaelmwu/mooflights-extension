@@ -21,7 +21,7 @@ beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock);
   vi.stubGlobal("chrome", {
     runtime: { getManifest: () => ({ version: "0.0.10", manifest_version: 3 }) },
-    permissions: { contains: vi.fn(async () => true) },
+    permissions: { contains: vi.fn(async () => true), onRemoved: { addListener: vi.fn() } },
     storage: {
       onChanged: { addListener: vi.fn() },
       local: {
@@ -119,6 +119,105 @@ it("turning off the one control stops events and disables both server-side purpo
   settings.communityHistory.enabled = false;
   const listener = vi.mocked(chrome.storage.onChanged.addListener).mock.calls[0]?.[0];
   listener?.({ muTravelSettings: { newValue: settings } }, "local");
+  await vi.waitFor(() => expect(fetchMock.mock.calls.filter(([, init]) => init.method === "PUT")).toHaveLength(2));
+  const updates = fetchMock.mock.calls.filter(([, init]) => init.method === "PUT");
+  expect(JSON.parse(updates.at(-1)?.[1].body)).toEqual({
+    historyEnabled: false,
+    analyticsEnabled: false,
+    analyticsConsentVersion: null,
+  });
+  await recordUsage({ eventName: "fare-preview.opened", surface: "google-flights-search" });
+  expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/usage-events"))).toHaveLength(1);
+});
+
+it.each(["fare", "countries", "search", "usage"] as const)(
+  "does not start %s requests when consent changes during the permission check",
+  async (operation) => {
+    settings.communityHistory = { enabled: true, consentVersion: "community-v2", baseUrl: "https://api.example.com" };
+    let finishPermission!: (allowed: boolean) => void;
+    vi.mocked(chrome.permissions.contains).mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finishPermission = resolve;
+        }),
+    );
+    const client = await import("./communityHistory");
+    const work =
+      operation === "fare"
+        ? client.estimateFare({
+            origin: "TPE",
+            destination: "NRT",
+            carrier: "BR",
+            cabin: "COACH",
+            departureDate: "2027-01-01",
+            currency: "USD",
+            price: 200,
+            tripType: "one-way",
+            passengerCount: 1,
+          })
+        : operation === "countries"
+          ? client.prioritizeCountries(query, query.countries)
+          : operation === "search"
+            ? client.prioritizeSearchCountries([query], query.countries)
+            : client.recordUsage({ eventName: "fare-preview.opened", surface: "google-flights-search" });
+    await vi.waitFor(() => expect(finishPermission).toBeTypeOf("function"));
+    settings.communityHistory.enabled = false;
+    const listener = vi.mocked(chrome.storage.onChanged.addListener).mock.calls[0]?.[0];
+    listener?.({ muTravelSettings: { newValue: settings } }, "local");
+    finishPermission(true);
+    await work;
+    expect(fetchMock).not.toHaveBeenCalled();
+  },
+);
+
+it("retries consent synchronization with current settings after an in-flight update is aborted", async () => {
+  settings.communityHistory = { enabled: true, consentVersion: "community-v2", baseUrl: "https://api.example.com" };
+  stored.mooFlightsHistoryContributorSessions = {
+    "https://api.example.com": "test-only-contributor-credential-1234567890",
+  };
+  fetchMock.mockImplementationOnce(
+    (_url, init: RequestInit) =>
+      new Promise((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+      }),
+  );
+  fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+  const { recordUsage } = await import("./communityHistory");
+  const usage = recordUsage({ eventName: "fare-preview.opened", surface: "google-flights-search" });
+  await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  settings.communityHistory.enabled = false;
+  const listener = vi.mocked(chrome.storage.onChanged.addListener).mock.calls[0]?.[0];
+  listener?.({ muTravelSettings: { newValue: settings } }, "local");
+  await usage;
+  await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  const [url, init] = fetchMock.mock.calls[1] ?? [];
+  expect(url).toBe("https://api.example.com/api/extension/v1/contributor-sessions/current");
+  expect(init.method).toBe("PUT");
+  expect(JSON.parse(init.body)).toEqual({
+    historyEnabled: false,
+    analyticsEnabled: false,
+    analyticsConsentVersion: null,
+  });
+  expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/usage-events"))).toBe(false);
+});
+
+it("native data-consent revocation disables server purposes while retaining host access", async () => {
+  settings.communityHistory = { enabled: true, consentVersion: "community-v2", baseUrl: "https://api.example.com" };
+  stored.mooFlightsHistoryContributorSessions = {
+    "https://api.example.com": "test-only-contributor-credential-1234567890",
+  };
+  let nativeGranted = true;
+  vi.stubGlobal("browser", { permissions: { getAll: async () => ({ data_collection: [] }) } });
+  vi.mocked(chrome.permissions.contains).mockImplementation(async (permissions) => {
+    const data = (permissions as chrome.permissions.Permissions & { data_collection?: string[] }).data_collection;
+    return !data || nativeGranted;
+  });
+  fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+  const { recordUsage } = await import("./communityHistory");
+  await recordUsage({ eventName: "fare-preview.opened", surface: "google-flights-search" });
+  nativeGranted = false;
+  const listener = vi.mocked(chrome.permissions.onRemoved.addListener).mock.calls[0]?.[0];
+  listener?.({});
   await vi.waitFor(() => expect(fetchMock.mock.calls.filter(([, init]) => init.method === "PUT")).toHaveLength(2));
   const updates = fetchMock.mock.calls.filter(([, init]) => init.method === "PUT");
   expect(JSON.parse(updates.at(-1)?.[1].body)).toEqual({
