@@ -18,6 +18,7 @@ import {
   prioritizeSearchCountries,
   recordUsage,
 } from "./communityHistory";
+import { sendTabMessage } from "./tabMessaging";
 
 type RuntimeMessage = {
   command?: string;
@@ -900,19 +901,6 @@ function waitForTabComplete(tabId: number, signal?: AbortSignal): Promise<void> 
     signal?.addEventListener("abort", cancelled, { once: true });
     chrome.tabs.get(tabId, (tab) => {
       if (!chrome.runtime.lastError && tab.status === "complete") done();
-    });
-  });
-}
-
-function sendTabMessage<T>(tabId: number, message: unknown): Promise<T> {
-  return new Promise((resolve, reject) => {
-    chrome.tabs.sendMessage(tabId, message, (response: T) => {
-      const error = chrome.runtime.lastError;
-      if (error) {
-        reject(new Error(error.message));
-        return;
-      }
-      resolve(response);
     });
   });
 }
