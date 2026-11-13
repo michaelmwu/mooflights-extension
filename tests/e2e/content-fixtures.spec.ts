@@ -1383,3 +1383,118 @@ function htmlFixture(body: string): string {
       <body>${body}</body>
     </html>`;
 }
+
+test("records fresh country comparisons with OTA names and applies shared country priorities", async ({
+  context,
+  page,
+  extensionServiceWorker,
+}) => {
+  await setGoogleFlightsCountries(extensionServiceWorker, ["US", "CA", "ZA"]);
+  await extensionServiceWorker.evaluate(async () => {
+    const stored = await chrome.storage.local.get("muTravelSettings");
+    await chrome.storage.local.set({
+      muTravelSettings: {
+        ...stored.muTravelSettings,
+        communityHistory: { enabled: true, baseUrl: "https://history.example.test" },
+      },
+    });
+    chrome.permissions.contains = async () => true;
+    const state = globalThis as typeof globalThis & {
+      historyRequests: { path: string; body: any }[];
+      comparisonUrls: string[];
+    };
+    state.historyRequests = [];
+    state.comparisonUrls = [];
+    // Extension-initiated first navigations bypass Playwright routing. Create blank
+    // tabs and let Playwright navigate them through the fixtures before parsing.
+    const create = chrome.tabs.create;
+    chrome.tabs.create = ((options: chrome.tabs.CreateProperties, callback: (tab: chrome.tabs.Tab) => void) => {
+      if (options.url?.startsWith("https://www.google.com/travel/flights")) {
+        state.comparisonUrls.push(options.url);
+        return create({ ...options, url: "about:blank" }, callback);
+      }
+      return create(options, callback);
+    }) as typeof chrome.tabs.create;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input, init) => {
+      if (!String(input).startsWith("https://history.example.test/")) return originalFetch(input, init);
+      const path = new URL(String(input)).pathname.split("/").at(-1) || "";
+      state.historyRequests.push({ path, body: JSON.parse(String(init?.body || "{}")) });
+      const body =
+        path === "contributor-sessions"
+          ? { contributorToken: "test-only-contributor-credential-1234567890" }
+          : path === "market-recommendations"
+            ? { recommendations: [{ country: "ZA", relativePrice: 1, sampleCount: 3 }] }
+            : { observationId: "test", duplicate: false };
+      return new Response(JSON.stringify(body), { status: 201, headers: { "Content-Type": "application/json" } });
+    };
+  });
+  await routeGoogleFlightsBookingFixtures(context);
+  await page.goto(
+    "https://www.google.com/travel/flights/booking?tfs=CDIQAho_EgoyMDI2LTA4LTI3Ih8KA0hLRxIKMjAyNi0wOC0yNxoDVFBFKgJKWDIDMjM2agcIARIDSEtHcgcIARIDVFBFQAFIAZgBAg&curr=USD&gl=US",
+  );
+  context.on("page", (comparison) => {
+    void extensionServiceWorker
+      .evaluate(() => (globalThis as any).comparisonUrls.shift() as string | undefined)
+      .then((url) => (url ? comparison.goto(url) : undefined))
+      .catch(() => undefined);
+  });
+  const firstComparison = context.waitForEvent("page");
+  await page.locator("#mooflights-google-flights-panel").getByRole("button", { name: "Compare (3)" }).click();
+  await (await firstComparison).waitForURL((url) => url.searchParams.get("gl") === "ZA");
+  await expect
+    .poll(() => extensionServiceWorker.evaluate(() => (globalThis as any).historyRequests.map((r: any) => r.path)), {
+      timeout: 15_000,
+    })
+    .toContain("market-observations");
+  const payload = await extensionServiceWorker.evaluate(
+    () => (globalThis as any).historyRequests.find((r: any) => r.path === "market-observations").body,
+  );
+  expect(payload.carriers).toEqual(["JX"]);
+  expect(payload.markets.map((m: any) => m.country).sort()).toEqual(["CA", "US", "ZA"]);
+  expect(payload.markets.flatMap((m: any) => m.options).some((o: any) => !o.isDirect && o.provider)).toBe(true);
+  expect(JSON.stringify(payload)).not.toMatch(/https:|bookingUrl|summaryText|priceText/);
+});
+
+test("shows uncertain fare-class estimates from search rows and removes them when sharing is disabled", async ({
+  context,
+  page,
+  extensionServiceWorker,
+}) => {
+  await extensionServiceWorker.evaluate(async () => {
+    await chrome.storage.local.set({
+      muTravelSettings: { communityHistory: { enabled: true, baseUrl: "https://history.example.test" } },
+    });
+    chrome.permissions.contains = async () => true;
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          status: "historical-estimate",
+          candidates: [{ bookingClass: "V", share: 0.75, sampleCount: 3 }],
+        }),
+        { headers: { "Content-Type": "application/json" } },
+      );
+  });
+  await context.route("https://www.google.com/travel/flights**", (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: `
+    <button aria-label="1 adult">1</button>
+    <ul><li class="pIav2d"><div class="wtdjmc">7:00 AM - 10:30 AM</div><div class="sSHqwe">EVA Air</div>
+    <div>3 hr 30 min Nonstop</div><span role="text">$200</span>
+    <span data-travelimpactmodelwebsiteurl="https://www.google.com/travel/impact?itinerary=TPE-NRT-BR-198-2027-01-01"></span></li></ul>`,
+    }),
+  );
+  const segment = "\x0a\x03TPE\x12\x0a2027-01-01\x1a\x03NRT\x2a\x02BR\x32\x03198";
+  const tfs = Buffer.from(`\x1a${String.fromCharCode(segment.length)}${segment}`, "binary").toString("base64url");
+  await page.goto(`https://www.google.com/travel/flights/search?tfs=${tfs}&curr=USD&gl=US`);
+  await expect(page.locator("[data-moo-flights-fare-estimate]")).toHaveText(
+    "Estimated booking class: V (75% match; 3 supporting observations)",
+  );
+  await extensionServiceWorker.evaluate(async () => {
+    await chrome.storage.local.set({
+      muTravelSettings: { communityHistory: { enabled: false, baseUrl: "https://history.example.test" } },
+    });
+  });
+  await expect(page.locator("[data-moo-flights-fare-estimate]")).toHaveCount(0);
+});

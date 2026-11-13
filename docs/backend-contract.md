@@ -84,3 +84,20 @@ Rules:
 - `GET /api/extension/v1/entitlements`
 
 These are intentionally deferred from the first reviewable extension release.
+
+## Community Flight History
+
+Community history has a separate, explicit opt-in setting, defaults to `https://app.mooflights.com`, and supports an API-origin override in dev builds. It is available in production builds only after host permission is granted. The background worker owns all requests, timeouts and the local contributor credential; it falls back to existing local behavior on failure.
+
+Endpoints in the private backend:
+
+- `POST /api/extension/v1/contributor-sessions` with `consentVersion: "history-v1"` returns a random `contributorToken`.
+- `POST /api/extension/v1/market-observations` accepts a `v1` completed Google Flights booking comparison. Country results include normalized `options` with `provider`, `price` and `isDirect`, in the observation's currency.
+- `POST /api/extension/v1/market-recommendations` accepts route `slices` (origin/destination), `carriers`, `cabin`, `tripType`, and selected `countries`. It returns `recommendations` containing `country`, `relativePrice`, `sampleCount` and supported `providers`.
+- `POST /api/extension/v1/fare-observations` accepts `v1` confirmed ITA examples with route, carrier, cabin, departure date, currency, price, `tripType: "one-way"`, `passengerCount: 1`, flight number, booking class, and optional fare basis.
+- `POST /api/extension/v1/fare-estimates` accepts the same fare context without training labels, flight number, source, version or idempotency key. It returns `status: "unknown"` and empty candidates, or `status: "historical-estimate"` with candidates containing `bookingClass`, `share` and `sampleCount`.
+- `DELETE /api/extension/v1/contributor-sessions/current` revokes the credential and deletes both types of raw observations.
+
+Observation writes and deletion use `X-MooFlights-Contributor-Token`. Writes use a UUID `idempotencyKey`. Recommendation reads do not include the contributor credential. All new fare/query payloads reject unknown fields and non-finite numbers. Clients must serialize allowlisted fields, excluding page URLs, booking links and account data.
+
+See [Community flight history](./community-history.md) for matching rules, initial limitations, consent and retention.

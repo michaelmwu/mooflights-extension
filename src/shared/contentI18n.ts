@@ -2,6 +2,10 @@ import type { AppLanguage } from "./types";
 
 const CONTENT_TRANSLATIONS = {
   en: {
+    estimatedBookingClass: "Estimated booking class: {class} ({share}% match; {count} supporting observations)",
+    estimatedBookingClassNote:
+      "Historical estimate from similar ITA fares. Verify the booking class before booking; fare rules and mileage may differ.",
+
     panelActions: "Panel actions",
     hideForSession: "Hide for this session",
     minimize: "Minimize",
@@ -123,6 +127,11 @@ const CONTENT_TRANSLATIONS = {
     openingFirstMatrixResult: "Opening first Matrix result...",
   },
   es: {
+    estimatedBookingClass:
+      "Clase de reserva estimada: {class} ({share}% de coincidencia; {count} observaciones de apoyo)",
+    estimatedBookingClassNote:
+      "Estimación histórica de tarifas ITA similares. Verifica la clase antes de reservar; las reglas y las millas pueden variar.",
+
     panelActions: "Acciones del panel",
     hideForSession: "Ocultar en esta sesión",
     minimize: "Minimizar",
@@ -248,6 +257,9 @@ const CONTENT_TRANSLATIONS = {
     openingFirstMatrixResult: "Abriendo el primer resultado de Matrix...",
   },
   "zh-Hans": {
+    estimatedBookingClass: "估计订座舱位：{class}（{share}% 匹配；{count} 条支持记录）",
+    estimatedBookingClassNote: "根据类似 ITA 票价的历史估计。预订前请确认订座舱位，票价规则和里程可能不同。",
+
     panelActions: "面板操作",
     hideForSession: "本次会话隐藏",
     minimize: "最小化",
@@ -366,6 +378,9 @@ const CONTENT_TRANSLATIONS = {
     openingFirstMatrixResult: "正在打开第一个 Matrix 结果...",
   },
   "zh-Hant": {
+    estimatedBookingClass: "估計訂位艙等：{class}（{share}% 符合；{count} 筆支持紀錄）",
+    estimatedBookingClassNote: "根據類似 ITA 票價的歷史估計。預訂前請確認訂位艙等，票價規則和里程可能不同。",
+
     panelActions: "面板操作",
     hideForSession: "本次工作階段隱藏",
     minimize: "最小化",
@@ -484,6 +499,10 @@ const CONTENT_TRANSLATIONS = {
     openingFirstMatrixResult: "正在開啟第一個 Matrix 結果...",
   },
   ja: {
+    estimatedBookingClass: "推定予約クラス: {class}（一致率 {share}%; 支持する観測 {count} 件）",
+    estimatedBookingClassNote:
+      "類似した ITA 運賃による過去の推定です。予約前に予約クラスを確認してください。運賃規則や獲得マイルは異なる場合があります。",
+
     panelActions: "パネル操作",
     hideForSession: "このセッションでは非表示",
     minimize: "最小化",
@@ -608,6 +627,10 @@ const CONTENT_TRANSLATIONS = {
     openingFirstMatrixResult: "最初の Matrix 結果を開いています...",
   },
   ko: {
+    estimatedBookingClass: "추정 예약 클래스: {class} (일치율 {share}%; 지원 관측 {count}개)",
+    estimatedBookingClassNote:
+      "유사한 ITA 운임의 과거 기록에 따른 추정입니다. 예약 전 클래스를 확인하세요. 운임 규정과 적립 마일은 다를 수 있습니다.",
+
     panelActions: "패널 작업",
     hideForSession: "이 세션에서 숨기기",
     minimize: "최소화",

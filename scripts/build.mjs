@@ -160,6 +160,10 @@ function applyBrowserManifest(manifest) {
   ];
 
   manifest.host_permissions = hostPermissions;
+  manifest.optional_host_permissions = unique([
+    ...(manifest.optional_host_permissions || []),
+    ...(devBuild ? ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"] : []),
+  ]);
   manifest.web_accessible_resources = webAccessibleResources;
 
   if (browser !== "firefox") return;
@@ -178,6 +182,8 @@ function applyBrowserManifest(manifest) {
   };
   manifest.permissions = Array.from(new Set([...(manifest.permissions || []), "tabs", ...hostPermissions]));
   delete manifest.host_permissions;
+  manifest.optional_permissions = manifest.optional_host_permissions || [];
+  delete manifest.optional_host_permissions;
   manifest.web_accessible_resources = Array.from(
     new Set(webAccessibleResources.flatMap((entry) => entry.resources || [])),
   );

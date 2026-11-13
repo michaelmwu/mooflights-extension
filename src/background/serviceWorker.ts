@@ -1,9 +1,27 @@
 import "../shared/firefoxChromeCompat";
+import {
+  buildFareObservation,
+  buildMarketObservation,
+  type FareQuery,
+  marketQueriesForSearchRows,
+  marketQueryForUrl,
+} from "../shared/communityHistory";
 import { type CountryResult, countryComparisonUrl, type SearchCountryResult } from "../shared/countryComparison";
-import type { RemoteProviderMetadata } from "../shared/types";
+import type { NormalizedItinerary, RemoteProviderMetadata } from "../shared/types";
+import {
+  contributeHistory,
+  deleteSharedHistory,
+  estimateFare,
+  prioritizeCountries,
+  prioritizeSearchCountries,
+} from "./communityHistory";
 
 type RuntimeMessage = {
   command?: string;
+  baseline?: CountryResult;
+  searchBaseline?: SearchCountryResult;
+  itinerary?: NormalizedItinerary;
+  fareQuery?: FareQuery;
   baseUrl?: string;
   countries?: string[];
   baselineOptionCount?: number;
@@ -45,6 +63,28 @@ chrome.runtime.onInstalled.addListener((details) => {
 
 chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
   const payload = message as RuntimeMessage;
+  if (payload.command === "recordConfirmedFare" && sender.tab?.url?.startsWith("https://matrix.itasoftware.com/")) {
+    try {
+      void contributeHistory(
+        "fare",
+        payload.itinerary ? buildFareObservation(payload.itinerary, crypto.randomUUID()) : null,
+      );
+    } catch {
+      /* Ignore malformed captures. */
+    }
+    sendResponse({ ok: true });
+    return false;
+  }
+  if (payload.command === "estimateHistoricalFare" && isGoogleFlightsSender(sender.tab?.url) && payload.fareQuery) {
+    void estimateFare(payload.fareQuery).then(sendResponse);
+    return true;
+  }
+  if (payload.command === "deleteSharedHistory" && sender.url === chrome.runtime.getURL("options/index.html")) {
+    void deleteSharedHistory(payload.baseUrl || "")
+      .then(() => sendResponse({ ok: true }))
+      .catch(() => sendResponse({ ok: false, error: "Could not delete shared history. Please retry." }));
+    return true;
+  }
   if (payload.command === "openOptionsPage") {
     openOptionsPage();
     sendResponse({ ok: true });
@@ -146,16 +186,27 @@ async function compareGoogleFlightsCountries(
 ): Promise<void> {
   const baseUrl = payload.baseUrl || "";
   if (!baseUrl) throw new Error("Missing Google Flights URL.");
-  const countries = Array.from(new Set((payload.countries || []).filter((country) => /^[A-Z]{2}$/.test(country))));
+  const selectedCountries = Array.from(
+    new Set((payload.countries || []).filter((country) => /^[A-Z]{2}$/.test(country))),
+  );
+  const countries = await prioritizeCountries(marketQueryForUrl(baseUrl, selectedCountries), selectedCountries);
   const baselineOptionCount = payload.baselineOptionCount || 0;
+  const freshResults: CountryResult[] = payload.baseline ? [payload.baseline] : [];
   try {
     await mapWithConcurrency(countries, GOOGLE_FLIGHTS_COMPARE_CONCURRENCY, async (country) => {
       throwIfGoogleFlightsComparisonCancelled(run);
       const result = await compareBookingCountry(baseUrl, country, baselineOptionCount, run);
       throwIfGoogleFlightsComparisonCancelled(run);
+      freshResults.push(result);
       sendGoogleFlightsCountryProgress(progressTabId, payload.requestId, result);
       return result;
     });
+    if (isGoogleFlightsSender(baseUrl)) {
+      void contributeHistory(
+        "market",
+        buildMarketObservation(baseUrl, payload.baseline?.country || "", freshResults, crypto.randomUUID()),
+      );
+    }
     sendGoogleFlightsCountryComplete(progressTabId, payload.requestId, { ok: true });
   } catch (error) {
     if (isGoogleFlightsComparisonCancelled(error, run)) {
@@ -175,7 +226,13 @@ async function compareGoogleFlightsSearchCountries(
 ): Promise<void> {
   const baseUrl = payload.baseUrl || "";
   if (!baseUrl) throw new Error("Missing Google Flights URL.");
-  const countries = Array.from(new Set((payload.countries || []).filter((country) => /^[A-Z]{2}$/.test(country))));
+  const selectedCountries = Array.from(
+    new Set((payload.countries || []).filter((country) => /^[A-Z]{2}$/.test(country))),
+  );
+  const countries = await prioritizeSearchCountries(
+    marketQueriesForSearchRows(baseUrl, payload.searchBaseline?.results || [], selectedCountries),
+    selectedCountries,
+  );
   const baselineResultCount = payload.baselineSearchResultCount || 0;
   try {
     await mapWithConcurrency(countries, GOOGLE_FLIGHTS_COMPARE_CONCURRENCY, async (country) => {
@@ -815,4 +872,18 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
 
 function throwIfAborted(signal: AbortSignal): void {
   if (signal.aborted) throw googleFlightsComparisonCancelledError();
+}
+
+function isGoogleFlightsSender(url: string | undefined): boolean {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.protocol === "https:" &&
+      ["www.google.com", "google.com"].includes(parsed.hostname) &&
+      parsed.pathname.startsWith("/travel/flights")
+    );
+  } catch {
+    return false;
+  }
 }

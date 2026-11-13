@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Last updated: May 31, 2026
+Last updated: November 13, 2026
 
 This policy applies to the current MooFlights browser extension.
 
@@ -29,6 +29,7 @@ The extension uses this data to:
 - Build prefilled links to booking, search, and mileage-crediting websites.
 - Compare selected Google Flights country pages.
 - Save your extension preferences locally.
+- When you explicitly enable Community flight history, contribute flight observations to the configured service and use shared history to prioritize country searches and estimate booking classes.
 
 MooFlights does not use the current production extension build for analytics, advertising profiles, or user
 tracking.
@@ -44,8 +45,11 @@ extension data by clearing the extension's site/app data in Chrome or uninstalli
 
 ## Network Requests And Sharing
 
-The current production extension build does not send your itinerary details, booking options, or saved preferences to Mu
-Travel servers.
+Community flight history is disabled by default. When you enable it and grant access to the configured API origin, the extension sends completed Google Flights booking comparisons (routes, travel dates, carriers, cabin, country markets, currency, prices and booking-provider names) and confirmed ITA fare examples (including flight number, booking class and optional fare basis). It also sends flight context to request country recommendations and historical booking-class estimates. These payloads exclude Google URLs, booking links, account data and page text.
+
+The configured service issues a random contributor credential, which the extension stores locally. This is separate from Google or MooTravel account identity; the backend stores a digest rather than the credential. Raw contributions remain until deleted; recommendations use a 90-day lookback. Disable sharing to stop requests. Use “Disable sharing and delete my shared history” to revoke the credential and delete your raw contributions. If deletion fails, the extension keeps the credential so you can retry. Delete shared history before clearing extension data or uninstalling, which removes your local deletion credential.
+
+Without this opt-in, the extension does not send flight observations to the history service.
 
 The extension does make normal browser requests needed for its current features:
 
@@ -66,7 +70,8 @@ Third-party websites are governed by their own privacy policies.
 
 The extension requests only the permissions needed for the current feature set:
 
-- `storage` for local settings and caches.
+- `storage` for local settings, caches and optional contributor credentials.
+- Optional host access to the history API origin you explicitly configure and approve.
 - `clipboardWrite` for user-triggered copy actions.
 - Host access for ITA Matrix, Google Flights, public FX-rate sources, and bundled runtime pages listed in the extension
   manifest.

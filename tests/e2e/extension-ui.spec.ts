@@ -35,3 +35,16 @@ test("persists Google Flights country settings from the options page", async ({ 
   await page.getByRole("button", { name: "Remove FR" }).click();
   await expect(page.getByText("France")).toBeHidden();
 });
+
+test("keeps community history off by default and validates the API URL before consent", async ({
+  openExtensionPage,
+}) => {
+  const page = await openExtensionPage("options/index.html");
+  const sharing = page.getByRole("checkbox", { name: "Enable anonymous sharing and historical suggestions" });
+  await expect(sharing).not.toBeChecked();
+  await page.getByLabel("History API URL").fill("http://example.com");
+  await sharing.click();
+  await expect(page.getByRole("status")).toHaveText("Enter an HTTPS API origin, or localhost for development.");
+  await expect(sharing).not.toBeChecked();
+  await expect(page.getByRole("button", { name: "Disable sharing and delete my shared history" })).toBeDisabled();
+});

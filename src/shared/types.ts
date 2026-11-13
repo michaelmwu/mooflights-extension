@@ -69,6 +69,10 @@ export type ExtensionSettings = {
   preferredFrequentFlyerPrograms: string[];
   frequentFlyerProgramTiers: Record<string, string>;
   debugMode: boolean;
+  communityHistory: {
+    enabled: boolean;
+    baseUrl: string;
+  };
   googleFlights: {
     countryCodes: string[];
   };

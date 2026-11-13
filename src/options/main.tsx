@@ -8,6 +8,7 @@ import {
   airportAreaSearchValue,
   countryDisplayName,
 } from "../shared/airports";
+import { DEFAULT_HISTORY_API_ORIGIN, historyBaseUrl } from "../shared/communityHistory";
 import { flagEmoji } from "../shared/flags";
 import { DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES, parseGoogleFlightsCountryInput } from "../shared/googleFlightsBooking";
 import {
@@ -32,6 +33,9 @@ function Options(): React.ReactElement {
   const [settings, setSettings] = useState<ExtensionSettings>(DEFAULT_SETTINGS);
   const [programSearch, setProgramSearch] = useState("");
   const [googleFlightsCountrySearch, setGoogleFlightsCountrySearch] = useState("");
+  const [historyUrl, setHistoryUrl] = useState(DEFAULT_HISTORY_API_ORIGIN);
+  const [historyStatus, setHistoryStatus] = useState("");
+  const [historyBusy, setHistoryBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const t = useMemo(() => createTranslator(settings.language), [settings.language]);
   const airportAreas = useMemo(() => airportAreaOptions(settings.language), [settings.language]);
@@ -48,7 +52,10 @@ function Options(): React.ReactElement {
   );
 
   useEffect(() => {
-    void loadSettings().then(setSettings);
+    void loadSettings().then((next) => {
+      setSettings(next);
+      setHistoryUrl(next.communityHistory.baseUrl || DEFAULT_HISTORY_API_ORIGIN);
+    });
   }, []);
 
   useEffect(() => {
@@ -61,6 +68,47 @@ function Options(): React.ReactElement {
     await saveSettings(next);
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1200);
+  }
+
+  async function enableHistory(enabled: boolean): Promise<void> {
+    setHistoryStatus("");
+    if (!enabled) {
+      await persist({ ...settings, communityHistory: { ...settings.communityHistory, enabled: false } });
+      return;
+    }
+    const baseUrl = historyBaseUrl(historyUrl);
+    if (!baseUrl) {
+      setHistoryStatus(t("historyInvalidUrl"));
+      return;
+    }
+    try {
+      const granted = await chrome.permissions.request({ origins: [`${baseUrl}/*`] });
+      if (!granted) {
+        setHistoryStatus(t("historyPermissionDenied"));
+        return;
+      }
+      await persist({ ...settings, communityHistory: { enabled: true, baseUrl } });
+    } catch {
+      setHistoryStatus(t("historyPermissionDenied"));
+    }
+  }
+
+  async function deleteHistory(): Promise<void> {
+    setHistoryBusy(true);
+    setHistoryStatus("");
+    try {
+      await persist({ ...settings, communityHistory: { ...settings.communityHistory, enabled: false } });
+      const result = await chrome.runtime.sendMessage({
+        command: "deleteSharedHistory",
+        baseUrl: settings.communityHistory.baseUrl,
+      });
+      if (result?.ok) await persist({ ...settings, communityHistory: { enabled: false, baseUrl: "" } });
+      setHistoryStatus(t(result?.ok ? "historyDeleted" : "historyDeleteFailed"));
+    } catch {
+      setHistoryStatus(t("historyDeleteFailed"));
+    } finally {
+      setHistoryBusy(false);
+    }
   }
 
   function setProviderPreference(providerId: string, preference: "preferred" | "hidden", enabled: boolean): void {
@@ -156,6 +204,40 @@ function Options(): React.ReactElement {
         </div>
         <span>{saved ? t("saved") : " "}</span>
       </header>
+
+      <section>
+        <h2>{t("historyTitle")}</h2>
+        <p>{t("historyNote")}</p>
+        {__MOOFLIGHTS_DEV_BUILD__ && (
+          <label>
+            {t("historyApiUrl")}
+            <input
+              type="url"
+              value={historyUrl}
+              disabled={!!settings.communityHistory.baseUrl || historyBusy}
+              onChange={(event) => setHistoryUrl(event.currentTarget.value)}
+              placeholder="https://…"
+            />
+          </label>
+        )}
+        <label>
+          <input
+            type="checkbox"
+            checked={settings.communityHistory.enabled}
+            disabled={historyBusy}
+            onChange={(event) => void enableHistory(event.currentTarget.checked)}
+          />
+          {t("historyConsent")}
+        </label>
+        <button
+          type="button"
+          disabled={historyBusy || !settings.communityHistory.baseUrl}
+          onClick={() => void deleteHistory()}
+        >
+          {t("historyDelete")}
+        </button>
+        {historyStatus && <p role="status">{historyStatus}</p>}
+      </section>
 
       <section>
         <h2>{t("general")}</h2>
