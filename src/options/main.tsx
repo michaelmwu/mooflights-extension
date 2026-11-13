@@ -101,6 +101,8 @@ function Options(): React.ReactElement {
         setHistoryStatus(t("historyPermissionDenied"));
         return;
       }
+      const resumed = await chrome.runtime.sendMessage({ command: "resumeHistorySharing", baseUrl });
+      if (!resumed?.ok) throw new Error("Could not resume sharing.");
       await persist({
         ...latestSettings.current,
         communityHistory: { enabled: true, consentVersion: COMMUNITY_CONSENT_VERSION, baseUrl },
@@ -117,9 +119,11 @@ function Options(): React.ReactElement {
     setHistoryBusy(true);
     setHistoryStatus("");
     setDeletionRequest(null);
+    let sharingOffSaved = false;
     try {
       const current = latestSettings.current;
       await persist({ ...current, communityHistory: { ...current.communityHistory, enabled: false } });
+      sharingOffSaved = true;
       await chrome.storage.local.set({ [COMMUNITY_PROMPT_KEY]: COMMUNITY_CONSENT_VERSION });
       const result = await chrome.runtime.sendMessage({
         command: "prepareHistoryDeletionRequest",
@@ -133,7 +137,19 @@ function Options(): React.ReactElement {
         setHistoryStatus(t("historyRequestPrepared"));
       }
     } catch {
-      setHistoryStatus(t("historyRequestFailed"));
+      if (!sharingOffSaved) {
+        try {
+          const saved = await loadSettings();
+          const restored = { ...latestSettings.current, communityHistory: saved.communityHistory };
+          latestSettings.current = restored;
+          setSettings(restored);
+          sharingOffSaved = !saved.communityHistory.enabled;
+        } catch {
+          // Do not claim that sharing stopped if its saved state cannot be read.
+        }
+        setSaved(false);
+      }
+      setHistoryStatus(t(sharingOffSaved ? "historyRequestFailed" : "historyOptOutFailed"));
     } finally {
       setHistoryBusy(false);
     }

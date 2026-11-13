@@ -18,6 +18,7 @@ import {
   prioritizeCountries,
   prioritizeSearchCountries,
   recordUsage,
+  resumeHistorySharing,
 } from "./communityHistory";
 import { updateComparisonCache } from "./comparisonCache";
 import { ComparisonTabRegistry, workerTabUrls } from "./comparisonTabs";
@@ -138,6 +139,16 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
   }
   if (payload.command === "estimateHistoricalFare" && isGoogleFlightsSender(sender.tab?.url) && payload.fareQuery) {
     void estimateFare(payload.fareQuery).then(sendResponse);
+    return true;
+  }
+  if (
+    payload.command === "resumeHistorySharing" &&
+    (sender.url === chrome.runtime.getURL("options/index.html") ||
+      sender.url === chrome.runtime.getURL("popup/index.html"))
+  ) {
+    void resumeHistorySharing(payload.baseUrl || "")
+      .then(() => sendResponse({ ok: true }))
+      .catch(() => sendResponse({ ok: false }));
     return true;
   }
   if (

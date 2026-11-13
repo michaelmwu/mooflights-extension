@@ -26,7 +26,10 @@ beforeEach(() => {
       onChanged: { addListener: vi.fn() },
       local: {
         get: vi.fn(async (key: string) => ({ [key]: key === "muTravelSettings" ? settings : stored[key] })),
-        set: vi.fn(async (patch: Record<string, unknown>) => Object.assign(stored, patch)),
+        set: vi.fn(async (patch: Record<string, unknown>) => {
+          if (patch.muTravelSettings) settings = patch.muTravelSettings as typeof settings;
+          Object.assign(stored, patch);
+        }),
       },
     },
   });
@@ -331,24 +334,104 @@ it("rejects malformed deletion references and never re-registers an invalid cred
   expect(fetchMock.mock.calls.every(([target]) => String(target).endsWith("/deletion-request"))).toBe(true);
 });
 
-it("rejoins once on a fresh opt-in contribution when an administrator revoked the old credential", async () => {
+it("pauses revoked sharing without replacing its identity now, on later events, or after worker restart", async () => {
+  const url = "https://api.example.com";
+  const token = "test-only-revoked-contributor-credential-1234567890";
+  settings.communityHistory = { enabled: true, consentVersion: "community-v3", baseUrl: url };
+  stored.mooFlightsHistoryContributorSessions = { [url]: token };
+  fetchMock.mockResolvedValue({ ok: false, status: 401 });
+  const client = await import("./communityHistory");
+  await client.recordUsage({ eventName: "fare-preview.opened", surface: "google-flights-search" });
+  expect(settings.communityHistory.enabled).toBe(false);
+  expect(stored.mooFlightsHistoryContributorSessions).toEqual({ [url]: token });
+  await client.recordUsage({ eventName: "fare-preview.opened", surface: "google-flights-search" });
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  // Even an old enabled preference restored before restart cannot silently rejoin.
+  settings.communityHistory.enabled = true;
+  vi.resetModules();
+  const restarted = await import("./communityHistory");
+  await restarted.recordUsage({ eventName: "fare-preview.opened", surface: "google-flights-search" });
+  expect(settings.communityHistory.enabled).toBe(false);
+  expect(stored.mooFlightsHistoryContributorSessions).toEqual({ [url]: token });
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(
+    fetchMock.mock.calls.every(
+      ([target, init]) => String(target).endsWith("/contributor-sessions/current") && init.method === "PUT",
+    ),
+  ).toBe(true);
+});
+
+it("requires an explicit resume action before replacing a verified revoked credential", async () => {
   const url = "https://api.example.com";
   const oldToken = "test-only-revoked-contributor-credential-1234567890";
   const newToken = "test-only-new-contributor-credential-1234567890";
-  settings.communityHistory = { enabled: true, consentVersion: "community-v3", baseUrl: url };
+  settings.communityHistory = { enabled: false, consentVersion: "community-v3", baseUrl: url };
   stored.mooFlightsHistoryContributorSessions = { [url]: oldToken };
   fetchMock.mockResolvedValueOnce({ ok: false, status: 401 });
   fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ contributorToken: newToken }) });
   fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
-  const { recordUsage } = await import("./communityHistory");
+  const { resumeHistorySharing, recordUsage } = await import("./communityHistory");
+  await resumeHistorySharing(url);
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(stored.mooFlightsHistoryContributorSessions).toEqual({});
+  settings.communityHistory.enabled = true;
   await recordUsage({ eventName: "fare-preview.opened", surface: "google-flights-search" });
   expect(fetchMock.mock.calls.map(([target, init]) => [target, init.method])).toEqual([
-    [`${url}/api/extension/v1/contributor-sessions/current`, "PUT"],
+    [`${url}/api/extension/v1/contributor-sessions/current`, "GET"],
     [`${url}/api/extension/v1/contributor-sessions`, "POST"],
     [`${url}/api/extension/v1/usage-events`, "POST"],
   ]);
   expect(fetchMock.mock.calls[2]?.[1].headers["X-MooFlights-Contributor-Token"]).toBe(newToken);
   expect(stored.mooFlightsHistoryContributorSessions).toEqual({ [url]: newToken });
+});
+
+it("keeps a valid contributor identity across an ordinary explicit sharing toggle", async () => {
+  const url = "https://api.example.com";
+  const token = "test-only-valid-contributor-credential-1234567890";
+  settings.communityHistory = { enabled: false, consentVersion: "community-v3", baseUrl: url };
+  stored.mooFlightsHistoryContributorSessions = { [url]: token };
+  fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) });
+  const { resumeHistorySharing, recordUsage } = await import("./communityHistory");
+  await resumeHistorySharing(url);
+  expect(stored.mooFlightsHistoryContributorSessions).toEqual({ [url]: token });
+  settings.communityHistory.enabled = true;
+  await recordUsage({ eventName: "fare-preview.opened", surface: "google-flights-search" });
+  expect(fetchMock.mock.calls.map(([, init]) => init.method)).toEqual(["GET", "PUT", "POST"]);
+  expect(fetchMock.mock.calls.every(([target]) => !String(target).endsWith("/contributor-sessions"))).toBe(true);
+  expect(fetchMock.mock.calls[2]?.[1].headers["X-MooFlights-Contributor-Token"]).toBe(token);
+});
+
+it("keeps the rejected credential when persisting the privacy pause fails", async () => {
+  const url = "https://api.example.com";
+  const token = "test-only-revoked-contributor-credential-1234567890";
+  settings.communityHistory = { enabled: true, consentVersion: "community-v3", baseUrl: url };
+  stored.mooFlightsHistoryContributorSessions = { [url]: token };
+  vi.mocked(chrome.storage.local.set).mockRejectedValueOnce(new Error("Storage failure"));
+  fetchMock.mockResolvedValue({ ok: false, status: 401 });
+  const { recordUsage } = await import("./communityHistory");
+  await recordUsage({ eventName: "fare-preview.opened", surface: "google-flights-search" });
+  expect(settings.communityHistory.enabled).toBe(true);
+  expect(stored.mooFlightsHistoryContributorSessions).toEqual({ [url]: token });
+  vi.resetModules();
+  const restarted = await import("./communityHistory");
+  await restarted.recordUsage({ eventName: "fare-preview.opened", surface: "google-flights-search" });
+  expect(fetchMock.mock.calls.every(([target]) => String(target).endsWith("/contributor-sessions/current"))).toBe(true);
+  expect(stored.mooFlightsHistoryContributorSessions).toEqual({ [url]: token });
+});
+
+it("pauses an identity revoked after consent was synchronized without creating a replacement", async () => {
+  const url = "https://api.example.com";
+  const token = "test-only-revoked-contributor-credential-1234567890";
+  settings.communityHistory = { enabled: true, consentVersion: "community-v3", baseUrl: url };
+  stored.mooFlightsHistoryContributorSessions = { [url]: token };
+  fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) });
+  const { recordUsage } = await import("./communityHistory");
+  await recordUsage({ eventName: "fare-preview.opened", surface: "google-flights-search" });
+  fetchMock.mockResolvedValueOnce({ ok: false, status: 401 });
+  await recordUsage({ eventName: "fare-preview.opened", surface: "google-flights-search" });
+  expect(settings.communityHistory.enabled).toBe(false);
+  expect(stored.mooFlightsHistoryContributorSessions).toEqual({ [url]: token });
+  expect(fetchMock.mock.calls.every(([target]) => !String(target).endsWith("/contributor-sessions"))).toBe(true);
 });
 
 it("does not prepare a request after permission state changes during its host check", async () => {

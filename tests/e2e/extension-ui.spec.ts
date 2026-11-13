@@ -371,3 +371,52 @@ test("asks community-v2 users to accept the retention disclosure before communit
   expect(saved.muTravelSettings.communityHistory).toMatchObject({ enabled: true, consentVersion: "community-v3" });
   expect(saved.mooFlightsCommunityPromptDecision).toBe("community-v3");
 });
+
+test("restores saved sharing state and reports an opt-out persistence failure before preparing deletion", async ({
+  openExtensionPage,
+  extensionServiceWorker,
+}) => {
+  await extensionServiceWorker.evaluate(() =>
+    chrome.storage.local.set({
+      muTravelSettings: {
+        communityHistory: { enabled: true, consentVersion: "community-v3", baseUrl: "https://app.mooflights.com" },
+      },
+    }),
+  );
+  const page = await openExtensionPage("options/index.html");
+  const sharing = page.getByRole("checkbox", { name: "Help improve MooFlights" });
+  await expect(sharing).toBeChecked();
+  await page.getByLabel("Add country").fill("FR");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Remove FR" })).toBeVisible();
+  await page.evaluate(() => {
+    const save = chrome.storage.local.set.bind(chrome.storage.local);
+    let failFirstOptOut = true;
+    chrome.storage.local.set = (async (patch: Record<string, any>) => {
+      if (failFirstOptOut && patch.muTravelSettings?.communityHistory?.enabled === false) {
+        failFirstOptOut = false;
+        throw new Error("Simulated storage failure");
+      }
+      await save(patch);
+    }) as typeof chrome.storage.local.set;
+    (window as any).deletionPreparationMessages = [];
+    chrome.runtime.sendMessage = (async (message: unknown) => {
+      (window as any).deletionPreparationMessages.push(message);
+      return { ok: true, status: "no-contributions" };
+    }) as typeof chrome.runtime.sendMessage;
+  });
+  await page.getByText("Manage shared data", { exact: true }).click();
+  await page.getByRole("button", { name: "Prepare deletion request" }).click();
+  await expect(page.getByRole("status")).toHaveText(
+    "Could not confirm sharing is off. Check the sharing setting and try again.",
+  );
+  await expect(sharing).toBeChecked();
+  await expect(page.getByRole("button", { name: "Remove FR" })).toBeVisible();
+  expect(await page.evaluate(() => (window as any).deletionPreparationMessages)).toEqual([]);
+  const saved = await extensionServiceWorker.evaluate(() => chrome.storage.local.get("muTravelSettings"));
+  expect(saved.muTravelSettings.communityHistory.enabled).toBe(true);
+  expect(saved.muTravelSettings.googleFlights.countryCodes).toContain("FR");
+  await page.reload();
+  await expect(sharing).toBeChecked();
+  await expect(page.getByRole("button", { name: "Remove FR" })).toBeVisible();
+});
