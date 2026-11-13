@@ -2,6 +2,7 @@ import type { ExtensionSettings } from "./types";
 
 // Keep the background worker's consent read independent of provider/airport registries.
 const SETTINGS_KEY = "muTravelSettings";
+export const COMMUNITY_PROMPT_KEY = "mooFlightsCommunityPromptDecision";
 export const COMMUNITY_CONSENT_VERSION = "community-v2";
 export const DEFAULT_HISTORY_API_ORIGIN = "https://app.mooflights.com";
 

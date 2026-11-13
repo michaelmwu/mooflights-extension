@@ -10,6 +10,7 @@ import {
 } from "../shared/airports";
 import { COMMUNITY_CONSENT_VERSION, DEFAULT_HISTORY_API_ORIGIN, historyBaseUrl } from "../shared/communityHistory";
 import { communityPermissions, supportsNativeDataConsent } from "../shared/communityPermissions";
+import { COMMUNITY_PROMPT_KEY } from "../shared/communitySettings";
 import { flagEmoji } from "../shared/flags";
 import { DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES, parseGoogleFlightsCountryInput } from "../shared/googleFlightsBooking";
 import {
@@ -28,7 +29,9 @@ import {
 import { ALWAYS_SHOWN_PROVIDER_IDS, LOCAL_PROVIDERS, providerConfidence } from "../shared/providers";
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from "../shared/storage";
 import type { AirportFilters, ExtensionSettings } from "../shared/types";
+import { CommunityIcon } from "../ui/CommunityIcon";
 import "./options.css";
+import "../ui/communityConsent.css";
 
 function Options(): React.ReactElement {
   const [settings, setSettings] = useState<ExtensionSettings>(DEFAULT_SETTINGS);
@@ -89,6 +92,7 @@ function Options(): React.ReactElement {
       setHistoryStatus(t("historyInvalidUrl"));
       return;
     }
+    setHistoryBusy(true);
     try {
       const granted = await chrome.permissions.request(communityPermissions(baseUrl, nativeDataConsent));
       if (!granted) {
@@ -99,8 +103,11 @@ function Options(): React.ReactElement {
         ...latestSettings.current,
         communityHistory: { enabled: true, consentVersion: COMMUNITY_CONSENT_VERSION, baseUrl },
       });
+      await chrome.storage.local.set({ [COMMUNITY_PROMPT_KEY]: COMMUNITY_CONSENT_VERSION });
     } catch {
       setHistoryStatus(t("historyPermissionDenied"));
+    } finally {
+      setHistoryBusy(false);
     }
   }
 
@@ -109,6 +116,7 @@ function Options(): React.ReactElement {
     setHistoryStatus("");
     try {
       await persist({ ...settings, communityHistory: { ...settings.communityHistory, enabled: false } });
+      await chrome.storage.local.set({ [COMMUNITY_PROMPT_KEY]: COMMUNITY_CONSENT_VERSION });
       const result = await chrome.runtime.sendMessage({
         command: "deleteSharedHistory",
         baseUrl: settings.communityHistory.baseUrl,
@@ -220,10 +228,26 @@ function Options(): React.ReactElement {
         <span>{saved ? t("saved") : " "}</span>
       </header>
 
-      <section>
-        <h2>{t("historyTitle")}</h2>
-        <p>{t("historyNote")}</p>
-        <p>
+      <section className="community-card" aria-labelledby="community-heading">
+        <div className="community-heading">
+          <CommunityIcon />
+          <h2 id="community-heading">{t("historyTitle")}</h2>
+          <span className={`community-status${settings.communityHistory.enabled ? " is-enabled" : ""}`}>
+            {t(settings.communityHistory.enabled ? "historySharingOn" : "historySharingOff")}
+          </span>
+        </div>
+        <p className="community-description">{t("historyNote")}</p>
+        <label className="community-toggle">
+          <span>{t("historyConsent")}</span>
+          <input
+            type="checkbox"
+            checked={settings.communityHistory.enabled}
+            disabled={!historyLoaded || historyBusy}
+            onChange={(event) => void enableHistory(event.currentTarget.checked)}
+          />
+        </label>
+        <p className="community-optional">{t("historyOptional")}</p>
+        <div className="community-footer">
           <a
             href="https://github.com/michaelmwu/mooflights-extension/blob/main/PRIVACY.md"
             target="_blank"
@@ -231,36 +255,37 @@ function Options(): React.ReactElement {
           >
             {t("historyDetails")}
           </a>
-        </p>
-        {__MOOFLIGHTS_DEV_BUILD__ && (
-          <label>
-            {t("historyApiUrl")}
-            <input
-              type="url"
-              value={historyUrl}
-              disabled={!historyLoaded || !!settings.communityHistory.baseUrl || historyBusy}
-              onChange={(event) => setHistoryUrl(event.currentTarget.value)}
-              placeholder="https://…"
-            />
-          </label>
+          {settings.communityHistory.baseUrl && (
+            <button
+              className="community-delete"
+              type="button"
+              disabled={!historyLoaded || historyBusy}
+              onClick={() => void deleteHistory()}
+            >
+              {t("historyDelete")}
+            </button>
+          )}
+        </div>
+        {historyStatus && (
+          <p className="community-message" role="status">
+            {historyStatus}
+          </p>
         )}
-        <label>
-          <input
-            type="checkbox"
-            checked={settings.communityHistory.enabled}
-            disabled={!historyLoaded || historyBusy}
-            onChange={(event) => void enableHistory(event.currentTarget.checked)}
-          />
-          {t("historyConsent")}
-        </label>
-        <button
-          type="button"
-          disabled={!historyLoaded || historyBusy || !settings.communityHistory.baseUrl}
-          onClick={() => void deleteHistory()}
-        >
-          {t("historyDelete")}
-        </button>
-        {historyStatus && <p role="status">{historyStatus}</p>}
+        {__MOOFLIGHTS_DEV_BUILD__ && (
+          <details className="community-dev">
+            <summary>{t("historyDevelopment")}</summary>
+            <label>
+              {t("historyApiUrl")}
+              <input
+                type="url"
+                value={historyUrl}
+                disabled={!historyLoaded || !!settings.communityHistory.baseUrl || historyBusy}
+                onChange={(event) => setHistoryUrl(event.currentTarget.value)}
+                placeholder="https://…"
+              />
+            </label>
+          </details>
+        )}
       </section>
 
       <section>
