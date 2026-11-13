@@ -1,28 +1,30 @@
+import { ANALYTICS_CONSENT_VERSION, type UsageEvent, type UsageSignal } from "../shared/analytics";
 import {
-  COMMUNITY_CONSENT_VERSION,
   type FareObservation,
   type FareQuery,
-  historyBaseUrl,
   type MarketObservation,
   type MarketQuery,
   orderHistoricalCountries,
   validatedFareEstimate,
 } from "../shared/communityHistory";
-import { loadSettings } from "../shared/storage";
+import { COMMUNITY_CONSENT_VERSION, historyBaseUrl, loadCommunitySettings } from "../shared/communitySettings";
 
 const SESSION_KEY = "mooFlightsHistoryContributorSessions";
 const controllers = new Set<AbortController>();
 const sessionRequests = new Map<string, Promise<string>>();
+const synchronizedConsents = new Map<string, string>();
 
 // Consent changes cancel outstanding reads/writes; there is no upload outbox.
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local" || !changes.muTravelSettings) return;
   for (const controller of controllers) controller.abort();
+  synchronizedConsents.clear();
+  void synchronizeStoredConsent().catch(() => undefined);
 });
 
-async function configuredUrl(): Promise<string> {
-  const { communityHistory } = await loadSettings();
-  if (!communityHistory.enabled) return "";
+async function configuredUrl(purpose: "history" | "analytics" | "consent" = "history"): Promise<string> {
+  const { communityHistory } = await loadCommunitySettings();
+  if (purpose !== "consent" && !communityHistory.enabled) return "";
   const url = historyBaseUrl(communityHistory.baseUrl);
   if (!url || !(await chrome.permissions.contains({ origins: [`${url}/*`] }))) return "";
   return url;
@@ -55,22 +57,57 @@ async function request(
   }
 }
 
-async function contributorToken(url: string): Promise<string> {
+async function consentPayload() {
+  const { communityHistory } = await loadCommunitySettings();
+  return {
+    historyEnabled: communityHistory.enabled,
+    analyticsEnabled: communityHistory.enabled,
+    analyticsConsentVersion: communityHistory.enabled ? ANALYTICS_CONSENT_VERSION : null,
+  };
+}
+
+async function synchronizeStoredConsent(): Promise<void> {
+  const url = await configuredUrl("consent");
+  if (!url) return;
+  const stored = await chrome.storage.local.get(SESSION_KEY);
+  const sessions = stored[SESSION_KEY] as Record<string, unknown> | undefined;
+  if (typeof sessions?.[url] !== "string") return;
+  await contributorToken(url, "consent");
+}
+
+async function contributorToken(
+  url: string,
+  purpose: "history" | "analytics" | "consent" = "history",
+): Promise<string> {
   const pending = sessionRequests.get(url);
-  if (pending) return pending;
+  if (pending) {
+    await pending;
+    return contributorToken(url, purpose);
+  }
   const promise = (async () => {
     const stored = await chrome.storage.local.get(SESSION_KEY);
     const sessions = (stored[SESSION_KEY] || {}) as Record<string, string>;
-    if (typeof sessions[url] === "string") return sessions[url];
-    // Recheck consent before creating credentials as well as before uploading.
-    if ((await configuredUrl()) !== url) throw new Error("History sharing disabled.");
-    const result = await request(url, "contributor-sessions", "POST", { consentVersion: COMMUNITY_CONSENT_VERSION });
+    if ((await configuredUrl(purpose)) !== url) throw new Error("Sharing disabled.");
+    const consent = await consentPayload();
+    const signature = JSON.stringify(consent);
+    if (typeof sessions[url] === "string") {
+      if (synchronizedConsents.get(url) !== signature) {
+        await request(url, "contributor-sessions/current", "PUT", consent, sessions[url]);
+        synchronizedConsents.set(url, signature);
+      }
+      return sessions[url];
+    }
+    if (purpose === "consent") throw new Error("No contributor credential.");
+    const result = await request(url, "contributor-sessions", "POST", {
+      consentVersion: COMMUNITY_CONSENT_VERSION,
+      ...consent,
+    });
     const token = (result as { contributorToken?: unknown })?.contributorToken;
     if (typeof token !== "string" || token.length < 32 || token.length > 256)
       throw new Error("Invalid contributor response.");
-    // Serialize session creation so parallel captures cannot overwrite credentials.
     sessions[url] = token;
     await chrome.storage.local.set({ [SESSION_KEY]: sessions });
+    synchronizedConsents.set(url, signature);
     return token;
   })();
   sessionRequests.set(url, promise);
@@ -78,6 +115,28 @@ async function contributorToken(url: string): Promise<string> {
     return await promise;
   } finally {
     sessionRequests.delete(url);
+  }
+}
+
+export async function recordUsage(signal: UsageSignal): Promise<void> {
+  const occurredAt = new Date().toISOString();
+  try {
+    const url = await configuredUrl("analytics");
+    if (!url) return;
+    const token = await contributorToken(url, "analytics");
+    if ((await configuredUrl("analytics")) !== url) return;
+    const manifest = chrome.runtime.getManifest();
+    const event: UsageEvent = {
+      ...signal,
+      contractVersion: "v1",
+      idempotencyKey: crypto.randomUUID(),
+      extensionVersion: manifest.version,
+      browser: manifest.manifest_version === 2 ? "firefox" : "chrome",
+      occurredAt,
+    };
+    await request(url, "usage-events", "POST", event, token);
+  } catch {
+    /* Analytics is best-effort and has no persistent queue. */
   }
 }
 
@@ -131,6 +190,7 @@ export async function deleteSharedHistory(baseUrl: string): Promise<void> {
   if (typeof sessions[url] !== "string") return;
   await request(url, "contributor-sessions/current", "DELETE", undefined, sessions[url]);
   delete sessions[url];
+  synchronizedConsents.delete(url);
   await chrome.storage.local.set({ [SESSION_KEY]: sessions });
 }
 

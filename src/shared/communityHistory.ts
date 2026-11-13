@@ -2,8 +2,7 @@ import type { CountryResult } from "./countryComparison";
 import { parseGoogleFlightsMatrixSearch } from "./googleFlightsBooking";
 import type { NormalizedItinerary } from "./types";
 
-export const DEFAULT_HISTORY_API_ORIGIN = "https://app.mooflights.com";
-export const COMMUNITY_CONSENT_VERSION = "history-v1";
+export { COMMUNITY_CONSENT_VERSION, DEFAULT_HISTORY_API_ORIGIN, historyBaseUrl } from "./communitySettings";
 export type HistoryCabin = "COACH" | "PREMIUM-COACH" | "BUSINESS" | "FIRST";
 export type MarketQuery = {
   slices: { origin: string; destination: string }[];
@@ -52,19 +51,6 @@ export type FareEstimate = {
   status: "historical-estimate" | "unknown";
   candidates: { bookingClass: string; share: number; sampleCount: number }[];
 };
-
-export function historyBaseUrl(value: unknown): string {
-  if (typeof value !== "string" || !value) return "";
-  try {
-    const url = new URL(value);
-    const local = ["localhost", "127.0.0.1"].includes(url.hostname);
-    if (url.protocol !== "https:" && !(local && url.protocol === "http:")) return "";
-    if (url.username || url.password || url.search || url.hash || url.pathname !== "/") return "";
-    return url.origin;
-  } catch {
-    return "";
-  }
-}
 
 export function marketQueryForUrl(url: string, countries: string[]): MarketQuery | null {
   const search = parseGoogleFlightsMatrixSearch(url);

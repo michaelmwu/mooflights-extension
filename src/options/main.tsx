@@ -8,7 +8,7 @@ import {
   airportAreaSearchValue,
   countryDisplayName,
 } from "../shared/airports";
-import { DEFAULT_HISTORY_API_ORIGIN, historyBaseUrl } from "../shared/communityHistory";
+import { COMMUNITY_CONSENT_VERSION, DEFAULT_HISTORY_API_ORIGIN, historyBaseUrl } from "../shared/communityHistory";
 import { flagEmoji } from "../shared/flags";
 import { DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES, parseGoogleFlightsCountryInput } from "../shared/googleFlightsBooking";
 import {
@@ -87,7 +87,10 @@ function Options(): React.ReactElement {
         setHistoryStatus(t("historyPermissionDenied"));
         return;
       }
-      await persist({ ...settings, communityHistory: { enabled: true, baseUrl } });
+      await persist({
+        ...settings,
+        communityHistory: { enabled: true, consentVersion: COMMUNITY_CONSENT_VERSION, baseUrl },
+      });
     } catch {
       setHistoryStatus(t("historyPermissionDenied"));
     }
@@ -102,7 +105,8 @@ function Options(): React.ReactElement {
         command: "deleteSharedHistory",
         baseUrl: settings.communityHistory.baseUrl,
       });
-      if (result?.ok) await persist({ ...settings, communityHistory: { enabled: false, baseUrl: "" } });
+      if (result?.ok)
+        await persist({ ...settings, communityHistory: { enabled: false, consentVersion: "", baseUrl: "" } });
       setHistoryStatus(t(result?.ok ? "historyDeleted" : "historyDeleteFailed"));
     } catch {
       setHistoryStatus(t("historyDeleteFailed"));
@@ -208,6 +212,15 @@ function Options(): React.ReactElement {
       <section>
         <h2>{t("historyTitle")}</h2>
         <p>{t("historyNote")}</p>
+        <p>
+          <a
+            href="https://github.com/michaelmwu/mooflights-extension/blob/main/PRIVACY.md"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {t("historyDetails")}
+          </a>
+        </p>
         {__MOOFLIGHTS_DEV_BUILD__ && (
           <label>
             {t("historyApiUrl")}

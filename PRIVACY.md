@@ -31,8 +31,7 @@ The extension uses this data to:
 - Save your extension preferences locally.
 - When you explicitly enable Community flight history, contribute flight observations to the configured service and use shared history to prioritize country searches and estimate booking classes.
 
-MooFlights does not use the current production extension build for analytics, advertising profiles, or user
-tracking.
+MooFlights does not use this data for advertising profiles or cross-site tracking. Optional first-party usage analytics helps improve the extension, under the same “Help improve MooFlights” consent as flight contributions.
 
 MooFlights' use of user data complies with the Chrome Web Store User Data Policy, including the Limited Use
 requirements.
@@ -45,11 +44,11 @@ extension data by clearing the extension's site/app data in Chrome or uninstalli
 
 ## Network Requests And Sharing
 
-Community flight history is disabled by default. When you enable it and grant access to the configured API origin, the extension sends completed Google Flights booking comparisons (routes, travel dates, carriers, cabin, country markets, currency, prices and booking-provider names) and confirmed ITA fare examples (including flight number, booking class and optional fare basis). It also sends flight context to request country recommendations and historical booking-class estimates. These payloads exclude Google URLs, booking links, account data and page text.
+“Help improve MooFlights” is disabled by default. When you enable it and grant access to the MooFlights service, the extension sends completed Google Flights booking comparisons (routes, travel dates, carriers, cabin, country markets, currency, prices and booking-provider names) and confirmed ITA fare examples (including flight number, booking class and optional fare basis). It also sends flight context to request country recommendations and historical booking-class estimates. These payloads exclude Google URLs, booking links, account data and page text. The same consent also covers basic feature-usage events: comparison start/completion, requested/completed/ready country counts, timings and outcomes, preview opens, class/program changes and ITA verification clicks. Usage events include extension version and browser family, but not the selected class/program, route, travel date, prices or country codes.
 
-The configured service issues a random contributor credential, which the extension stores locally. This is separate from Google or MooTravel account identity; the backend stores a digest rather than the credential. Raw contributions remain until deleted; recommendations use a 90-day lookback. Disable sharing to stop requests. Use “Disable sharing and delete my shared history” to revoke the credential and delete your raw contributions. If deletion fails, the extension keeps the credential so you can retry. Delete shared history before clearing extension data or uninstalling, which removes your local deletion credential.
+The service assigns a pseudonymous contributor ID and issues a random contributor credential, which the extension stores locally. This is separate from Google or MooTravel account identity; the backend stores a digest rather than the credential. Raw contributions remain until deleted; recommendations use a 90-day lookback. Disable sharing to stop requests. Use “Turn off sharing and delete my contributions” to revoke the credential and delete your flight and usage contributions together. If deletion fails, the extension keeps the credential so you can retry. Delete shared history before clearing extension data or uninstalling, which removes your local deletion credential.
 
-Without this opt-in, the extension does not send flight observations to the history service.
+Without this opt-in, the extension sends neither flight observations nor usage events. Earlier consent for flight-only sharing must be confirmed again before this expanded sharing begins. A future verified sign-in could link contributions to an account only with your agreement; the extension does not send email addresses or claimed account IDs in these payloads.
 
 The extension does make normal browser requests needed for its current features:
 

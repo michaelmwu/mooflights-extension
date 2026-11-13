@@ -1,4 +1,5 @@
 import "../shared/firefoxChromeCompat";
+import { validatedUsageSignal } from "../shared/analytics";
 import {
   buildFareObservation,
   buildMarketObservation,
@@ -7,6 +8,7 @@ import {
   marketQueryForUrl,
 } from "../shared/communityHistory";
 import { type CountryResult, countryComparisonUrl, type SearchCountryResult } from "../shared/countryComparison";
+import { isSkyscannerFlightsPageUrl } from "../shared/skyscannerBooking";
 import type { NormalizedItinerary, RemoteProviderMetadata } from "../shared/types";
 import {
   contributeHistory,
@@ -14,10 +16,12 @@ import {
   estimateFare,
   prioritizeCountries,
   prioritizeSearchCountries,
+  recordUsage,
 } from "./communityHistory";
 
 type RuntimeMessage = {
   command?: string;
+  usageSignal?: unknown;
   baseline?: CountryResult;
   searchBaseline?: SearchCountryResult;
   itinerary?: NormalizedItinerary;
@@ -63,6 +67,17 @@ chrome.runtime.onInstalled.addListener((details) => {
 
 chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
   const payload = message as RuntimeMessage;
+  if (payload.command === "recordUsageEvent") {
+    const signal = validatedUsageSignal(payload.usageSignal);
+    if (
+      signal &&
+      sender.tab?.url &&
+      (isGoogleFlightsSender(sender.tab.url) || isSkyscannerFlightsPageUrl(sender.tab.url))
+    )
+      void recordUsage(signal);
+    sendResponse({ ok: true });
+    return false;
+  }
   if (payload.command === "recordConfirmedFare" && sender.tab?.url?.startsWith("https://matrix.itasoftware.com/")) {
     try {
       void contributeHistory(
@@ -189,6 +204,20 @@ async function compareGoogleFlightsCountries(
   const selectedCountries = Array.from(
     new Set((payload.countries || []).filter((country) => /^[A-Z]{2}$/.test(country))),
   );
+  const usageRunId = crypto.randomUUID();
+  const usageStartedAt = performance.now();
+  const usageSurface = isSkyscannerFlightsPageUrl(baseUrl)
+    ? ("skyscanner-booking" as const)
+    : ("google-flights-booking" as const);
+  let usageCompleted = 0;
+  let usageReady = 0;
+  let usageOutcome: "completed" | "cancelled" | "error" = "completed";
+  void recordUsage({
+    eventName: "comparison.started",
+    surface: usageSurface,
+    runId: usageRunId,
+    requestedCountryCount: selectedCountries.length,
+  });
   const countries = await prioritizeCountries(marketQueryForUrl(baseUrl, selectedCountries), selectedCountries);
   const baselineOptionCount = payload.baselineOptionCount || 0;
   const freshResults: CountryResult[] = payload.baseline ? [payload.baseline] : [];
@@ -198,6 +227,8 @@ async function compareGoogleFlightsCountries(
       const result = await compareBookingCountry(baseUrl, country, baselineOptionCount, run);
       throwIfGoogleFlightsComparisonCancelled(run);
       freshResults.push(result);
+      usageCompleted += 1;
+      if (result.status === "ready") usageReady += 1;
       sendGoogleFlightsCountryProgress(progressTabId, payload.requestId, result);
       return result;
     });
@@ -209,12 +240,23 @@ async function compareGoogleFlightsCountries(
     }
     sendGoogleFlightsCountryComplete(progressTabId, payload.requestId, { ok: true });
   } catch (error) {
+    usageOutcome = isGoogleFlightsComparisonCancelled(error, run) ? "cancelled" : "error";
     if (isGoogleFlightsComparisonCancelled(error, run)) {
       sendGoogleFlightsCountryComplete(progressTabId, payload.requestId, { ok: true, cancelled: true });
       return;
     }
     throw error;
   } finally {
+    void recordUsage({
+      eventName: "comparison.completed",
+      surface: usageSurface,
+      runId: usageRunId,
+      requestedCountryCount: selectedCountries.length,
+      completedCountryCount: usageCompleted,
+      readyCountryCount: usageReady,
+      durationMs: Math.min(86400000, Math.max(0, Math.round(performance.now() - usageStartedAt))),
+      outcome: usageOutcome,
+    });
     activeGoogleFlightsComparisonRuns.delete(googleFlightsComparisonRunKey(progressTabId, payload.requestId || ""));
   }
 }
@@ -229,6 +271,20 @@ async function compareGoogleFlightsSearchCountries(
   const selectedCountries = Array.from(
     new Set((payload.countries || []).filter((country) => /^[A-Z]{2}$/.test(country))),
   );
+  const usageRunId = crypto.randomUUID();
+  const usageStartedAt = performance.now();
+  const usageSurface = isSkyscannerFlightsPageUrl(baseUrl)
+    ? ("skyscanner-search" as const)
+    : ("google-flights-search" as const);
+  let usageCompleted = 0;
+  let usageReady = 0;
+  let usageOutcome: "completed" | "cancelled" | "error" = "completed";
+  void recordUsage({
+    eventName: "comparison.started",
+    surface: usageSurface,
+    runId: usageRunId,
+    requestedCountryCount: selectedCountries.length,
+  });
   const countries = await prioritizeSearchCountries(
     marketQueriesForSearchRows(baseUrl, payload.searchBaseline?.results || [], selectedCountries),
     selectedCountries,
@@ -237,19 +293,33 @@ async function compareGoogleFlightsSearchCountries(
   try {
     await mapWithConcurrency(countries, GOOGLE_FLIGHTS_COMPARE_CONCURRENCY, async (country) => {
       throwIfGoogleFlightsComparisonCancelled(run);
-      return compareGoogleFlightsSearchCountry(baseUrl, country, baselineResultCount, run, (result) => {
+      const result = await compareGoogleFlightsSearchCountry(baseUrl, country, baselineResultCount, run, (result) => {
         throwIfGoogleFlightsComparisonCancelled(run);
         sendGoogleFlightsSearchProgress(progressTabId, payload.requestId, result);
       });
+      usageCompleted += 1;
+      if (result.status === "ready") usageReady += 1;
+      return result;
     });
     sendGoogleFlightsSearchComplete(progressTabId, payload.requestId, { ok: true });
   } catch (error) {
+    usageOutcome = isGoogleFlightsComparisonCancelled(error, run) ? "cancelled" : "error";
     if (isGoogleFlightsComparisonCancelled(error, run)) {
       sendGoogleFlightsSearchComplete(progressTabId, payload.requestId, { ok: true, cancelled: true });
       return;
     }
     throw error;
   } finally {
+    void recordUsage({
+      eventName: "comparison.completed",
+      surface: usageSurface,
+      runId: usageRunId,
+      requestedCountryCount: selectedCountries.length,
+      completedCountryCount: usageCompleted,
+      readyCountryCount: usageReady,
+      durationMs: Math.min(86400000, Math.max(0, Math.round(performance.now() - usageStartedAt))),
+      outcome: usageOutcome,
+    });
     activeGoogleFlightsComparisonRuns.delete(googleFlightsComparisonRunKey(progressTabId, payload.requestId || ""));
   }
 }

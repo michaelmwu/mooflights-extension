@@ -1,4 +1,5 @@
 import "../shared/firefoxChromeCompat";
+import type { PreviewEvent } from "../shared/analytics";
 import { safeChromeCall, sendRuntimeMessage } from "../shared/chromeRuntime";
 import { type FareEstimate, fareQueryForSearchRow, validatedFareEstimate } from "../shared/communityHistory";
 import { createContentTranslator } from "../shared/contentI18n";
@@ -4005,6 +4006,7 @@ function applyHistoricalFareEstimates(): void {
         (url) => {
           void openMatrixWithAutoOpen(url);
         },
+        trackFarePreview,
       );
       const target = searchBadgeTarget(element, row);
       if (preview.parentElement !== target) target.append(preview);
@@ -4042,4 +4044,9 @@ function applyHistoricalFareEstimates(): void {
     }
   }
   pruneFarePreviews();
+}
+
+function trackFarePreview(eventName: PreviewEvent): void {
+  if (!farePreviewSettings.communityHistory.enabled) return;
+  sendRuntimeMessage({ command: "recordUsageEvent", usageSignal: { eventName, surface: "google-flights-search" } });
 }

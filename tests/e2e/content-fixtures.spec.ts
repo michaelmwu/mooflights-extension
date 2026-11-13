@@ -1395,7 +1395,7 @@ test("records fresh country comparisons with OTA names and applies shared countr
     await chrome.storage.local.set({
       muTravelSettings: {
         ...stored.muTravelSettings,
-        communityHistory: { enabled: true, baseUrl: "https://history.example.test" },
+        communityHistory: { enabled: true, consentVersion: "community-v2", baseUrl: "https://history.example.test" },
       },
     });
     chrome.permissions.contains = async () => true;
@@ -1465,14 +1465,26 @@ test("previews uncertain fare-class earnings locally and removes the UI when sha
     await chrome.storage.local.set({
       muTravelSettings: {
         preferredFrequentFlyerPrograms: ["United MileagePlus"],
-        communityHistory: { enabled: true, baseUrl: "https://history.example.test" },
+        communityHistory: { enabled: true, consentVersion: "community-v2", baseUrl: "https://history.example.test" },
       },
     });
     chrome.permissions.contains = async () => true;
-    const state = globalThis as typeof globalThis & { farePreviewRequests: string[] };
+    const state = globalThis as typeof globalThis & {
+      farePreviewRequests: string[];
+      farePreviewEvents: Record<string, unknown>[];
+    };
     state.farePreviewRequests = [];
-    globalThis.fetch = async (input) => {
-      state.farePreviewRequests.push(new URL(String(input)).pathname);
+    state.farePreviewEvents = [];
+    globalThis.fetch = async (input, init) => {
+      const path = new URL(String(input)).pathname;
+      state.farePreviewRequests.push(path);
+      if (path.endsWith("/contributor-sessions"))
+        return new Response(JSON.stringify({ contributorToken: "test-only-contributor-credential-1234567890" }));
+      if (path.endsWith("/usage-events")) {
+        state.farePreviewEvents.push(JSON.parse(String(init?.body)));
+        return new Response(JSON.stringify({ eventId: "test", duplicate: false }));
+      }
+      if (init?.method === "PUT") return new Response("{}");
       return new Response(
         JSON.stringify({
           status: "historical-estimate",
@@ -1531,8 +1543,28 @@ test("previews uncertain fare-class earnings locally and removes the UI when sha
     JSON.parse(Buffer.from(matrixUrl.searchParams.get("search") || "", "base64").toString()).slices[0].routing,
   ).toBe("F:TG640");
   await expect.poll(() => page.evaluate(() => (window as any).rowClicks)).toBe(0);
+  await expect
+    .poll(() =>
+      extensionServiceWorker.evaluate(() => (globalThis as any).farePreviewEvents.map((event: any) => event.eventName)),
+    )
+    .toEqual(
+      expect.arrayContaining(["fare-preview.opened", "fare-preview.class-changed", "fare-preview.program-changed"]),
+    );
+  const events = await extensionServiceWorker.evaluate(() => (globalThis as any).farePreviewEvents);
+  for (const event of events) {
+    expect(Object.keys(event).sort()).toEqual([
+      "browser",
+      "contractVersion",
+      "eventName",
+      "extensionVersion",
+      "idempotencyKey",
+      "occurredAt",
+      "surface",
+    ]);
+  }
   const requests = await extensionServiceWorker.evaluate(() => (globalThis as any).farePreviewRequests);
-  expect(requests).toEqual(["/api/extension/v1/fare-estimates"]);
+  expect(requests.filter((path: string) => path.endsWith("/fare-estimates"))).toHaveLength(1);
+  expect(requests.some((path: string) => path.endsWith("/fare-observations"))).toBe(false);
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
   await expect(compare).toBeFocused();
@@ -1564,7 +1596,7 @@ for (const scenario of [
       await chrome.storage.local.set({
         muTravelSettings: {
           preferredFrequentFlyerPrograms: preferred,
-          communityHistory: { enabled: true, baseUrl: "https://history.example.test" },
+          communityHistory: { enabled: true, consentVersion: "community-v2", baseUrl: "https://history.example.test" },
         },
       });
       chrome.permissions.contains = async () => true;

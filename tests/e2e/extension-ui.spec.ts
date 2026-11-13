@@ -40,11 +40,48 @@ test("keeps community history off by default and validates the API URL before co
   openExtensionPage,
 }) => {
   const page = await openExtensionPage("options/index.html");
-  const sharing = page.getByRole("checkbox", { name: "Enable anonymous sharing and historical suggestions" });
+  const sharing = page.getByRole("checkbox", { name: "Help improve MooFlights" });
   await expect(sharing).not.toBeChecked();
   await page.getByLabel("History API URL").fill("http://example.com");
   await sharing.click();
   await expect(page.getByRole("status")).toHaveText("Enter an HTTPS API origin, or localhost for development.");
   await expect(sharing).not.toBeChecked();
-  await expect(page.getByRole("button", { name: "Disable sharing and delete my shared history" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Turn off sharing and delete my contributions" })).toBeDisabled();
+});
+
+test("uses one benefit-led consent control for flight contributions and feature usage", async ({
+  openExtensionPage,
+  extensionServiceWorker,
+}) => {
+  const page = await openExtensionPage("options/index.html");
+  const section = page.getByRole("heading", { name: "Community insights" }).locator("..");
+  await expect(section.getByRole("checkbox")).toHaveCount(1);
+  await expect(
+    section.getByText(
+      "Share flight comparisons and basic feature usage to improve country recommendations and mileage estimates.",
+    ),
+  ).toBeVisible();
+  await expect(section.getByRole("link", { name: "What gets shared" })).toBeVisible();
+  await page.evaluate(() => {
+    chrome.permissions.request = async () => true;
+  });
+  await section.getByRole("checkbox", { name: "Help improve MooFlights" }).click();
+  await expect(section.getByRole("checkbox")).toBeChecked();
+  const settings = await extensionServiceWorker.evaluate(
+    async () => (await chrome.storage.local.get("muTravelSettings")).muTravelSettings,
+  );
+  expect(settings.communityHistory).toMatchObject({
+    enabled: true,
+    consentVersion: "community-v2",
+    baseUrl: "https://app.mooflights.com",
+  });
+  await section.getByRole("checkbox").click();
+  await expect(section.getByRole("checkbox")).not.toBeChecked();
+});
+
+test("accepts explicit localhost ports for development API permissions", async ({ extensionServiceWorker }) => {
+  const allowed = await extensionServiceWorker.evaluate(() =>
+    chrome.permissions.contains({ origins: ["http://localhost:48731/*"] }),
+  );
+  expect(allowed).toBe(true);
 });

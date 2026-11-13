@@ -91,13 +91,17 @@ Community history has a separate, explicit opt-in setting, defaults to `https://
 
 Endpoints in the private backend:
 
-- `POST /api/extension/v1/contributor-sessions` with `consentVersion: "history-v1"` returns a random `contributorToken`.
+- `POST /api/extension/v1/contributor-sessions` with `consentVersion: "community-v2"`, both purpose flags enabled, and `analyticsConsentVersion: "analytics-v1"` returns a random `contributorToken` and stable `contributorId`.
 - `POST /api/extension/v1/market-observations` accepts a `v1` completed Google Flights booking comparison. Country results include normalized `options` with `provider`, `price` and `isDirect`, in the observation's currency.
 - `POST /api/extension/v1/market-recommendations` accepts route `slices` (origin/destination), `carriers`, `cabin`, `tripType`, and selected `countries`. It returns `recommendations` containing `country`, `relativePrice`, `sampleCount` and supported `providers`.
 - `POST /api/extension/v1/fare-observations` accepts `v1` confirmed ITA examples with route, carrier, cabin, departure date, currency, price, `tripType: "one-way"`, `passengerCount: 1`, flight number, booking class, and optional fare basis.
 - `POST /api/extension/v1/fare-estimates` accepts the same fare context without training labels, flight number, source, version or idempotency key. It returns `status: "unknown"` and empty candidates, or `status: "historical-estimate"` with candidates containing `bookingClass`, `share` and `sampleCount`.
-- `DELETE /api/extension/v1/contributor-sessions/current` revokes the credential and deletes both types of raw observations.
+- `DELETE /api/extension/v1/contributor-sessions/current` revokes the credential and deletes raw market observations, fare observations and usage events.
 
 Observation writes and deletion use `X-MooFlights-Contributor-Token`. Writes use a UUID `idempotencyKey`. Recommendation reads do not include the contributor credential. All new fare/query payloads reject unknown fields and non-finite numbers. Clients must serialize allowlisted fields, excluding page URLs, booking links and account data.
 
 See [Community flight history](./community-history.md) for matching rules, initial limitations, consent and retention.
+
+`GET /api/extension/v1/contributor-sessions/current` returns the credential-owned contributor ID and consent state. `PUT` updates history/analytics purpose permission; the extension exposes one control that changes both together. Legacy credentials keep their IDs and have analytics disabled until explicit opt-in.
+
+`POST /api/extension/v1/usage-events` accepts versioned, allowlisted feature signals with extension version, browser and occurrence time. Comparison signals carry a fresh run UUID, bounded country counts, duration and outcome. Preview signals contain only the event name and surface. Unknown properties, flight details, selected class/program values and account identifiers are rejected. Writes are idempotent per credential and UUID, limited to 500 new events per hour per contributor, and return `eventId`/`duplicate`. Revocation removes events together with flight observations. Future account linking must prove both identities and obtain agreement; an email or claimed user ID is not an account-linking API.

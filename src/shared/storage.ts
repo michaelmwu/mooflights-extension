@@ -1,4 +1,4 @@
-import { historyBaseUrl } from "./communityHistory";
+import { normalizeCommunityHistory } from "./communitySettings";
 import { DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES, normalizeGoogleFlightsCountryCodes } from "./googleFlightsBooking";
 import { filterAvailableGoogleFlightsCountryCodes } from "./googleFlightsCountries";
 import { DEFAULT_LANGUAGE, normalizeLanguage } from "./i18n";
@@ -14,7 +14,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   preferredFrequentFlyerPrograms: [],
   frequentFlyerProgramTiers: {},
   debugMode: false,
-  communityHistory: { enabled: false, baseUrl: "" },
+  communityHistory: { enabled: false, consentVersion: "", baseUrl: "" },
   googleFlights: {
     countryCodes: [...DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES],
   },
@@ -87,10 +87,7 @@ export function mergeSettings(value: unknown): ExtensionSettings {
     ),
     frequentFlyerProgramTiers: stringRecord(candidate.frequentFlyerProgramTiers),
     debugMode: booleanValue(candidate.debugMode, DEFAULT_SETTINGS.debugMode),
-    communityHistory: {
-      enabled: communityHistory.enabled === true,
-      baseUrl: historyBaseUrl(communityHistory.baseUrl),
-    },
+    communityHistory: normalizeCommunityHistory(communityHistory),
     googleFlights: {
       countryCodes: googleFlightsCountryCodes(googleFlights.countryCodes),
     },

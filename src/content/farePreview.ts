@@ -1,3 +1,4 @@
+import type { PreviewEvent } from "../shared/analytics";
 import type { FareEstimate } from "../shared/communityHistory";
 import { createContentTranslator } from "../shared/contentI18n";
 import {
@@ -24,6 +25,7 @@ type PreviewState = {
   portal?: HTMLElement;
   close?: (restoreFocus?: boolean) => void;
   verify: (url: string) => void;
+  track: (event: PreviewEvent) => void;
 };
 const previews = new WeakMap<HTMLElement, PreviewState>();
 const openedPreviews = new Map<HTMLElement, () => void>();
@@ -36,6 +38,7 @@ export function reconcileFarePreview(
   settings: ExtensionSettings,
   language: AppLanguage,
   verify: (url: string) => void,
+  track: (event: PreviewEvent) => void,
 ): HTMLElement {
   pruneFarePreviews();
   const host = existing instanceof HTMLElement ? existing : document.createElement("span");
@@ -56,12 +59,14 @@ export function reconcileFarePreview(
       settings,
       language,
       verify,
+      track,
       selection: {},
       signature: "",
       model: buildFarePreview(context, estimate, settings),
     };
     previews.set(host, state);
   }
+  state.track = track;
   if (state.signature === signature) return host;
   state.context = context;
   state.estimate = estimate;
@@ -132,6 +137,9 @@ function renderSummary(host: HTMLElement, state: PreviewState): void {
   });
 }
 function updateSelection(host: HTMLElement, state: PreviewState, selection: FarePreviewSelection): void {
+  if (selection.bookingClass && selection.bookingClass !== state.model.selected.bookingClass)
+    state.track("fare-preview.class-changed");
+  if (selection.program && selection.program !== state.model.program) state.track("fare-preview.program-changed");
   state.selection = { ...state.selection, ...selection };
   state.model = buildFarePreview(state.context, state.estimate, state.settings, state.selection);
   renderSummary(host, state);
@@ -173,6 +181,7 @@ function renderPanel(host: HTMLElement, state: PreviewState): void {
       root.querySelector<HTMLButtonElement>(`[data-class="${code}"]`)?.focus();
     });
   root.querySelector("a")?.addEventListener("click", (event) => {
+    state.track("fare-preview.verify-clicked");
     if (
       !(event instanceof MouseEvent) ||
       event.button !== 0 ||
@@ -187,6 +196,7 @@ function renderPanel(host: HTMLElement, state: PreviewState): void {
   });
 }
 function openPanel(host: HTMLElement, state: PreviewState): void {
+  state.track("fare-preview.opened");
   // A body-level portal avoids clipping the preview inside Google's price containers.
   for (const other of document.querySelectorAll<HTMLElement>("[data-moo-flights-fare-estimate]"))
     if (other !== host) previews.get(other)?.close?.(false);

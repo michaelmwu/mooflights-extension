@@ -71,6 +71,7 @@ export type ExtensionSettings = {
   debugMode: boolean;
   communityHistory: {
     enabled: boolean;
+    consentVersion: string;
     baseUrl: string;
   };
   googleFlights: {

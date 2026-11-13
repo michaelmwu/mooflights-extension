@@ -2,7 +2,7 @@
 
 Community history is an optional shared dataset in the separate MooFlights backend. It is disabled by default and is not required for country comparisons, ITA parsing, mileage estimates, or booking links.
 
-In Options, enable anonymous sharing and historical suggestions. Chrome asks for access to `https://app.mooflights.com` only. Dev builds also expose an API-origin override; HTTP is accepted for localhost development. Once configured, disable sharing and delete history before changing the service origin, so the deletion credential stays usable.
+In Options, enable the single **Help improve MooFlights** control. It covers flight contributions and basic feature usage together, with a short explanation and privacy link. It is off by default; earlier flight-only consent must be confirmed again for `community-v2`. Chrome asks for access to `https://app.mooflights.com` only. Dev builds also expose an API-origin override; HTTP is accepted for localhost development. Once configured, disable sharing and delete history before changing the service origin, so the deletion credential stays usable.
 
 ## Country and OTA history
 
@@ -20,7 +20,7 @@ Google Flights search rows show an estimated-class label and a mileage range for
 
 The backend matches route, carrier, cabin and currency, within 5% of the observed price and 14 days of comparable booking lead time. It considers observations received in the last 90 days, with one vote per contributor credential. Returned candidates need at least three supporting credentials. These are descriptive historical shares, not calibrated probabilities or verified booking classes. Verify the class and fare rules before booking or relying on mileage earnings.
 
-“Compare classes” opens a keyboard-accessible panel with the plausible classes, their earnings for one consistent program, and local class/program selectors. A most-likely label indicates historical ordering; the UI does not show historical agreement as a calibrated probability. Manual selections are marked as previews and stay on that flight's page instance. They do not change saved preferences, historical predictions, or training data. Escape closes the panel and restores focus; turning off sharing removes both row hints and open previews.
+“Compare classes” opens a keyboard-accessible panel with the plausible classes, their earnings for one consistent program, and local class/program selectors. A most-likely label indicates historical ordering; the UI does not show historical agreement as a calibrated probability. Manual selections are marked as previews and stay on that flight's page instance. They do not change saved preferences, historical predictions, or training data. Named interaction events can be sent under the community opt-in, without the selected class or program values. Escape closes the panel and restores focus; turning off sharing removes both row hints and open previews.
 
 The preview reuses the extension's local mileage rules and selected program tiers. It never treats Google's tax-inclusive total as an eligible base fare for revenue-based earning. Such programs display “Eligible fare needed.” “Check in ITA Matrix” prefills the exact flight, cabin and date without assuming the previewed booking class is confirmed.
 
@@ -28,12 +28,16 @@ The extension limits concurrent fare requests to three and queries at most 20 di
 
 ## Consent and deletion
 
-The background worker owns networking and contributor credentials. After opt-in, it obtains a random contributor credential from the backend and stores it locally, separate from account identity. It does not require Google or MooTravel sign-in. The backend stores an HMAC digest of the credential.
+The background worker owns networking and contributor credentials. Each credential maps to a stable server-side contributor UUID shared by flight observations and usage events. This identifies an installation, not a verified person. It can be associated with an account later only through verified sign-in and an explicit linking choice; there is no client-supplied account-ID field. After opt-in, it obtains a random contributor credential from the backend and stores it locally, separate from account identity. It does not require Google or MooTravel sign-in. The backend stores an HMAC digest of the credential.
 
-Disabling sharing stops new history requests and cancels outstanding requests. The delete action also disables sharing, revokes the credential and deletes the contributor's raw market and fare observations. If deletion fails, the extension keeps the credential so the user can retry. Clearing extension storage or uninstalling removes the credential; delete shared history first if you want the server-side data removed. Raw observations are retained until deleted; recommendation queries use a 90-day lookback.
+Disabling sharing stops new history requests and cancels outstanding requests. The delete action also disables sharing, revokes the credential and deletes the contributor's raw market observations, fare observations and usage events. If deletion fails, the extension keeps the credential so the user can retry. Clearing extension storage or uninstalling removes the credential; delete shared history first if you want the server-side data removed. Raw observations are retained until deleted; recommendation queries use a 90-day lookback.
 
 ## Deployment
 
 The API lives in the private `michaelmwu/mooflights-backend` repository. Apply its Alembic migrations and configure `DATABASE_URL` and a production `CONTRIBUTOR_TOKEN_PEPPER` on the server. The extension receives neither value. The extension's API URL is independent of the existing dev-only provider-metadata settings.
 
 A working HTTPS hostname is required before enabling shared history for users. The default service origin is `https://app.mooflights.com`; dev builds can override it.
+
+## Product usage
+
+The same opt-in covers comparison start/completion, requested/completed/ready country counts, duration/outcome, and fare-preview opens, class/program changes and ITA verification clicks. Events include a fresh comparison-run ID, extension version and browser family. They exclude routes, country codes, prices, selected preview values, account identifiers and page text. Analytics failures never block a feature, and events have no durable upload queue. The contributor ID is resolved by the server from the credential, rather than supplied as a claimed identity in event bodies.
