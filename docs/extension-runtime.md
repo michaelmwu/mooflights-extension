@@ -99,3 +99,9 @@ Google Flights rendering uses a debounce with a one-second maximum wait, a cheap
 The background imports consent settings through `communitySettings.ts`; importing the complete settings/provider registry would pull airport and mileage datasets into every worker wake. Keep those datasets in content/UI entrypoints that need them.
 
 Use `bun run build -- --metafile` (or add `--metafile` to a dev build) to write esbuild input metadata next to each generated JavaScript entry as `.meta.json`. Inspect the worker inputs when changing shared imports. In the reviewed development build, removing the heavy settings import reduced the worker from 910,189 to 79,630 bytes; neither `airports.json` nor `mileage-earning.json` is a worker input.
+
+## FX Network Fallback
+
+Each public FX source has a five-second fetch deadline. Same-page callers share an in-flight request, and a persisted last-failure timestamp suppresses another attempt for 30 minutes after an unsuccessful refresh, including across page loads. Fresh cached rates still use the existing one-day TTL; a valid stale snapshot remains the fallback when both sources fail. No mileage UI waits indefinitely on a rate fetch.
+
+FX cooldown begins only after both sources fail; a pending request in another tab does not suppress a new tab’s initial load.
