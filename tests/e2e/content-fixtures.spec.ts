@@ -1405,16 +1405,20 @@ test("records fresh country comparisons with OTA names and applies shared countr
     };
     state.historyRequests = [];
     state.comparisonUrls = [];
-    // Extension-initiated first navigations bypass Playwright routing. Create blank
-    // tabs and let Playwright navigate them through the fixtures before parsing.
-    const create = chrome.tabs.create;
-    chrome.tabs.create = ((options: chrome.tabs.CreateProperties, callback: (tab: chrome.tabs.Tab) => void) => {
+    // Route extension-initiated destination navigation through Playwright fixtures.
+    // The worker creates/registers its blank tab before updating to this URL.
+    const update = chrome.tabs.update;
+    chrome.tabs.update = ((
+      tabId: number,
+      options: chrome.tabs.UpdateProperties,
+      callback: (tab?: chrome.tabs.Tab) => void,
+    ) => {
       if (options.url?.startsWith("https://www.google.com/travel/flights")) {
         state.comparisonUrls.push(options.url);
-        return create({ ...options, url: "about:blank" }, callback);
+        return update(tabId, { ...options, url: "about:blank" }, callback);
       }
-      return create(options, callback);
-    }) as typeof chrome.tabs.create;
+      return update(tabId, options, callback);
+    }) as typeof chrome.tabs.update;
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async (input, init) => {
       if (!String(input).startsWith("https://history.example.test/")) return originalFetch(input, init);
@@ -1435,7 +1439,15 @@ test("records fresh country comparisons with OTA names and applies shared countr
   );
   context.on("page", (comparison) => {
     void extensionServiceWorker
-      .evaluate(() => (globalThis as any).comparisonUrls.shift() as string | undefined)
+      .evaluate(async () => {
+        const deadline = Date.now() + 5000;
+        while (Date.now() < deadline) {
+          const url = (globalThis as any).comparisonUrls.shift() as string | undefined;
+          if (url) return url;
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        return undefined;
+      })
       .then((url) => (url ? comparison.goto(url) : undefined))
       .catch(() => undefined);
   });

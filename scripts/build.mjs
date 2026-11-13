@@ -8,6 +8,7 @@ import { browserTarget } from "./browser-target.mjs";
 const execFileAsync = promisify(execFile);
 const root = process.cwd();
 const watch = process.argv.includes("--watch");
+const writeMetafiles = process.argv.includes("--metafile");
 const browser = browserTarget();
 const stableDist = process.argv.includes("--stable-dist") || process.env.MOOFLIGHTS_STABLE_EXTENSION_DIST === "1";
 const dist = await distPath();
@@ -271,7 +272,13 @@ if (watch) {
     `Watching ${browser} extension sources in dev-build mode. Load or reload the unpacked extension from ${dist}.`,
   );
 } else {
-  await Promise.all(entries.map(async (entry) => esbuild.build(await buildEntry(entry))));
+  await Promise.all(
+    entries.map(async (entry) => {
+      const result = await esbuild.build({ ...(await buildEntry(entry)), metafile: writeMetafiles });
+      if (writeMetafiles)
+        await writeFile(resolve(dist, `${entry.outfile}.meta.json`), `${JSON.stringify(result.metafile, null, 2)}\n`);
+    }),
+  );
   await copyStaticFiles();
   console.log(`Wrote ${browser} extension build to ${dist}`);
 }
