@@ -101,6 +101,8 @@ function Popup(): React.ReactElement {
         setSharingError(t("historyPermissionDenied"));
         return;
       }
+      const resumed = await chrome.runtime.sendMessage({ command: "resumeHistorySharing", baseUrl });
+      if (!resumed?.ok) throw new Error("Could not resume sharing.");
       const next = await patchSettings({
         communityHistory: { enabled: true, consentVersion: COMMUNITY_CONSENT_VERSION, baseUrl },
       });
@@ -161,6 +163,7 @@ function Popup(): React.ReactElement {
             <h2 id="community-prompt-heading">{t("historyPromptTitle")}</h2>
           </div>
           <p className="community-description">{t("historyNote")}</p>
+          <p className="community-retention">{t("historyRetainedStatistics")}</p>
           <div className="community-prompt-actions">
             <button type="button" disabled={sharingBusy} onClick={() => void enableSharing()}>
               {t("historyEnable")}

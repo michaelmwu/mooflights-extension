@@ -8,6 +8,7 @@ import {
   airportAreaSearchValue,
   countryDisplayName,
 } from "../shared/airports";
+import { type HistoryDeletionRequest, validatedHistoryDeletionRequest } from "../shared/communityDataManagement";
 import { COMMUNITY_CONSENT_VERSION, DEFAULT_HISTORY_API_ORIGIN, historyBaseUrl } from "../shared/communityHistory";
 import { communityPermissions, supportsNativeDataConsent } from "../shared/communityPermissions";
 import { COMMUNITY_PROMPT_KEY } from "../shared/communitySettings";
@@ -41,6 +42,7 @@ function Options(): React.ReactElement {
   const [historyUrl, setHistoryUrl] = useState(DEFAULT_HISTORY_API_ORIGIN);
   const [historyStatus, setHistoryStatus] = useState("");
   const [historyBusy, setHistoryBusy] = useState(false);
+  const [deletionRequest, setDeletionRequest] = useState<HistoryDeletionRequest | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [nativeDataConsent, setNativeDataConsent] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -99,6 +101,8 @@ function Options(): React.ReactElement {
         setHistoryStatus(t("historyPermissionDenied"));
         return;
       }
+      const resumed = await chrome.runtime.sendMessage({ command: "resumeHistorySharing", baseUrl });
+      if (!resumed?.ok) throw new Error("Could not resume sharing.");
       await persist({
         ...latestSettings.current,
         communityHistory: { enabled: true, consentVersion: COMMUNITY_CONSENT_VERSION, baseUrl },
@@ -111,26 +115,54 @@ function Options(): React.ReactElement {
     }
   }
 
-  async function deleteHistory(): Promise<void> {
+  async function prepareDeletionRequest(): Promise<void> {
     setHistoryBusy(true);
     setHistoryStatus("");
+    setDeletionRequest(null);
+    let sharingOffSaved = false;
     try {
-      await persist({ ...settings, communityHistory: { ...settings.communityHistory, enabled: false } });
+      const current = latestSettings.current;
+      await persist({ ...current, communityHistory: { ...current.communityHistory, enabled: false } });
+      sharingOffSaved = true;
       await chrome.storage.local.set({ [COMMUNITY_PROMPT_KEY]: COMMUNITY_CONSENT_VERSION });
       const result = await chrome.runtime.sendMessage({
-        command: "deleteSharedHistory",
-        baseUrl: settings.communityHistory.baseUrl,
+        command: "prepareHistoryDeletionRequest",
+        baseUrl: current.communityHistory.baseUrl,
       });
-      if (result?.ok)
-        await persist({
-          ...latestSettings.current,
-          communityHistory: { enabled: false, consentVersion: "", baseUrl: "" },
-        });
-      setHistoryStatus(t(result?.ok ? "historyDeleted" : "historyDeleteFailed"));
+      if (!result?.ok) throw new Error("Could not prepare request.");
+      if (result.status === "no-contributions") {
+        setHistoryStatus(t("historyNoContributions"));
+      } else {
+        setDeletionRequest(validatedHistoryDeletionRequest(result));
+        setHistoryStatus(t("historyRequestPrepared"));
+      }
     } catch {
-      setHistoryStatus(t("historyDeleteFailed"));
+      if (!sharingOffSaved) {
+        try {
+          const saved = await loadSettings();
+          const restored = { ...latestSettings.current, communityHistory: saved.communityHistory };
+          latestSettings.current = restored;
+          setSettings(restored);
+          sharingOffSaved = !saved.communityHistory.enabled;
+        } catch {
+          // Do not claim that sharing stopped if its saved state cannot be read.
+        }
+        setSaved(false);
+      }
+      setHistoryStatus(t(sharingOffSaved ? "historyRequestFailed" : "historyOptOutFailed"));
     } finally {
       setHistoryBusy(false);
+    }
+  }
+
+  async function copyDeletionReference(): Promise<void> {
+    if (!deletionRequest) return;
+    try {
+      await navigator.clipboard.writeText(deletionRequest.requestId);
+      setHistoryStatus(t("historyReferenceCopied"));
+    } catch {
+      // The read-only reference remains selectable if clipboard access fails.
+      document.getElementById("deletion-request-reference")?.focus();
     }
   }
 
@@ -237,6 +269,7 @@ function Options(): React.ReactElement {
           </span>
         </div>
         <p className="community-description">{t("historyNote")}</p>
+        <p className="community-retention">{t("historyRetainedStatistics")}</p>
         <label className="community-toggle">
           <span>{t("historyConsent")}</span>
           <input
@@ -255,22 +288,42 @@ function Options(): React.ReactElement {
           >
             {t("historyDetails")}
           </a>
-          {settings.communityHistory.baseUrl && (
-            <button
-              className="community-delete"
-              type="button"
-              disabled={!historyLoaded || historyBusy}
-              onClick={() => void deleteHistory()}
-            >
-              {t("historyDelete")}
-            </button>
-          )}
         </div>
         {historyStatus && (
           <p className="community-message" role="status">
             {historyStatus}
           </p>
         )}
+        <details className="community-management">
+          <summary>{t("historyManageData")}</summary>
+          <p>{t("historyManagementNote")}</p>
+          <p>{t("historyRetainedStatistics")}</p>
+          <button type="button" disabled={!historyLoaded || historyBusy} onClick={() => void prepareDeletionRequest()}>
+            {t("historyPrepareDeletion")}
+          </button>
+          {deletionRequest && (
+            <div className="community-deletion-reference">
+              <label htmlFor="deletion-request-reference">{t("historyRequestReference")}</label>
+              <input
+                id="deletion-request-reference"
+                type="text"
+                readOnly
+                value={deletionRequest.requestId}
+                onFocus={(event) => event.currentTarget.select()}
+              />
+              <div className="community-management-actions">
+                <button type="button" onClick={() => void copyDeletionReference()}>
+                  {t("historyCopyReference")}
+                </button>
+                <a
+                  href={`mailto:support@mooflights.com?subject=${encodeURIComponent("MooFlights data deletion request")}&body=${encodeURIComponent(`${t("historyRequestReference")}: ${deletionRequest.requestId}`)}`}
+                >
+                  {t("historyEmailDeletion")}
+                </a>
+              </div>
+            </div>
+          )}
+        </details>
         {__MOOFLIGHTS_DEV_BUILD__ && (
           <details className="community-dev">
             <summary>{t("historyDevelopment")}</summary>

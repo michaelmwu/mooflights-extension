@@ -14,9 +14,11 @@ import {
   contributeHistory,
   deleteSharedHistory,
   estimateFare,
+  prepareHistoryDeletionRequest,
   prioritizeCountries,
   prioritizeSearchCountries,
   recordUsage,
+  resumeHistorySharing,
 } from "./communityHistory";
 import { updateComparisonCache } from "./comparisonCache";
 import { ComparisonTabRegistry, workerTabUrls } from "./comparisonTabs";
@@ -137,6 +139,25 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
   }
   if (payload.command === "estimateHistoricalFare" && isGoogleFlightsSender(sender.tab?.url) && payload.fareQuery) {
     void estimateFare(payload.fareQuery).then(sendResponse);
+    return true;
+  }
+  if (
+    payload.command === "resumeHistorySharing" &&
+    (sender.url === chrome.runtime.getURL("options/index.html") ||
+      sender.url === chrome.runtime.getURL("popup/index.html"))
+  ) {
+    void resumeHistorySharing(payload.baseUrl || "")
+      .then(() => sendResponse({ ok: true }))
+      .catch(() => sendResponse({ ok: false }));
+    return true;
+  }
+  if (
+    payload.command === "prepareHistoryDeletionRequest" &&
+    sender.url === chrome.runtime.getURL("options/index.html")
+  ) {
+    void prepareHistoryDeletionRequest(payload.baseUrl || "")
+      .then((result) => sendResponse({ ok: true, ...result }))
+      .catch(() => sendResponse({ ok: false, error: "Could not prepare deletion request. Please retry." }));
     return true;
   }
   if (payload.command === "deleteSharedHistory" && sender.url === chrome.runtime.getURL("options/index.html")) {
