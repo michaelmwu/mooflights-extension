@@ -118,3 +118,68 @@ test("comparison worker tabs only answer parse messages and never install the pa
   await expect(panel.getByRole("button", { name: "Compare (2)" })).toBeEnabled();
   await expect.poll(() => workerPage.isClosed()).toBe(true);
 });
+
+test("restores cached search prices immediately after returning to a previous route", async ({
+  context,
+  page,
+  extensionServiceWorker,
+}) => {
+  const firstUrl = "https://www.google.com/travel/flights/search?tfs=cache-return-a&curr=USD&gl=US";
+  const otherUrl = firstUrl.replace("cache-return-a", "cache-return-b");
+  await extensionServiceWorker.evaluate(async (url) => {
+    const row = {
+      rowKey: "stored-row",
+      matchKey: "Thai Airways 7:00 AM 3:00 PM 6 hr Nonstop",
+      rowIndex: 0,
+      price: 200,
+      currency: "USD",
+      priceText: "$200",
+      summaryText: "7:00 AM - 3:00 PM Thai Airways 6 hr Nonstop $200",
+      carrierText: "Thai Airways",
+      timeText: "7:00 AM - 3:00 PM",
+      durationText: "6 hr",
+      stopsText: "Nonstop",
+      itineraryKey: "BKK-NRT-TG640-20270101",
+      matchConfidence: "high",
+    };
+    await chrome.storage.local.set({
+      muTravelSettings: { googleFlights: { countryCodes: ["US", "KR"] } },
+      mooFlightsGoogleFlightsSearchComparisonCache: {
+        fixture: {
+          pageKey: "/travel/flights/search?tfs=cache-return-a&curr=USD",
+          baselineSignature: "previous-row-order",
+          selectedCountries: ["US", "KR"],
+          cachedAt: Date.now(),
+          results: [
+            { country: "US", url, status: "ready", results: [row] },
+            {
+              country: "KR",
+              url: url.replace("gl=US", "gl=KR"),
+              status: "ready",
+              results: [{ ...row, price: 180, priceText: "$180" }],
+            },
+          ],
+        },
+      },
+    });
+  }, firstUrl);
+  await context.route("https://www.google.com/travel/flights**", (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: `<!doctype html><html><body><ul><li class="pIav2d">
+      <div class="wtdjmc">7:00 AM - 3:00 PM</div><div class="sSHqwe">Thai Airways</div><div>6 hr Nonstop</div>
+      <div class="U3gSDe"><span class="YMlIz FpEdX" role="text">$200</span></div>
+      <span data-travelimpactmodelwebsiteurl="https://www.google.com/travel/impact?itinerary=BKK-NRT-TG-640-20270101"></span>
+    </li></ul></body></html>`,
+    }),
+  );
+  await page.goto(firstUrl);
+  const priceBadge = page.locator("[data-moo-flights-search-badge]", { hasText: "South Korea $180" });
+  await expect(priceBadge).toBeVisible();
+  for (let visit = 0; visit < 2; visit += 1) {
+    await page.evaluate((url) => history.pushState(null, "", url), otherUrl);
+    await expect(priceBadge).toHaveCount(0, { timeout: 2500 });
+    await page.evaluate((url) => history.pushState(null, "", url), firstUrl);
+    await expect(priceBadge).toBeVisible({ timeout: 2500 });
+  }
+});
