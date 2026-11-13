@@ -2,7 +2,7 @@
 
 Community history is an optional shared dataset in the separate MooFlights backend. It is disabled by default and is not required for country comparisons, ITA parsing, mileage estimates, or booking links.
 
-In Options, enable the single **Help improve MooFlights** control. It covers flight contributions and basic feature usage together, with a short explanation and privacy link. It is off by default; earlier flight-only consent must be confirmed again for `community-v2`. Chrome asks for access to `https://app.mooflights.com` only. Dev builds also expose an API-origin override; HTTP is accepted for localhost development. Once configured, disable sharing and delete history before changing the service origin, so the deletion credential stays usable.
+On the first popup visit, a sticky **Better searches, together** banner offers **Enable sharing** and **No thanks**. Choosing **No thanks** dismisses it across future visits without enabling uploads. Existing opt-in or opt-out choices are respected; there is no repeated prompt. The single **Help improve MooFlights** control in Options is always available to change the choice. It covers flight contributions and basic feature usage together, with a short explanation and privacy link. It is off by default; earlier flight-only consent must be confirmed again for `community-v2`. Chrome asks for access to `https://app.mooflights.com` only. Dev builds also expose an API-origin override; HTTP is accepted for localhost development. Once configured, disable sharing and delete history before changing the service origin, so the deletion credential stays usable.
 
 ## Country and OTA history
 
