@@ -905,7 +905,6 @@ function waitForTabComplete(tabId: number, signal?: AbortSignal): Promise<void> 
   });
 }
 
-
 function delay(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
