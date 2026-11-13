@@ -8,6 +8,7 @@ import {
   airportCodes,
 } from "../shared/airports";
 import { fetchRemoteProviderMetadata } from "../shared/backendClient";
+import { boundedDebounce } from "../shared/boundedDebounce";
 import { runtimeUrl, safeChromeCall, sendRuntimeMessage } from "../shared/chromeRuntime";
 import { type ContentTranslationKey, createContentTranslator } from "../shared/contentI18n";
 import { loadUsdCurrencyRates, type UsdCurrencyRates } from "../shared/currencyRates";
@@ -119,11 +120,6 @@ const PANEL_CORNER_SNAP_PX = 96;
 const PANEL_MINIMIZED_ICON_SIZE_PX = 64;
 let mileageProgramsByLengthCache: string[] | undefined;
 const airportAreaOptionsByLanguage = new Map<ExtensionSettings["language"], AirportAreaOption[]>();
-let autoCaptureCheckTimer: number | undefined;
-let flightResultAnnotationTimer: number | undefined;
-let autoSearchTimer: number | undefined;
-let autoOpenTimer: number | undefined;
-let tabAutoOpenCheckTimer: number | undefined;
 let locationClearButtonInstallFrame: number | undefined;
 let autoSearchStartedAt = 0;
 let autoSearchDone = false;
@@ -138,6 +134,10 @@ let tabScopedAutoOpenCheckStartedAt = 0;
 let tabScopedAutoOpenCheckLocationKey = "";
 let suppressPanelRestoreClick = false;
 const panelUi = loadPanelUiState();
+let annotationRevision = 0;
+const annotatedGrids = new WeakMap<HTMLElement, { revision: number; row: HTMLTableRowElement | null }>();
+const boundPanelRoots = new WeakSet<ShadowRoot>();
+const OWN_DOM_SELECTOR = `#${PANEL_ID}, #${BRIDGE_ID}, #mooflights-flight-result-styles, #mooflights-location-clear-styles, .mu-mileage-earnings, .mu-mileage-column, .mooflights-location-clear`;
 
 const state: PanelState = {
   settings: null,
@@ -162,6 +162,17 @@ const state: PanelState = {
   airportAreaSearch: "",
 };
 
+const autoCaptureWork = boundedDebounce(() => {
+  resetForLocationChange();
+  maybeAutoCapture(false);
+}, AUTO_CAPTURE_DEBOUNCE_MS);
+const autoSearchWork = boundedDebounce(maybeAutoSubmitMatrixSearch, AUTO_SEARCH_DEBOUNCE_MS);
+const autoOpenWork = boundedDebounce(maybeAutoOpenMatrixResult, AUTO_OPEN_DEBOUNCE_MS);
+const tabAutoOpenWork = boundedDebounce(() => {
+  void refreshTabScopedAutoOpenAuthorization();
+}, TAB_AUTO_OPEN_CHECK_DEBOUNCE_MS);
+const flightAnnotationWork = boundedDebounce(annotateFlightResults, 150);
+
 void init();
 
 async function init(): Promise<void> {
@@ -174,13 +185,12 @@ async function init(): Promise<void> {
   chrome.storage?.onChanged?.addListener(onSettingsChanged);
   void loadUsdCurrencyRates().then((rates) => {
     state.currencyRates = rates;
+    annotationRevision += 1;
     if (state.itinerary) render();
     annotateFlightResultsSoon();
   });
   render();
-  installAutoCaptureObserver();
-  installFlightResultObserver();
-  installSearchAutoSubmitObserver();
+  installPageObserver();
   maybeAutoCapture();
   annotateFlightResultsSoon();
   scheduleAutoSubmitMatrixSearch();
@@ -191,6 +201,7 @@ async function init(): Promise<void> {
 function onSettingsChanged(changes: Record<string, chrome.storage.StorageChange>, areaName: string): void {
   if (areaName !== "local" || !changes[SETTINGS_KEY]) return;
   state.settings = mergeSettings(changes[SETTINGS_KEY].newValue);
+  annotationRevision += 1;
   state.airportPreview = airportCodes(state.settings.airportHelper).slice(0, 120);
   state.airportAreaSearch = "";
   installLocationClearButtons();
@@ -230,8 +241,9 @@ function render(): void {
   const settings = state.settings;
   if (!settings) return;
 
-  shadow.innerHTML = `
-    <style>${styles()}</style>
+  const content = shadow.querySelector<HTMLElement>('[data-role="panel-content"]');
+  if (!content) return;
+  content.innerHTML = `
       <section class="panel ${state.panelMinimized ? "minimized" : ""}" style="${panelPositionStyle(state.panelPosition)}" aria-label="MooFlights">
         ${
           state.panelMinimized
@@ -294,92 +306,98 @@ function renderLinksPanel(): string {
 }
 
 function bind(root: ShadowRoot): void {
-  root.querySelector('[data-action="minimize-panel"]')?.addEventListener("click", () => {
-    minimizePanel(root);
-  });
-  root.querySelector('[data-action="hide-panel-session"]')?.addEventListener("click", hidePanelForSession);
-  root.querySelectorAll<HTMLElement>(".panel-menu .menu-item").forEach((item) => {
-    item.addEventListener("click", closePanelMenu);
-  });
-  root.querySelector('[data-action="restore-panel"]')?.addEventListener("click", () => {
-    if (!state.panelMinimized) return;
-    if (suppressPanelRestoreClick) {
-      suppressPanelRestoreClick = false;
-      return;
-    }
-    state.panelCollapsePosition = state.panelPosition;
-    restoreExpandedPanelPosition();
-    state.panelMinimized = false;
-    savePanelUiState();
-    render();
-  });
-  root.querySelector<HTMLElement>('[data-action="restore-panel"]')?.addEventListener("pointerdown", onPanelDragStart);
-  root.querySelector<HTMLElement>('[data-role="panel-header"]')?.addEventListener("pointerdown", onPanelDragStart);
-  root.querySelector('[data-action="capture"]')?.addEventListener("click", () => {
-    void captureItinerary(false);
-  });
-  root.querySelector('[data-action="parse-paste"]')?.addEventListener("click", () => {
-    const input = root.querySelector<HTMLTextAreaElement>('[data-role="json-input"]');
-    if (input?.value) void parseAndSetItinerary(input.value);
-  });
-  root.querySelector('[data-action="copy-airports"]')?.addEventListener("click", () => {
-    void copyAirportPreview("copiedAirportCodes");
-  });
-  root.querySelector('[data-action="options"]')?.addEventListener("click", () => {
-    sendRuntimeMessage({ command: "openOptionsPage" });
-  });
-  root.querySelector('[data-action="show-all-mileage"]')?.addEventListener("click", () => {
-    state.showAllMileagePrograms = true;
-    render();
-  });
-  root.querySelectorAll<HTMLButtonElement>('[data-action="mileage-sort"]').forEach((button) => {
-    button.addEventListener("click", () => {
-      state.mileageSortMode = button.dataset.sort === "name" ? "name" : "miles";
-      render();
-    });
-  });
-  root
-    .querySelector<HTMLInputElement>('[data-action="toggle-preferred-mileage-group"]')
-    ?.addEventListener("change", (event) => {
-      state.groupPreferredMileage = event.currentTarget instanceof HTMLInputElement && event.currentTarget.checked;
-      render();
-    });
-
-  root.querySelectorAll<HTMLInputElement>('input[data-setting="area"]').forEach((input) => {
-    input.addEventListener("change", () => {
-      if (!input.value.trim()) return;
-      void updateAirportSetting("area", input.value);
-    });
-    input.addEventListener("input", () => {
-      state.airportAreaSearch = input.value;
-      renderAirportAreaDropdown(root.querySelector<HTMLElement>('[data-role="airport-area-dropdown"]'));
-    });
-    input.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") {
-        state.airportAreaSearch = "";
-        input.value = "";
-        renderAirportAreaDropdown(root.querySelector<HTMLElement>('[data-role="airport-area-dropdown"]'));
-        return;
+  if (boundPanelRoots.has(root)) return;
+  boundPanelRoots.add(root);
+  root.addEventListener("click", (event) => {
+    const target = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-action]") : null;
+    if (!target) return;
+    const menu = target.closest<HTMLDetailsElement>(".panel-menu");
+    if (target.matches(".menu-item") && menu) menu.open = false;
+    switch (target.dataset.action) {
+      case "minimize-panel":
+        minimizePanel(root);
+        break;
+      case "hide-panel-session":
+        hidePanelForSession();
+        break;
+      case "restore-panel":
+        if (!state.panelMinimized || suppressPanelRestoreClick) {
+          suppressPanelRestoreClick = false;
+          return;
+        }
+        state.panelCollapsePosition = state.panelPosition;
+        restoreExpandedPanelPosition();
+        state.panelMinimized = false;
+        savePanelUiState();
+        render();
+        break;
+      case "capture":
+        void captureItinerary(false);
+        break;
+      case "parse-paste": {
+        const input = root.querySelector<HTMLTextAreaElement>('[data-role="json-input"]');
+        if (input?.value) void parseAndSetItinerary(input.value);
+        break;
       }
-      if (event.key !== "Enter") return;
+      case "copy-airports":
+        void copyAirportPreview("copiedAirportCodes");
+        break;
+      case "options":
+        sendRuntimeMessage({ command: "openOptionsPage" });
+        break;
+      case "show-all-mileage":
+        state.showAllMileagePrograms = true;
+        render();
+        break;
+      case "mileage-sort":
+        state.mileageSortMode = target.dataset.sort === "name" ? "name" : "miles";
+        render();
+        break;
+      case "remove-airport-code":
+        void removeAirportCode(target.dataset.code || "");
+        break;
+      case "select-airport-area":
+        if (target.dataset.value) void updateAirportSetting("area", target.dataset.value);
+        break;
+    }
+  });
+  root.addEventListener("pointerdown", (event) => {
+    const handle =
+      event.target instanceof Element
+        ? event.target.closest<HTMLElement>('[data-action="restore-panel"], [data-role="panel-header"]')
+        : null;
+    if (handle) onPanelDragStart(event as PointerEvent, handle);
+  });
+  root.addEventListener("mousedown", (event) => {
+    if (event.target instanceof Element && event.target.closest('[data-action="select-airport-area"]'))
       event.preventDefault();
-      const firstOption = airportAreaDropdownOptions()[0];
-      void updateAirportSetting("area", firstOption?.searchValue || input.value);
-    });
   });
-  bindAirportAreaDropdown(root);
-  root.querySelectorAll<HTMLButtonElement>('[data-action="remove-airport-code"]').forEach((button) => {
-    button.addEventListener("click", () => {
-      void removeAirportCode(button.dataset.code || "");
-    });
+  root.addEventListener("change", (event) => {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement)) return;
+    if (input.dataset.action === "toggle-preferred-mileage-group") {
+      state.groupPreferredMileage = input.checked;
+      render();
+    } else if (input.dataset.setting === "area" && input.value.trim()) void updateAirportSetting("area", input.value);
   });
-}
-
-function closePanelMenu(event: Event): void {
-  const item = event.currentTarget;
-  if (!(item instanceof HTMLElement)) return;
-  const menu = item.closest<HTMLDetailsElement>(".panel-menu");
-  if (menu) menu.open = false;
+  root.addEventListener("input", (event) => {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement) || input.dataset.setting !== "area") return;
+    state.airportAreaSearch = input.value;
+    renderAirportAreaDropdown(root.querySelector<HTMLElement>('[data-role="airport-area-dropdown"]'));
+  });
+  root.addEventListener("keydown", (event) => {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement) || input.dataset.setting !== "area") return;
+    if ((event as KeyboardEvent).key === "Escape") {
+      state.airportAreaSearch = "";
+      input.value = "";
+      renderAirportAreaDropdown(root.querySelector<HTMLElement>('[data-role="airport-area-dropdown"]'));
+    } else if ((event as KeyboardEvent).key === "Enter") {
+      event.preventDefault();
+      void updateAirportSetting("area", airportAreaDropdownOptions()[0]?.searchValue || input.value);
+    }
+  });
 }
 
 function minimizePanel(root: ShadowRoot): void {
@@ -448,8 +466,8 @@ function isPanelPosition(value: unknown): value is PanelPosition {
   );
 }
 
-function onPanelDragStart(event: PointerEvent): void {
-  const handle = event.currentTarget;
+function onPanelDragStart(event: PointerEvent, explicitHandle?: HTMLElement): void {
+  const handle = explicitHandle || event.currentTarget;
   if (!(handle instanceof HTMLElement)) return;
   if (handle.dataset.role === "panel-header" && isInteractivePanelDragTarget(event.target)) return;
   const panel = handle.closest<HTMLElement>(".panel");
@@ -854,40 +872,47 @@ function onBridgeMessage(event: MessageEvent): void {
   }
 }
 
-function installAutoCaptureObserver(): void {
-  const observer = new MutationObserver(() => {
-    if (isItineraryPage()) {
-      scheduleAutoCaptureCheck();
-    } else {
-      resetForLocationChange();
-    }
-  });
-  observer.observe(document.documentElement, { childList: true, subtree: true });
-  window.addEventListener("popstate", scheduleAutoCaptureCheck);
-  window.addEventListener("hashchange", scheduleAutoCaptureCheck);
+function isOwnMutation(mutation: MutationRecord): boolean {
+  const element = mutation.target instanceof Element ? mutation.target : mutation.target.parentElement;
+  if (element?.closest(OWN_DOM_SELECTOR)) return true;
+  const changed = [...mutation.addedNodes, ...mutation.removedNodes];
+  return (
+    changed.length > 0 &&
+    changed.every(
+      (node) => node instanceof Element && (node.matches(OWN_DOM_SELECTOR) || node.closest(OWN_DOM_SELECTOR)),
+    )
+  );
 }
 
-function installFlightResultObserver(): void {
-  const observer = new MutationObserver(() => {
-    if (!isFlightsPage()) return;
-    scheduleTabScopedAutoOpenAuthorizationCheck();
-    annotateFlightResultsSoon();
-    scheduleAutoOpenMatrixResult();
-  });
-  observer.observe(document.documentElement, { childList: true, subtree: true });
-  window.addEventListener("popstate", scheduleFlightResultsWork);
-  window.addEventListener("hashchange", scheduleFlightResultsWork);
+function invalidateGridForMutation(mutation: MutationRecord): void {
+  const element = mutation.target instanceof Element ? mutation.target : mutation.target.parentElement;
+  const grid = element?.closest<HTMLElement>("matrix-itinerary-grid");
+  if (grid) annotatedGrids.delete(grid);
 }
 
-function installSearchAutoSubmitObserver(): void {
-  const observer = new MutationObserver(() => {
-    if (!isSearchPage()) return;
-    scheduleAutoSubmitMatrixSearch();
-    scheduleLocationClearButtonInstall();
+function dispatchPageWork(): void {
+  resetForLocationChange();
+  if (isItineraryPage()) scheduleAutoCaptureCheck();
+  else if (isFlightsPage()) scheduleFlightResultsWork();
+  else if (isSearchPage()) scheduleSearchPageWork();
+}
+
+function installPageObserver(): void {
+  const observer = new MutationObserver((mutations) => {
+    const external = mutations.filter((mutation) => !isOwnMutation(mutation));
+    if (!external.length) return;
+    for (const mutation of external) invalidateGridForMutation(mutation);
+    dispatchPageWork();
   });
-  observer.observe(document.documentElement, { childList: true, subtree: true });
-  window.addEventListener("popstate", scheduleSearchPageWork);
-  window.addEventListener("hashchange", scheduleSearchPageWork);
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+    attributes: true,
+    attributeFilter: ["src", "alt", "aria-label"],
+  });
+  window.addEventListener("popstate", dispatchPageWork);
+  window.addEventListener("hashchange", dispatchPageWork);
 }
 
 function scheduleSearchPageWork(): void {
@@ -897,28 +922,13 @@ function scheduleSearchPageWork(): void {
 }
 
 function scheduleAutoCaptureCheck(): void {
-  if (autoCaptureCheckTimer) window.clearTimeout(autoCaptureCheckTimer);
-  autoCaptureCheckTimer = window.setTimeout(() => {
-    autoCaptureCheckTimer = undefined;
-    resetForLocationChange();
-    maybeAutoCapture(false);
-  }, AUTO_CAPTURE_DEBOUNCE_MS);
+  autoCaptureWork();
 }
-
 function scheduleAutoSubmitMatrixSearch(): void {
-  if (autoSearchTimer) window.clearTimeout(autoSearchTimer);
-  autoSearchTimer = window.setTimeout(() => {
-    autoSearchTimer = undefined;
-    maybeAutoSubmitMatrixSearch();
-  }, AUTO_SEARCH_DEBOUNCE_MS);
+  autoSearchWork();
 }
-
 function scheduleAutoOpenMatrixResult(): void {
-  if (autoOpenTimer) window.clearTimeout(autoOpenTimer);
-  autoOpenTimer = window.setTimeout(() => {
-    autoOpenTimer = undefined;
-    maybeAutoOpenMatrixResult();
-  }, AUTO_OPEN_DEBOUNCE_MS);
+  autoOpenWork();
 }
 
 function scheduleFlightResultsWork(): void {
@@ -936,11 +946,7 @@ function scheduleTabScopedAutoOpenAuthorizationCheck(): void {
   }
   if (!tabScopedAutoOpenCheckStartedAt) tabScopedAutoOpenCheckStartedAt = Date.now();
   if (Date.now() - tabScopedAutoOpenCheckStartedAt > TAB_AUTO_OPEN_CHECK_TIMEOUT_MS) return;
-  if (tabAutoOpenCheckTimer) window.clearTimeout(tabAutoOpenCheckTimer);
-  tabAutoOpenCheckTimer = window.setTimeout(() => {
-    tabAutoOpenCheckTimer = undefined;
-    void refreshTabScopedAutoOpenAuthorization();
-  }, TAB_AUTO_OPEN_CHECK_DEBOUNCE_MS);
+  tabAutoOpenWork();
 }
 
 async function refreshTabScopedAutoOpenAuthorization(): Promise<void> {
@@ -1256,10 +1262,7 @@ function forgetAutoOpenRequest(): void {
   tabScopedAutoOpenUntil = 0;
   tabScopedAutoOpenCheckStartedAt = 0;
   tabScopedAutoOpenCheckLocationKey = "";
-  if (tabAutoOpenCheckTimer) {
-    window.clearTimeout(tabAutoOpenCheckTimer);
-    tabAutoOpenCheckTimer = undefined;
-  }
+  tabAutoOpenWork.cancel();
 }
 
 function resetAutoOpenState(): void {
@@ -1348,11 +1351,7 @@ function decodeBase64SearchParam(value: string): string {
 }
 
 function annotateFlightResultsSoon(): void {
-  if (flightResultAnnotationTimer) window.clearTimeout(flightResultAnnotationTimer);
-  flightResultAnnotationTimer = window.setTimeout(() => {
-    flightResultAnnotationTimer = undefined;
-    annotateFlightResults();
-  }, 150);
+  flightAnnotationWork();
 }
 
 function annotateFlightResults(): void {
@@ -1361,6 +1360,10 @@ function annotateFlightResults(): void {
   installResultTableColumns();
 
   for (const grid of document.querySelectorAll<HTMLElement>("matrix-itinerary-grid")) {
+    const resultRow = resultRowForGrid(grid);
+    const previous = annotatedGrids.get(grid);
+    if (previous?.revision === annotationRevision && previous.row === resultRow) continue;
+    for (const line of grid.querySelectorAll(".mu-mileage-earnings")) line.remove();
     const items = Array.from(grid.querySelectorAll<HTMLElement>("mat-list-item"));
     const parsedItems = items.map((item) => ({ item, segment: parseResultSegment(item) }));
     const segments = parsedItems
@@ -1381,8 +1384,8 @@ function annotateFlightResults(): void {
       target.appendChild(renderResultMileageLine(segment, estimate));
     });
 
-    const resultRow = resultRowForGrid(grid);
     if (resultRow) updateResultRowMileage(resultRow, resultMileageSummary(itinerary));
+    annotatedGrids.set(grid, { revision: annotationRevision, row: resultRow });
   }
 }
 
@@ -1906,18 +1909,6 @@ function renderAirportAreaDropdown(dropdown: HTMLElement | null): void {
       ? (dropdown.getRootNode() as ShadowRoot).querySelector<HTMLInputElement>('input[data-setting="area"]')
       : null;
   input?.setAttribute("aria-expanded", options.length > 0 ? "true" : "false");
-  bindAirportAreaDropdown(dropdown);
-}
-
-function bindAirportAreaDropdown(root: ParentNode): void {
-  root.querySelectorAll<HTMLButtonElement>('[data-action="select-airport-area"]').forEach((button) => {
-    button.addEventListener("mousedown", (event) => event.preventDefault());
-    button.addEventListener("click", () => {
-      const value = button.dataset.value || "";
-      if (!value) return;
-      void updateAirportSetting("area", value);
-    });
-  });
 }
 
 function normalizeAirportAreaSearch(value: string): string {
@@ -2167,7 +2158,16 @@ function getShadowRoot(): ShadowRoot | null {
     host.id = PANEL_ID;
     document.documentElement.appendChild(host);
   }
-  return host.shadowRoot || host.attachShadow({ mode: "open" });
+  const shadow = host.shadowRoot || host.attachShadow({ mode: "open" });
+  if (!shadow.querySelector("style")) {
+    const style = document.createElement("style");
+    style.textContent = styles();
+    const content = document.createElement("div");
+    content.dataset.role = "panel-content";
+    shadow.append(style, content);
+  }
+  bind(shadow);
+  return shadow;
 }
 
 function removePanel(): void {
