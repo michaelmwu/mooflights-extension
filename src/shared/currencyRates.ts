@@ -8,11 +8,11 @@ export type UsdCurrencyRates = {
 
 const CACHE_KEY = "muTravelUsdCurrencyRates";
 const TTL_MS = 24 * 60 * 60 * 1000;
-const ATTEMPT_KEY = "muTravelUsdCurrencyRatesLastAttempt";
+const FAILURE_KEY = "muTravelUsdCurrencyRatesLastFailure";
 const RETRY_BACKOFF_MS = 30 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 5000;
 let inFlight: Promise<UsdCurrencyRates | null> | undefined;
-let lastAttempt = -Infinity;
+let lastFailure = -Infinity;
 const PRIMARY_URL = "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json";
 const FALLBACK_URL = "https://api.fxratesapi.com/latest?base=USD";
 
@@ -31,23 +31,25 @@ async function loadRates(now: number): Promise<UsdCurrencyRates | null> {
   const cached = await readCachedRates();
   if (cached && now >= cached.fetchedAt && now - cached.fetchedAt < TTL_MS) return cached;
   try {
-    const stored = await chrome.storage.local.get(ATTEMPT_KEY);
-    const attempt = stored[ATTEMPT_KEY];
-    if (typeof attempt === "number" && Number.isFinite(attempt)) lastAttempt = Math.max(lastAttempt, attempt);
+    const stored = await chrome.storage.local.get(FAILURE_KEY);
+    const failure = stored[FAILURE_KEY];
+    if (typeof failure === "number" && Number.isFinite(failure)) lastFailure = Math.max(lastFailure, failure);
   } catch {
-    /* The per-page attempt remains a fallback when storage is unavailable. */
+    /* The per-page failure timestamp remains a fallback when storage is unavailable. */
   }
-  if (now >= lastAttempt && now - lastAttempt < RETRY_BACKOFF_MS) return cached;
-  lastAttempt = now;
-  try {
-    await chrome.storage.local.set({ [ATTEMPT_KEY]: now });
-  } catch {
-    /* Best effort. */
-  }
+  if (now >= lastFailure && now - lastFailure < RETRY_BACKOFF_MS) return cached;
   const fetched = await fetchUsdCurrencyRates(now);
   if (fetched) {
     await writeCachedRates(fetched);
     return fetched;
+  }
+  // An active refresh in another tab is not a failed refresh. Only failure
+  // starts the persisted cooldown, so a newly opened tab can still get rates.
+  lastFailure = now;
+  try {
+    await chrome.storage.local.set({ [FAILURE_KEY]: now });
+  } catch {
+    /* Best effort. */
   }
   return cached;
 }

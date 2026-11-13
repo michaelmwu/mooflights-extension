@@ -37,7 +37,7 @@ it("persists a failed attempt so later page loads return stale rates during back
   const first = await import("./currencyRates");
   expect(await first.loadUsdCurrencyRates(now)).toMatchObject({ fetchedAt: stale.fetchedAt });
   expect(fetchMock).toHaveBeenCalledTimes(2);
-  expect(stored.muTravelUsdCurrencyRatesLastAttempt).toBe(now);
+  expect(stored.muTravelUsdCurrencyRatesLastFailure).toBe(now);
   vi.resetModules();
   const nextPage = await import("./currencyRates");
   expect(await nextPage.loadUsdCurrencyRates(now + 60_000)).toMatchObject({ fetchedAt: stale.fetchedAt });
@@ -73,4 +73,25 @@ it("shares concurrent work and caches a valid fallback response", async () => {
   expect(first).toMatchObject({ rates: { JPY: 160 }, source: "fxratesapi" });
   expect(fetchMock).toHaveBeenCalledTimes(2);
   expect(stored.muTravelUsdCurrencyRates).toMatchObject({ fetchedAt: now });
+});
+
+it("does not suppress a different tab while the first refresh is pending", async () => {
+  let finishFirst!: (response: unknown) => void;
+  fetchMock
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishFirst = resolve;
+        }),
+    )
+    .mockResolvedValue({ ok: true, json: async () => ({ usd: { jpy: 160 } }) });
+  const firstTab = await import("./currencyRates");
+  const first = firstTab.loadUsdCurrencyRates(now);
+  await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  expect(stored.muTravelUsdCurrencyRatesLastFailure).toBeUndefined();
+  vi.resetModules();
+  const secondTab = await import("./currencyRates");
+  expect(await secondTab.loadUsdCurrencyRates(now + 100)).toMatchObject({ rates: { JPY: 160 } });
+  finishFirst({ ok: true, json: async () => ({ usd: { jpy: 160 } }) });
+  expect(await first).toMatchObject({ rates: { JPY: 160 } });
 });

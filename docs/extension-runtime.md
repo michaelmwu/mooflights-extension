@@ -102,4 +102,6 @@ Use `bun run build -- --metafile` (or add `--metafile` to a dev build) to write 
 
 ## FX Network Fallback
 
-Each public FX source has a five-second fetch deadline. Same-page callers share an in-flight request, and a persisted last-attempt timestamp suppresses another attempt for 30 minutes after an unsuccessful refresh, including across page loads. Fresh cached rates still use the existing one-day TTL; a valid stale snapshot remains the fallback when both sources fail. No mileage UI waits indefinitely on a rate fetch.
+Each public FX source has a five-second fetch deadline. Same-page callers share an in-flight request, and a persisted last-failure timestamp suppresses another attempt for 30 minutes after an unsuccessful refresh, including across page loads. Fresh cached rates still use the existing one-day TTL; a valid stale snapshot remains the fallback when both sources fail. No mileage UI waits indefinitely on a rate fetch.
+
+FX cooldown begins only after both sources fail; a pending request in another tab does not suppress a new tab’s initial load.
