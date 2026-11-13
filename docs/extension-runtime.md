@@ -105,3 +105,7 @@ Use `bun run build -- --metafile` (or add `--metafile` to a dev build) to write 
 Each public FX source has a five-second fetch deadline. Same-page callers share an in-flight request, and a persisted last-failure timestamp suppresses another attempt for 30 minutes after an unsuccessful refresh, including across page loads. Fresh cached rates still use the existing one-day TTL; a valid stale snapshot remains the fallback when both sources fail. No mileage UI waits indefinitely on a rate fetch.
 
 FX cooldown begins only after both sources fail; a pending request in another tab does not suppress a new tab’s initial load.
+
+## ITA Rendering
+
+A single document observer dispatches work by page type and ignores extension-owned mutations. Grid revisions prevent parsing unchanged, already annotated results. Rendering keeps the stylesheet and delegated listeners installed, and bounded debounces ensure streaming page updates cannot postpone work indefinitely.
