@@ -47,6 +47,12 @@ import {
 import { DEFAULT_SETTINGS, loadSettings, mergeSettings, SETTINGS_KEY } from "../shared/storage";
 import type { AppLanguage } from "../shared/types";
 import {
+  FARE_PREVIEW_PORTAL_SELECTOR,
+  pruneFarePreviews,
+  reconcileFarePreview,
+  removeFarePreviews,
+} from "./farePreview";
+import {
   mooFlightsPanelHeaderStyles,
   renderMooFlightsMinimizedButton,
   renderMooFlightsPanelHeader,
@@ -125,7 +131,7 @@ const SEARCH_BADGE_TARGET_SELECTOR = "[data-moo-flights-search-badge-target]";
 const SEARCH_HIGHLIGHT_SELECTOR = "[data-moo-flights-search-highlight]";
 const SEARCH_BADGE_STYLES_ID = "moo-flights-search-badge-styles";
 const FARE_ESTIMATE_SELECTOR = "[data-moo-flights-fare-estimate]";
-const OWN_SEARCH_ANNOTATION_SELECTOR = `${FARE_ESTIMATE_SELECTOR}, ${SEARCH_BADGE_SELECTOR}, #${PANEL_ID}, #${SEARCH_BADGE_STYLES_ID}`;
+const OWN_SEARCH_ANNOTATION_SELECTOR = `${FARE_PREVIEW_PORTAL_SELECTOR}, ${FARE_ESTIMATE_SELECTOR}, ${SEARCH_BADGE_SELECTOR}, #${PANEL_ID}, #${SEARCH_BADGE_STYLES_ID}`;
 const DEFAULT_PANEL_POSITION: PanelPosition = { edge: "right", ratio: 1 };
 const PANEL_EDGE_OFFSET_PX = 16;
 const GOOGLE_FLIGHTS_HEADER_HEIGHT_PX = 64;
@@ -145,6 +151,7 @@ const VIEW_MORE_FLIGHTS_LABEL_PATTERNS = [
 ];
 const COUNTRY_OPTIONS_BY_LANGUAGE = new Map<AppLanguage, ReturnType<typeof googleFlightsAvailableCountryOptions>>();
 let historyEnabled = false;
+let farePreviewSettings = DEFAULT_SETTINGS;
 let historyGeneration = 0;
 let fareEstimatePage = "";
 const farePageQueries = new Set<string>();
@@ -677,6 +684,7 @@ async function init(): Promise<void> {
     applyGoogleFlightsCountryInput(readSessionGoogleFlightsCountrySelection() || settings.googleFlights.countryCodes);
     state.language = settings.language;
     historyEnabled = settings.communityHistory.enabled;
+    farePreviewSettings = settings;
   } catch {
     applyGoogleFlightsCountryInput(readSessionGoogleFlightsCountrySelection() || DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES);
   }
@@ -690,6 +698,8 @@ function onSettingsChanged(changes: Record<string, chrome.storage.StorageChange>
   if (areaName !== "local" || !changes[SETTINGS_KEY]) return;
   const next = mergeSettings(changes[SETTINGS_KEY].newValue);
   historyEnabled = next.communityHistory.enabled;
+  farePreviewSettings = next;
+  removeFarePreviews();
   historyGeneration += 1;
   fareEstimates.clear();
   pendingFareEstimates.clear();
@@ -3059,6 +3069,7 @@ function storedSearchHighlightMatchKey(pageKey: string): string {
 }
 
 function removeSearchBadges(): void {
+  removeFarePreviews();
   for (const badge of Array.from(document.querySelectorAll(`${SEARCH_BADGE_SELECTOR}, ${FARE_ESTIMATE_SELECTOR}`))) {
     badge.remove();
   }
@@ -3952,6 +3963,7 @@ function escapeHtml(value: string): string {
 }
 
 function applyHistoricalFareEstimates(): void {
+  pruneFarePreviews();
   if (!historyEnabled || isCurrentSkyscannerPage() || currentRenderPanelMode() !== "search") return;
   const passengerLabels = Array.from(document.querySelectorAll("button[aria-label], [role='button'][aria-label]"))
     .map((button) => normalizeText(button.getAttribute("aria-label") || ""))
@@ -3981,19 +3993,21 @@ function applyHistoricalFareEstimates(): void {
     const key = JSON.stringify(query);
     const estimate = fareEstimates.get(key);
     if (estimate?.status === "historical-estimate") {
-      const candidate = estimate.candidates[0];
-      if (!candidate) continue;
-      const badge = existing || document.createElement("span");
-      badge.setAttribute("data-moo-flights-fare-estimate", "1");
-      badge.className = "moo-flights-search-badge";
-      const text = t()("estimatedBookingClass", {
-        class: candidate.bookingClass,
-        share: Math.round(candidate.share * 100),
-        count: candidate.sampleCount,
-      });
-      if (badge.textContent !== text) badge.textContent = text;
-      badge.setAttribute("title", t()("estimatedBookingClassNote"));
-      if (!existing) searchBadgeTarget(element, row).append(badge);
+      const flightNumber = row.itineraryKey?.match(/^[A-Z]{3}-[A-Z]{3}-[A-Z0-9]{2}(\d{1,4}[A-Z]?)-/)?.[1];
+      if (!flightNumber) continue;
+      const preview = reconcileFarePreview(
+        existing,
+        `${row.itineraryKey}:${key}`,
+        { fare: query, flightNumber },
+        estimate,
+        farePreviewSettings,
+        state.language,
+        (url) => {
+          void openMatrixWithAutoOpen(url);
+        },
+      );
+      const target = searchBadgeTarget(element, row);
+      if (preview.parentElement !== target) target.append(preview);
     } else {
       existing?.remove();
       if (
@@ -4027,4 +4041,5 @@ function applyHistoricalFareEstimates(): void {
         });
     }
   }
+  pruneFarePreviews();
 }

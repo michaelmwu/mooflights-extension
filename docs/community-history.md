@@ -16,9 +16,13 @@ Recommendation queries need a Google Flights `tfs` route and carrier codes. For 
 
 ITA captures contribute confirmed, single-letter booking classes and available fare bases. The first version accepts only single-passenger, one-way itineraries with one segment, known cabin, currency and total price. It avoids allocating round-trip or connection totals to individual segments. Predictions are never submitted as training labels.
 
-Google Flights search rows can show a clearly labeled historical booking-class estimate when the row exposes exact airports, carrier, flight number and departure date through its itinerary identity. The page must also expose an explicit single-adult/passenger label in English. Missing identity, unsupported passenger context, connections, round trips, or insufficient history produce no hint.
+Google Flights search rows show an estimated-class label and a mileage range for the preferred frequent-flyer program. Equal earnings across plausible classes collapse to one amount; missing class data is shown as unavailable rather than zero. The row must expose exact airports, carrier, flight number and departure date through its itinerary identity. The page must also expose an explicit single-adult/passenger label in English. Missing identity, unsupported passenger context, connections, round trips, or insufficient history produce no hint.
 
 The backend matches route, carrier, cabin and currency, within 5% of the observed price and 14 days of comparable booking lead time. It considers observations received in the last 90 days, with one vote per contributor credential. Returned candidates need at least three supporting credentials. These are descriptive historical shares, not calibrated probabilities or verified booking classes. Verify the class and fare rules before booking or relying on mileage earnings.
+
+“Compare classes” opens a keyboard-accessible panel with the plausible classes, their earnings for one consistent program, and local class/program selectors. A most-likely label indicates historical ordering; the UI does not show historical agreement as a calibrated probability. Manual selections are marked as previews and stay on that flight's page instance. They do not change saved preferences, historical predictions, or training data. Escape closes the panel and restores focus; turning off sharing removes both row hints and open previews.
+
+The preview reuses the extension's local mileage rules and selected program tiers. It never treats Google's tax-inclusive total as an eligible base fare for revenue-based earning. Such programs display “Eligible fare needed.” “Check in ITA Matrix” prefills the exact flight, cabin and date without assuming the previewed booking class is confirmed.
 
 The extension limits concurrent fare requests to three and queries at most 20 distinct fares per page. Responses are cached in memory; there is no persistent upload queue. API failures leave local features usable.
 

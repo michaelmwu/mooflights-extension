@@ -1456,45 +1456,150 @@ test("records fresh country comparisons with OTA names and applies shared countr
   expect(JSON.stringify(payload)).not.toMatch(/https:|bookingUrl|summaryText|priceText/);
 });
 
-test("shows uncertain fare-class estimates from search rows and removes them when sharing is disabled", async ({
+test("previews uncertain fare-class earnings locally and removes the UI when sharing is disabled", async ({
   context,
   page,
   extensionServiceWorker,
 }) => {
   await extensionServiceWorker.evaluate(async () => {
     await chrome.storage.local.set({
-      muTravelSettings: { communityHistory: { enabled: true, baseUrl: "https://history.example.test" } },
+      muTravelSettings: {
+        preferredFrequentFlyerPrograms: ["United MileagePlus"],
+        communityHistory: { enabled: true, baseUrl: "https://history.example.test" },
+      },
     });
     chrome.permissions.contains = async () => true;
-    globalThis.fetch = async () =>
-      new Response(
+    const state = globalThis as typeof globalThis & { farePreviewRequests: string[] };
+    state.farePreviewRequests = [];
+    globalThis.fetch = async (input) => {
+      state.farePreviewRequests.push(new URL(String(input)).pathname);
+      return new Response(
         JSON.stringify({
           status: "historical-estimate",
-          candidates: [{ bookingClass: "V", share: 0.75, sampleCount: 3 }],
+          candidates: [
+            { bookingClass: "W", share: 0.7, sampleCount: 7 },
+            { bookingClass: "Y", share: 0.3, sampleCount: 3 },
+          ],
         }),
         { headers: { "Content-Type": "application/json" } },
       );
+    };
   });
   await context.route("https://www.google.com/travel/flights**", (route) =>
     route.fulfill({
       contentType: "text/html",
-      body: `
-    <button aria-label="1 adult">1</button>
-    <ul><li class="pIav2d"><div class="wtdjmc">7:00 AM - 10:30 AM</div><div class="sSHqwe">EVA Air</div>
-    <div>3 hr 30 min Nonstop</div><span role="text">$200</span>
-    <span data-travelimpactmodelwebsiteurl="https://www.google.com/travel/impact?itinerary=TPE-NRT-BR-198-2027-01-01"></span></li></ul>`,
+      body: htmlFixture(`
+      <style>body{font-family:Arial;margin:32px}.pIav2d{display:flex;justify-content:space-between;max-width:760px;border:1px solid #ddd;border-radius:12px;padding:20px;overflow:hidden}.U3gSDe{max-width:260px}</style>
+      <button aria-label="1 adult">1</button>
+      <h1>Bangkok to Tokyo</h1><ul><li class="pIav2d"><div><div class="wtdjmc">7:00 AM - 3:00 PM</div>
+      <div class="sSHqwe">Thai Airways</div><div>6 hr Nonstop</div></div><div class="U3gSDe"><span class="YMlIz FpEdX" role="text">$200</span></div>
+      <span data-travelimpactmodelwebsiteurl="https://www.google.com/travel/impact?itinerary=BKK-NRT-TG-640-20270101"></span></li>
+      <li class="pIav2d"><div><div class="wtdjmc">9:00 AM - 5:00 PM</div><div class="sSHqwe">Thai Airways</div><div>6 hr Nonstop</div></div>
+      <div class="U3gSDe"><span class="YMlIz FpEdX" role="text">$200</span></div>
+      <span data-travelimpactmodelwebsiteurl="https://www.google.com/travel/impact?itinerary=BKK-NRT-TG-642-20270101"></span></li></ul>
+      <script>window.rowClicks=0;document.querySelector('.pIav2d').addEventListener('click',()=>window.rowClicks++);</script>`),
     }),
   );
-  const segment = "\x0a\x03TPE\x12\x0a2027-01-01\x1a\x03NRT\x2a\x02BR\x32\x03198";
+  const segment = "\x0a\x03BKK\x12\x0a2027-01-01\x1a\x03NRT\x2a\x02TG\x32\x03640";
   const tfs = Buffer.from(`\x1a${String.fromCharCode(segment.length)}${segment}`, "binary").toString("base64url");
   await page.goto(`https://www.google.com/travel/flights/search?tfs=${tfs}&curr=USD&gl=US`);
-  await expect(page.locator("[data-moo-flights-fare-estimate]")).toHaveText(
-    "Estimated booking class: V (75% match; 3 supporting observations)",
+  const preview = page.locator("[data-moo-flights-fare-estimate]").first();
+  const otherPreview = page.locator("[data-moo-flights-fare-estimate]").nth(1);
+  await expect(preview.getByText("Estimated class W / Y", { exact: true })).toBeVisible();
+  await expect(preview.getByText("United MileagePlus: 722–2,889 estimated miles", { exact: true })).toBeVisible();
+  const compare = preview.getByRole("button", { name: "Compare classes" });
+  await compare.click();
+  const dialog = page.getByRole("dialog", { name: "Booking class earnings preview" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "W · most likely" })).toHaveAttribute("aria-pressed", "true");
+  await expect(dialog.getByText(/%/)).toHaveCount(0);
+  await page.screenshot({ path: ".context/qa/fare-preview.png" });
+  await dialog.getByLabel("Frequent flyer program").selectOption("Air India Maharaja Club");
+  await expect(preview.getByText("Air India Maharaja Club: 2,889 estimated miles", { exact: true })).toBeVisible();
+  await expect(otherPreview.getByText("United MileagePlus: 722–2,889 estimated miles", { exact: true })).toBeVisible();
+  await dialog.getByLabel("Frequent flyer program").selectOption("United MileagePlus");
+  await dialog.getByRole("button", { name: "Y", exact: true }).click();
+  await expect(dialog.getByText("Preview Y: 2,889 estimated miles", { exact: true })).toBeVisible();
+  await dialog.getByLabel("Preview booking class").selectOption("Q");
+  await expect(dialog.locator(".selected")).toContainText("Preview Q:");
+  await expect(otherPreview.getByText("United MileagePlus: 722–2,889 estimated miles", { exact: true })).toBeVisible();
+  await expect(preview.getByText("Estimated class W / Y", { exact: true })).toBeVisible();
+  const matrixUrl = new URL(
+    (await dialog.getByRole("link", { name: "Check in ITA Matrix" }).getAttribute("href")) || "",
   );
+  expect(
+    JSON.parse(Buffer.from(matrixUrl.searchParams.get("search") || "", "base64").toString()).slices[0].routing,
+  ).toBe("F:TG640");
+  await expect.poll(() => page.evaluate(() => (window as any).rowClicks)).toBe(0);
+  const requests = await extensionServiceWorker.evaluate(() => (globalThis as any).farePreviewRequests);
+  expect(requests).toEqual(["/api/extension/v1/fare-estimates"]);
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(compare).toBeFocused();
+  await compare.click();
+  await expect(dialog.getByLabel("Preview booking class")).toHaveValue("Q");
   await extensionServiceWorker.evaluate(async () => {
+    const stored = await chrome.storage.local.get("muTravelSettings");
     await chrome.storage.local.set({
-      muTravelSettings: { communityHistory: { enabled: false, baseUrl: "https://history.example.test" } },
+      muTravelSettings: {
+        ...stored.muTravelSettings,
+        communityHistory: { enabled: false, baseUrl: "https://history.example.test" },
+      },
     });
   });
-  await expect(page.locator("[data-moo-flights-fare-estimate]")).toHaveCount(0);
+  await expect(preview).toHaveCount(0);
+  await expect(dialog).toHaveCount(0);
 });
+
+for (const scenario of [
+  { carrier: "UA", preferred: ["United MileagePlus"], expected: "Eligible fare needed", programData: true },
+  { carrier: "XX", preferred: [], expected: "Earnings unavailable", programData: false },
+]) {
+  test(`shows ${scenario.expected.toLowerCase()} instead of invented mileage`, async ({
+    context,
+    page,
+    extensionServiceWorker,
+  }) => {
+    await extensionServiceWorker.evaluate(async (preferred) => {
+      await chrome.storage.local.set({
+        muTravelSettings: {
+          preferredFrequentFlyerPrograms: preferred,
+          communityHistory: { enabled: true, baseUrl: "https://history.example.test" },
+        },
+      });
+      chrome.permissions.contains = async () => true;
+      globalThis.fetch = async () =>
+        new Response(
+          JSON.stringify({
+            status: "historical-estimate",
+            candidates: [{ bookingClass: "Y", share: 1, sampleCount: 3 }],
+          }),
+          { headers: { "Content-Type": "application/json" } },
+        );
+    }, scenario.preferred);
+    await context.route("https://www.google.com/travel/flights**", (route) =>
+      route.fulfill({
+        contentType: "text/html",
+        body: htmlFixture(`
+      <button aria-label="1 adult">1</button><ul><li class="pIav2d"><div class="wtdjmc">7:00 AM - 10:00 AM</div>
+      <div class="sSHqwe">Example airline</div><div>3 hr Nonstop</div><span role="text">$5,000</span>
+      <span data-travelimpactmodelwebsiteurl="https://www.google.com/travel/impact?itinerary=LAX-SEA-${scenario.carrier}-123-20270101"></span></li></ul>`),
+      }),
+    );
+    const segment = `\x0a\x03LAX\x12\x0a2027-01-01\x1a\x03SEA\x2a\x02${scenario.carrier}\x32\x03123`;
+    const tfs = Buffer.from(`\x1a${String.fromCharCode(segment.length)}${segment}`, "binary").toString("base64url");
+    await page.goto(`https://www.google.com/travel/flights/search?tfs=${tfs}&curr=USD&gl=US`);
+    const preview = page.locator("[data-moo-flights-fare-estimate]");
+    await expect(preview).toContainText(scenario.expected);
+    await expect(preview).not.toContainText("25,000");
+    await preview.getByRole("button", { name: "Compare classes" }).click();
+    const dialog = page.getByRole("dialog", { name: "Booking class earnings preview" });
+    await expect(dialog.locator(".selected")).toHaveText(`Preview Y: ${scenario.expected}`);
+    if (!scenario.programData) {
+      await expect(dialog.getByLabel("Frequent flyer program")).toBeDisabled();
+      await expect(dialog.getByLabel("Preview booking class")).toBeFocused();
+    }
+    await dialog.getByRole("button", { name: "Close preview" }).click();
+    await expect(dialog).toHaveCount(0);
+  });
+}
