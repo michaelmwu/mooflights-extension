@@ -1207,6 +1207,9 @@ function scheduleRenderTick(): void {
     state.pageKey = pageKey;
     state.cacheKey = cacheKey;
   } else if (pageKeyChanged) {
+    // A fresh page state may need a previously successful lookup restored again.
+    // Keep memoized checks only while the current comparison state is retained.
+    checkedSearchCache.clear();
     state.pageKey = pageKey;
     state.cacheKey = cacheKey;
     state.baselineSignature = "";
