@@ -14,6 +14,7 @@ import {
   contributeHistory,
   deleteSharedHistory,
   estimateFare,
+  prepareHistoryDeletionRequest,
   prioritizeCountries,
   prioritizeSearchCountries,
   recordUsage,
@@ -137,6 +138,15 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
   }
   if (payload.command === "estimateHistoricalFare" && isGoogleFlightsSender(sender.tab?.url) && payload.fareQuery) {
     void estimateFare(payload.fareQuery).then(sendResponse);
+    return true;
+  }
+  if (
+    payload.command === "prepareHistoryDeletionRequest" &&
+    sender.url === chrome.runtime.getURL("options/index.html")
+  ) {
+    void prepareHistoryDeletionRequest(payload.baseUrl || "")
+      .then((result) => sendResponse({ ok: true, ...result }))
+      .catch(() => sendResponse({ ok: false, error: "Could not prepare deletion request. Please retry." }));
     return true;
   }
   if (payload.command === "deleteSharedHistory" && sender.url === chrome.runtime.getURL("options/index.html")) {

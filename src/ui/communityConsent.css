@@ -123,21 +123,6 @@
   font-size: 12px;
   text-underline-offset: 3px;
 }
-.community-card .community-delete {
-  margin-left: auto;
-  border: 0;
-  background: transparent;
-  padding: 4px 0;
-  color: #64748b;
-  font: inherit;
-  font-size: 12px;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: pointer;
-}
-.community-delete:hover {
-  color: #b91c1c;
-}
 .community-card button:disabled {
   opacity: 0.5;
   cursor: wait;
@@ -226,4 +211,59 @@
   .community-prompt .community-heading {
     flex-wrap: nowrap;
   }
+}
+
+.community-management {
+  margin-top: 14px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 12px;
+  color: #526477;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.community-management summary {
+  cursor: pointer;
+  color: #64748b;
+  font-size: 12px;
+}
+.community-management p {
+  margin: 10px 0;
+}
+.community-management button {
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #f8fafc;
+  padding: 7px 10px;
+  color: #334155;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.community-deletion-reference {
+  margin-top: 12px;
+}
+.community-deletion-reference label {
+  display: block;
+  margin-bottom: 6px;
+}
+.community-deletion-reference input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  font-family: monospace;
+  font-size: 12px;
+}
+.community-management-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.community-card .community-retention {
+  margin: 8px 0 0;
+  color: #526477;
+  font-size: 12px;
+  line-height: 1.5;
 }

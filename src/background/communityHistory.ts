@@ -1,4 +1,5 @@
 import { ANALYTICS_CONSENT_VERSION, type UsageEvent, type UsageSignal } from "../shared/analytics";
+import { type PrepareHistoryDeletionResult, validatedHistoryDeletionRequest } from "../shared/communityDataManagement";
 import {
   type FareObservation,
   type FareQuery,
@@ -16,6 +17,12 @@ const sessionRequests = new Map<string, Promise<string>>();
 const synchronizedConsents = new Map<string, string>();
 let consentGeneration = 0;
 type RequestContext = { url: string; generation: number };
+
+class HistoryServiceError extends Error {
+  constructor(readonly status: number) {
+    super("History service unavailable.");
+  }
+}
 
 // Consent changes cancel outstanding reads/writes; there is no upload outbox.
 function invalidateConsent(): void {
@@ -67,7 +74,7 @@ async function request(
       headers: { "Content-Type": "application/json", ...(token ? { "X-MooFlights-Contributor-Token": token } : {}) },
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
-    if (!response.ok) throw new Error("History service unavailable.");
+    if (!response.ok) throw new HistoryServiceError(response.status);
     return response.status === 204 ? null : await response.json();
   } finally {
     clearTimeout(timeout);
@@ -82,6 +89,7 @@ async function consentPayload() {
     historyEnabled: enabled,
     analyticsEnabled: enabled,
     analyticsConsentVersion: enabled ? ANALYTICS_CONSENT_VERSION : null,
+    retentionConsentVersion: enabled ? "aggregate-v1" : null,
   };
 }
 
@@ -145,12 +153,39 @@ async function contributorToken(
   }
 }
 
+async function contributorRequest(
+  context: RequestContext,
+  path: string,
+  body: unknown,
+  purpose: "history" | "analytics",
+): Promise<unknown> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const before = await chrome.storage.local.get(SESSION_KEY);
+    const previousToken = (before[SESSION_KEY] as Record<string, unknown> | undefined)?.[context.url];
+    try {
+      const token = await contributorToken(context, purpose);
+      return await request(context, path, "POST", body, token);
+    } catch (error) {
+      if (!(error instanceof HistoryServiceError) || error.status !== 401 || attempt !== 0) throw error;
+      const stored = await chrome.storage.local.get(SESSION_KEY);
+      const sessions = (stored[SESSION_KEY] || {}) as Record<string, string>;
+      if (sessions[context.url] === previousToken) {
+        delete sessions[context.url];
+        synchronizedConsents.delete(context.url);
+        await chrome.storage.local.set({ [SESSION_KEY]: sessions });
+      }
+      // Only a newly enabled contribution can rejoin after admin revocation.
+      // Consent synchronization and deletion preparation never create a session.
+    }
+  }
+  throw new Error("History service unavailable.");
+}
+
 export async function recordUsage(signal: UsageSignal): Promise<void> {
   const occurredAt = new Date().toISOString();
   try {
     const context = await configuredUrl("analytics");
     if (!context) return;
-    const token = await contributorToken(context, "analytics");
     const manifest = chrome.runtime.getManifest();
     const event: UsageEvent = {
       ...signal,
@@ -160,7 +195,7 @@ export async function recordUsage(signal: UsageSignal): Promise<void> {
       browser: manifest.manifest_version === 2 ? "firefox" : "chrome",
       occurredAt,
     };
-    await request(context, "usage-events", "POST", event, token);
+    await contributorRequest(context, "usage-events", event, "analytics");
   } catch {
     /* Analytics is best-effort and has no persistent queue. */
   }
@@ -174,8 +209,7 @@ export async function contributeHistory(
   try {
     const context = await configuredUrl();
     if (!context) return;
-    const token = await contributorToken(context);
-    await request(context, `${kind}-observations`, "POST", observation, token);
+    await contributorRequest(context, `${kind}-observations`, observation, "history");
   } catch {
     /* Sharing failure must not affect local features. */
   }
@@ -201,6 +235,41 @@ export async function estimateFare(query: FareQuery): Promise<ReturnType<typeof 
     /* No estimate is a valid offline fallback. */
   }
   return { status: "unknown", candidates: [] };
+}
+
+export async function prepareHistoryDeletionRequest(baseUrl: string): Promise<PrepareHistoryDeletionResult> {
+  const url = historyBaseUrl(baseUrl);
+  if (!url) {
+    if (!baseUrl) return { status: "no-contributions" };
+    throw new Error("Invalid history API URL.");
+  }
+  // The Options action disables sharing first. Invalidate work that may still be
+  // waiting on permission/session promises before preparing the authenticated request.
+  invalidateConsent();
+  const pending = sessionRequests.get(url);
+  if (pending) await pending.catch(() => undefined);
+  const stored = await chrome.storage.local.get(SESSION_KEY);
+  const sessions = stored[SESSION_KEY] as Record<string, unknown> | undefined;
+  const token = sessions?.[url];
+  if (typeof token !== "string") return { status: "no-contributions" };
+  const context = await configuredUrl("consent");
+  if (!context || context.url !== url) throw new Error("History API permission required.");
+  try {
+    const result = await request(context, "contributor-sessions/current/deletion-request", "POST", undefined, token);
+    return validatedHistoryDeletionRequest(result);
+  } catch (error) {
+    if (!(error instanceof HistoryServiceError) || error.status !== 401) throw error;
+    // A completed administrative deletion revokes the old credential. Do not
+    // register a replacement merely to prepare another deletion request.
+    const latest = await chrome.storage.local.get(SESSION_KEY);
+    const current = (latest[SESSION_KEY] || {}) as Record<string, string>;
+    if (current[url] === token) {
+      delete current[url];
+      synchronizedConsents.delete(url);
+      await chrome.storage.local.set({ [SESSION_KEY]: current });
+    }
+    return { status: "no-contributions" };
+  }
 }
 
 export async function deleteSharedHistory(baseUrl: string): Promise<void> {

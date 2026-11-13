@@ -1395,7 +1395,7 @@ test("records fresh country comparisons with OTA names and applies shared countr
     await chrome.storage.local.set({
       muTravelSettings: {
         ...stored.muTravelSettings,
-        communityHistory: { enabled: true, consentVersion: "community-v2", baseUrl: "https://history.example.test" },
+        communityHistory: { enabled: true, consentVersion: "community-v3", baseUrl: "https://history.example.test" },
       },
     });
     chrome.permissions.contains = async () => true;
@@ -1477,7 +1477,7 @@ test("previews uncertain fare-class earnings locally and removes the UI when sha
     await chrome.storage.local.set({
       muTravelSettings: {
         preferredFrequentFlyerPrograms: ["United MileagePlus"],
-        communityHistory: { enabled: true, consentVersion: "community-v2", baseUrl: "https://history.example.test" },
+        communityHistory: { enabled: true, consentVersion: "community-v3", baseUrl: "https://history.example.test" },
       },
     });
     chrome.permissions.contains = async () => true;
@@ -1625,7 +1625,7 @@ for (const scenario of [
       await chrome.storage.local.set({
         muTravelSettings: {
           preferredFrequentFlyerPrograms: preferred,
-          communityHistory: { enabled: true, consentVersion: "community-v2", baseUrl: "https://history.example.test" },
+          communityHistory: { enabled: true, consentVersion: "community-v3", baseUrl: "https://history.example.test" },
         },
       });
       chrome.permissions.contains = async () => true;

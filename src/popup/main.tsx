@@ -161,6 +161,7 @@ function Popup(): React.ReactElement {
             <h2 id="community-prompt-heading">{t("historyPromptTitle")}</h2>
           </div>
           <p className="community-description">{t("historyNote")}</p>
+          <p className="community-retention">{t("historyRetainedStatistics")}</p>
           <div className="community-prompt-actions">
             <button type="button" disabled={sharingBusy} onClick={() => void enableSharing()}>
               {t("historyEnable")}
