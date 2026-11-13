@@ -1502,7 +1502,7 @@ test("previews uncertain fare-class earnings locally and removes the UI when sha
       contentType: "text/html",
       body: htmlFixture(`
       <style>body{font-family:Arial;margin:32px}.pIav2d{display:flex;justify-content:space-between;max-width:760px;border:1px solid #ddd;border-radius:12px;padding:20px;overflow:hidden}.U3gSDe{max-width:260px}</style>
-      
+
       <h1>Bangkok to Tokyo</h1><ul><li class="pIav2d"><div><div class="wtdjmc">7:00 AM - 3:00 PM</div>
       <div class="sSHqwe">Thai Airways</div><div>6 hr Nonstop</div></div><div class="U3gSDe"><span class="YMlIz FpEdX" role="text">$200</span></div>
       <span data-travelimpactmodelwebsiteurl="https://www.google.com/travel/impact?itinerary=BKK-NRT-TG-640-20270101"></span></li>
