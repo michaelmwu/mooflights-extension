@@ -684,6 +684,7 @@ async function setCapturedItinerary(
   const remoteMetadata = await fetchRemoteProviderMetadata(settings);
   if (expectedLocationKey !== state.locationKey) return;
   state.itinerary = itinerary;
+  void chrome.runtime.sendMessage({ command: "recordConfirmedFare", itinerary }).catch(() => undefined);
   state.links = applyPageLinkOverrides(rankProviderLinks(itinerary, settings, remoteMetadata));
   state.error = "";
   state.autoCaptureAttempted = true;

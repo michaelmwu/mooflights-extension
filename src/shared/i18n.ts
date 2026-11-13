@@ -17,6 +17,17 @@ export const APP_LANGUAGE_CODES = new Set<AppLanguage>(LANGUAGE_OPTIONS.map((lan
 
 const TRANSLATIONS = {
   en: {
+    historyTitle: "Community insights",
+    historyNote:
+      "Share flight comparisons and basic feature usage to improve country recommendations and mileage estimates.",
+    historyApiUrl: "History API URL",
+    historyConsent: "Help improve MooFlights",
+    historyDelete: "Turn off sharing and delete my contributions",
+    historyInvalidUrl: "Enter an HTTPS API origin, or localhost for development.",
+    historyPermissionDenied: "API access was not granted. Sharing remains off.",
+    historyDeleted: "Shared history deleted and sharing disabled.",
+    historyDeleteFailed: "Deletion failed. Sharing is off; retry to delete your shared data.",
+
     appName: "MooFlights",
     appTagline: "Companion tools for Google Flights and ITA Matrix.",
     popupTagline: "Offline-first ITA Matrix tools.",
@@ -80,8 +91,20 @@ const TRANSLATIONS = {
       "Dev-build-only controls for pointing the extension at a locally running MooTravel API. This is an HTTPS/API boundary, not direct database access.",
     fetchProviderMetadata: "Fetch optional provider metadata from backend.",
     apiBaseUrl: "API base URL",
+    historyDetails: "What gets shared",
   },
   es: {
+    historyTitle: "Información de la comunidad",
+    historyNote:
+      "Comparte comparaciones de vuelos y uso básico para mejorar las recomendaciones de países y las estimaciones de millas.",
+    historyApiUrl: "URL de la API del historial",
+    historyConsent: "Ayudar a mejorar MooFlights",
+    historyDelete: "Desactivar y eliminar mis contribuciones",
+    historyInvalidUrl: "Introduce un origen HTTPS o localhost para desarrollo.",
+    historyPermissionDenied: "Acceso denegado. El envío sigue desactivado.",
+    historyDeleted: "Historial eliminado y envío desactivado.",
+    historyDeleteFailed: "No se pudo eliminar. El envío está desactivado; vuelve a intentarlo.",
+
     appName: "MooFlights",
     appTagline: "Herramientas complementarias para Google Flights e ITA Matrix.",
     popupTagline: "Herramientas de ITA Matrix que funcionan primero sin conexión.",
@@ -145,8 +168,19 @@ const TRANSLATIONS = {
       "Controles solo para builds de desarrollo que apuntan la extensión a una API local de MooTravel. Es un límite HTTPS/API, no acceso directo a la base de datos.",
     fetchProviderMetadata: "Obtener metadatos opcionales de proveedores desde el backend.",
     apiBaseUrl: "URL base de la API",
+    historyDetails: "Qué se comparte",
   },
   "zh-Hans": {
+    historyTitle: "社区见解",
+    historyNote: "分享航班比较和基本功能使用情况，改善国家推荐和里程估算。",
+    historyApiUrl: "历史 API 地址",
+    historyConsent: "帮助改进 MooFlights",
+    historyDelete: "关闭分享并删除我的贡献",
+    historyInvalidUrl: "请输入 HTTPS 来源地址，开发时可用 localhost。",
+    historyPermissionDenied: "未授予 API 访问权限，分享保持关闭。",
+    historyDeleted: "已删除共享历史并关闭分享。",
+    historyDeleteFailed: "删除失败。分享已关闭，请重试删除数据。",
+
     appName: "MooFlights",
     appTagline: "适用于 Google Flights 和 ITA Matrix 的辅助工具。",
     popupTagline: "离线优先的 ITA Matrix 工具。",
@@ -209,8 +243,19 @@ const TRANSLATIONS = {
       "仅开发构建使用的控件，用于将扩展指向本地运行的 MooTravel API。这是 HTTPS/API 边界，不是直接数据库访问。",
     fetchProviderMetadata: "从后端获取可选的提供商元数据。",
     apiBaseUrl: "API 基础 URL",
+    historyDetails: "分享哪些数据",
   },
   "zh-Hant": {
+    historyTitle: "社群見解",
+    historyNote: "分享航班比較與基本功能使用情況，改善國家推薦和里程估算。",
+    historyApiUrl: "歷史 API 網址",
+    historyConsent: "協助改善 MooFlights",
+    historyDelete: "關閉分享並刪除我的貢獻",
+    historyInvalidUrl: "請輸入 HTTPS 來源網址，開發時可用 localhost。",
+    historyPermissionDenied: "未授予 API 存取權限，分享保持關閉。",
+    historyDeleted: "已刪除共享歷史並關閉分享。",
+    historyDeleteFailed: "刪除失敗。分享已關閉，請重試刪除資料。",
+
     appName: "MooFlights",
     appTagline: "適用於 Google Flights 和 ITA Matrix 的輔助工具。",
     popupTagline: "離線優先的 ITA Matrix 工具。",
@@ -273,8 +318,19 @@ const TRANSLATIONS = {
       "僅開發建置使用的控制項，用於將擴充功能指向本機執行的 MooTravel API。這是 HTTPS/API 邊界，不是直接資料庫存取。",
     fetchProviderMetadata: "從後端取得選用的供應商中繼資料。",
     apiBaseUrl: "API 基礎 URL",
+    historyDetails: "分享哪些資料",
   },
   ja: {
+    historyTitle: "コミュニティの情報",
+    historyNote: "フライト比較と基本的な機能の利用状況を共有し、国のおすすめや獲得マイルの推定を改善します。",
+    historyApiUrl: "履歴 API URL",
+    historyConsent: "MooFlights の改善に協力する",
+    historyDelete: "共有を無効にして自分の投稿を削除",
+    historyInvalidUrl: "HTTPS のオリジン、開発用には localhost を入力してください。",
+    historyPermissionDenied: "API へのアクセスが許可されませんでした。共有は無効です。",
+    historyDeleted: "共有履歴を削除し、共有を無効にしました。",
+    historyDeleteFailed: "削除に失敗しました。共有は無効です。削除を再試行してください。",
+
     appName: "MooFlights",
     appTagline: "Google Flights と ITA Matrix の補助ツール。",
     popupTagline: "オフライン優先の ITA Matrix ツール。",
@@ -338,8 +394,19 @@ const TRANSLATIONS = {
       "ローカルで実行中の MooTravel API に拡張機能を向ける、開発ビルド専用の設定です。これは HTTPS/API の境界であり、データベースへの直接アクセスではありません。",
     fetchProviderMetadata: "バックエンドから任意のプロバイダーメタデータを取得します。",
     apiBaseUrl: "API ベース URL",
+    historyDetails: "共有する情報",
   },
   ko: {
+    historyTitle: "커뮤니티 인사이트",
+    historyNote: "항공편 비교와 기본 기능 사용 정보를 공유하여 국가 추천과 마일 추정을 개선합니다.",
+    historyApiUrl: "기록 API URL",
+    historyConsent: "MooFlights 개선에 참여",
+    historyDelete: "공유를 끄고 내 기여 삭제",
+    historyInvalidUrl: "HTTPS 출처를 입력하세요. 개발 시 localhost를 사용할 수 있습니다.",
+    historyPermissionDenied: "API 접근이 허용되지 않았습니다. 공유는 비활성화 상태입니다.",
+    historyDeleted: "공유 기록이 삭제되고 공유가 비활성화되었습니다.",
+    historyDeleteFailed: "삭제에 실패했습니다. 공유는 꺼져 있습니다. 삭제를 다시 시도하세요.",
+
     appName: "MooFlights",
     appTagline: "Google Flights와 ITA Matrix용 보조 도구.",
     popupTagline: "오프라인 우선 ITA Matrix 도구.",
@@ -403,6 +470,7 @@ const TRANSLATIONS = {
       "로컬에서 실행 중인 MooTravel API를 확장 프로그램에 연결하기 위한 개발 빌드 전용 설정입니다. 이는 HTTPS/API 경계이며 직접 데이터베이스 액세스가 아닙니다.",
     fetchProviderMetadata: "백엔드에서 선택적 제공업체 메타데이터 가져오기.",
     apiBaseUrl: "API 기본 URL",
+    historyDetails: "공유되는 정보",
   },
 } as const;
 

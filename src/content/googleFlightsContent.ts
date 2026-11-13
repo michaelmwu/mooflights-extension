@@ -1,5 +1,7 @@
 import "../shared/firefoxChromeCompat";
+import type { PreviewEvent } from "../shared/analytics";
 import { safeChromeCall, sendRuntimeMessage } from "../shared/chromeRuntime";
+import { type FareEstimate, fareQueryForSearchRow, validatedFareEstimate } from "../shared/communityHistory";
 import { createContentTranslator } from "../shared/contentI18n";
 import {
   type CountryResult,
@@ -45,6 +47,12 @@ import {
 } from "../shared/skyscannerBooking";
 import { DEFAULT_SETTINGS, loadSettings, mergeSettings, SETTINGS_KEY } from "../shared/storage";
 import type { AppLanguage } from "../shared/types";
+import {
+  FARE_PREVIEW_PORTAL_SELECTOR,
+  pruneFarePreviews,
+  reconcileFarePreview,
+  removeFarePreviews,
+} from "./farePreview";
 import {
   mooFlightsPanelHeaderStyles,
   renderMooFlightsMinimizedButton,
@@ -123,7 +131,8 @@ const SEARCH_BADGE_SELECTOR = "[data-moo-flights-search-badge]";
 const SEARCH_BADGE_TARGET_SELECTOR = "[data-moo-flights-search-badge-target]";
 const SEARCH_HIGHLIGHT_SELECTOR = "[data-moo-flights-search-highlight]";
 const SEARCH_BADGE_STYLES_ID = "moo-flights-search-badge-styles";
-const OWN_SEARCH_ANNOTATION_SELECTOR = `${SEARCH_BADGE_SELECTOR}, #${PANEL_ID}, #${SEARCH_BADGE_STYLES_ID}`;
+const FARE_ESTIMATE_SELECTOR = "[data-moo-flights-fare-estimate]";
+const OWN_SEARCH_ANNOTATION_SELECTOR = `${FARE_PREVIEW_PORTAL_SELECTOR}, ${FARE_ESTIMATE_SELECTOR}, ${SEARCH_BADGE_SELECTOR}, #${PANEL_ID}, #${SEARCH_BADGE_STYLES_ID}`;
 const DEFAULT_PANEL_POSITION: PanelPosition = { edge: "right", ratio: 1 };
 const PANEL_EDGE_OFFSET_PX = 16;
 const GOOGLE_FLIGHTS_HEADER_HEIGHT_PX = 64;
@@ -142,6 +151,13 @@ const VIEW_MORE_FLIGHTS_LABEL_PATTERNS = [
   /^显示更多航班$/,
 ];
 const COUNTRY_OPTIONS_BY_LANGUAGE = new Map<AppLanguage, ReturnType<typeof googleFlightsAvailableCountryOptions>>();
+let historyEnabled = false;
+let farePreviewSettings = DEFAULT_SETTINGS;
+let historyGeneration = 0;
+let fareEstimatePage = "";
+const farePageQueries = new Set<string>();
+const fareEstimates = new Map<string, FareEstimate>();
+const pendingFareEstimates = new Set<string>();
 let regionDisplayNames: Intl.DisplayNames | null | undefined;
 let countryCodeByDisplayName: Map<string, string> | null | undefined;
 let suppressPanelRestoreClick = false;
@@ -668,6 +684,8 @@ async function init(): Promise<void> {
     const settings = await loadSettings();
     applyGoogleFlightsCountryInput(readSessionGoogleFlightsCountrySelection() || settings.googleFlights.countryCodes);
     state.language = settings.language;
+    historyEnabled = settings.communityHistory.enabled;
+    farePreviewSettings = settings;
   } catch {
     applyGoogleFlightsCountryInput(readSessionGoogleFlightsCountrySelection() || DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES);
   }
@@ -680,6 +698,14 @@ async function init(): Promise<void> {
 function onSettingsChanged(changes: Record<string, chrome.storage.StorageChange>, areaName: string): void {
   if (areaName !== "local" || !changes[SETTINGS_KEY]) return;
   const next = mergeSettings(changes[SETTINGS_KEY].newValue);
+  historyEnabled = next.communityHistory.enabled;
+  farePreviewSettings = next;
+  removeFarePreviews();
+  historyGeneration += 1;
+  fareEstimates.clear();
+  pendingFareEstimates.clear();
+  farePageQueries.clear();
+  for (const badge of document.querySelectorAll(FARE_ESTIMATE_SELECTOR)) badge.remove();
   const languageChanged = next.language !== state.language;
   state.language = next.language;
   applyGoogleFlightsCountryInput(readSessionGoogleFlightsCountrySelection() || next.googleFlights.countryCodes);
@@ -1059,6 +1085,7 @@ function scheduleRender(): void {
     if (mode === "search") {
       updateSearchBaselineDuringComparison();
       applySearchBadges();
+      applyHistoricalFareEstimates();
       applyRequestedSearchHighlight(state.searchBaseline);
     }
     return;
@@ -1093,6 +1120,7 @@ function scheduleRender(): void {
       comparedCountries: state.searchResults.map((result) => result.country),
     });
     applySearchBadges();
+    applyHistoricalFareEstimates();
     applyRequestedSearchHighlight(state.searchBaseline);
     return;
   }
@@ -1163,6 +1191,7 @@ function scheduleRender(): void {
 
   if (!pageKeyChanged && state.baselineSignature === baselineSignature) {
     applySearchBadges();
+    applyHistoricalFareEstimates();
     applyRequestedSearchHighlight(searchBaseline);
     if (mode === "search" && state.searchResults.length === 0)
       void loadStoredSearchComparisonCache(cacheKey, baselineSignature);
@@ -1502,6 +1531,7 @@ function render(): void {
     sendRuntimeMessage({ command: "openOptionsPage" });
   });
   applySearchBadges();
+  applyHistoricalFareEstimates();
 }
 
 function t(): ReturnType<typeof createContentTranslator> {
@@ -2487,6 +2517,7 @@ async function compareCountries(): Promise<void> {
       baseUrl,
       countries,
       baselineOptionCount: baseline?.options.length ?? 0,
+      baseline,
       requestId,
     })) as { ok?: boolean; error?: string } | undefined;
     if (state.pageKey !== comparePageKey || state.comparingRequestId !== requestId) return;
@@ -2554,6 +2585,7 @@ async function compareSearchRows(): Promise<void> {
       baseUrl,
       countries,
       baselineSearchResultCount: baseline.results.length,
+      searchBaseline: baseline,
       requestId,
     })) as { ok?: boolean; error?: string } | undefined;
     if (state.pageKey !== comparePageKey || state.comparingRequestId !== requestId) return;
@@ -3041,7 +3073,8 @@ function storedSearchHighlightMatchKey(pageKey: string): string {
 }
 
 function removeSearchBadges(): void {
-  for (const badge of Array.from(document.querySelectorAll(SEARCH_BADGE_SELECTOR))) {
+  removeFarePreviews();
+  for (const badge of Array.from(document.querySelectorAll(`${SEARCH_BADGE_SELECTOR}, ${FARE_ESTIMATE_SELECTOR}`))) {
     badge.remove();
   }
   for (const target of Array.from(document.querySelectorAll(SEARCH_BADGE_TARGET_SELECTOR))) {
@@ -3073,7 +3106,7 @@ function searchBadgeTarget(row: Element, parsed: SearchResult): Element {
   if (hiddenMatchingPriceContainer) return priceBlockTarget(hiddenMatchingPriceContainer);
 
   const priceElement = Array.from(row.querySelectorAll("[aria-label], [role='text'], span, div")).find((element) => {
-    if (element.closest(SEARCH_BADGE_SELECTOR)) return false;
+    if (element.closest(`${SEARCH_BADGE_SELECTOR}, ${FARE_ESTIMATE_SELECTOR}`)) return false;
     return searchTargetContainsPrice(element, parsed.priceText);
   });
   return priceElement?.parentElement || row.querySelector(".YMlIz, .FpEdX, .U3gSDe")?.parentElement || row;
@@ -3099,7 +3132,7 @@ function skyscannerSearchBadgeTarget(row: Element, parsed: SearchResult): Elemen
   if (visiblePriceContainer) return skyscannerPriceBadgeTarget(visiblePriceContainer);
 
   const priceElement = Array.from(row.querySelectorAll("[aria-label], span, div, p")).find((element) => {
-    if (element.closest(SEARCH_BADGE_SELECTOR)) return false;
+    if (element.closest(`${SEARCH_BADGE_SELECTOR}, ${FARE_ESTIMATE_SELECTOR}`)) return false;
     if (element.closest('[class*="EcoTicket"]')) return false;
     if (!isVisibleElement(element)) return false;
     if (!searchTargetContainsPrice(element, parsed.priceText)) return false;
@@ -3931,4 +3964,92 @@ function escapeHtml(value: string): string {
     };
     return entities[character] || character;
   });
+}
+
+function applyHistoricalFareEstimates(): void {
+  pruneFarePreviews();
+  if (!historyEnabled || isCurrentSkyscannerPage() || currentRenderPanelMode() !== "search") return;
+  const passengerLabels = Array.from(document.querySelectorAll("button[aria-label], [role='button'][aria-label]"))
+    .map((button) => normalizeText(button.getAttribute("aria-label") || ""))
+    .filter((label) => /adult|passenger|child|infant/i.test(label));
+  const singleAdult =
+    passengerLabels.some((label) => /^1 (?:adult|passenger)(?:[,.] change[^.]*)?\.?$/i.test(label)) &&
+    !passengerLabels.some((label) => /[1-9]\d* (?:children|child|infants?|[2-9] adults?)/i.test(label));
+  const href = window.location.href;
+  const generation = historyGeneration;
+  if (fareEstimatePage !== href) {
+    fareEstimatePage = href;
+    farePageQueries.clear();
+  }
+  const parsedRows = parseCurrentSearchPage().results;
+  const used = new Set<string>();
+  let requests = 0;
+  for (const [index, element] of currentSearchResultRows().entries()) {
+    const row = currentSearchResultForVisibleRow(element, index, parsedRows, used);
+    if (!row) continue;
+    used.add(row.rowKey);
+    const query = fareQueryForSearchRow(href, row, singleAdult);
+    const existing = element.querySelector(FARE_ESTIMATE_SELECTOR);
+    if (!query) {
+      existing?.remove();
+      continue;
+    }
+    const key = JSON.stringify(query);
+    const estimate = fareEstimates.get(key);
+    if (estimate?.status === "historical-estimate") {
+      const flightNumber = row.itineraryKey?.match(/^[A-Z]{3}-[A-Z]{3}-[A-Z0-9]{2}(\d{1,4}[A-Z]?)-/)?.[1];
+      if (!flightNumber) continue;
+      const preview = reconcileFarePreview(
+        existing,
+        `${row.itineraryKey}:${key}`,
+        { fare: query, flightNumber },
+        estimate,
+        farePreviewSettings,
+        state.language,
+        (url) => {
+          void openMatrixWithAutoOpen(url);
+        },
+        trackFarePreview,
+      );
+      const target = searchBadgeTarget(element, row);
+      if (preview.parentElement !== target) target.append(preview);
+    } else {
+      existing?.remove();
+      if (
+        estimate ||
+        pendingFareEstimates.has(key) ||
+        requests >= 10 ||
+        pendingFareEstimates.size >= 3 ||
+        farePageQueries.size >= 20
+      )
+        continue;
+      requests += 1;
+      pendingFareEstimates.add(key);
+      farePageQueries.add(key);
+      void chrome.runtime
+        .sendMessage({ command: "estimateHistoricalFare", fareQuery: query })
+        .then((response) => {
+          if (historyGeneration !== generation || !historyEnabled) return;
+          if (fareEstimates.size >= 200) {
+            const oldest = fareEstimates.keys().next().value;
+            if (oldest) fareEstimates.delete(oldest);
+          }
+          fareEstimates.set(key, validatedFareEstimate(response));
+        })
+        .catch(() => {
+          if (historyGeneration === generation) fareEstimates.set(key, { status: "unknown", candidates: [] });
+        })
+        .finally(() => {
+          if (historyGeneration !== generation) return;
+          pendingFareEstimates.delete(key);
+          if (window.location.href === href) applyHistoricalFareEstimates();
+        });
+    }
+  }
+  pruneFarePreviews();
+}
+
+function trackFarePreview(eventName: PreviewEvent): void {
+  if (!farePreviewSettings.communityHistory.enabled) return;
+  sendRuntimeMessage({ command: "recordUsageEvent", usageSignal: { eventName, surface: "google-flights-search" } });
 }

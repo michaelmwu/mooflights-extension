@@ -66,6 +66,7 @@ export type EarningsEstimate = {
   displayFare?: string;
   basis: "distance-percent" | "revenue-multiplier" | "fixed" | "unknown";
   approximate?: boolean;
+  requiresEligibleFare?: boolean;
   sourceFetchedAt: string;
 };
 
@@ -423,6 +424,7 @@ function estimateSegmentEarningsRows(
       displayFare: computed.displayFare,
       basis: computed.basis,
       approximate: computed.approximate,
+      requiresEligibleFare: computed.requiresEligibleFare,
       sourceFetchedAt: DATA.f,
     };
   });
@@ -806,7 +808,10 @@ function computeMiles(
   fare: number | undefined,
   fareCurrency: string | undefined,
   currencyRates: UsdCurrencyRates | null | undefined,
-): Pick<EarningsEstimate, "estimatedMiles" | "formula" | "displayFare" | "basis" | "approximate"> {
+): Pick<
+  EarningsEstimate,
+  "estimatedMiles" | "formula" | "displayFare" | "basis" | "approximate" | "requiresEligibleFare"
+> {
   if (finiteNumber(percent) && finiteNumber(distance)) {
     return {
       estimatedMiles: Math.round(distance * (percent / 100)),
@@ -858,6 +863,7 @@ function computeMiles(
   return {
     formula: value || "Open Where to Credit for details",
     basis: "unknown",
+    ...(revenueMultiplier ? { requiresEligibleFare: true } : {}),
   };
 }
 

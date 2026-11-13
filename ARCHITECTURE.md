@@ -72,3 +72,9 @@ Response:
 ```
 
 The local provider registry remains the fallback source of truth.
+
+## Shared Flight History
+
+Community flight history is an explicit opt-in enhancement at `https://app.mooflights.com`. The background worker owns HTTP requests, contributor credentials and upload lifecycle. Content scripts normalize fresh Google Flights booking comparisons and confirmed ITA examples, and render validated historical hints. The backend owns durable observations, country/OTA aggregation and fare-class estimation. Predictions remain separate from confirmed training labels.
+
+The backend uses private Coolify-managed Postgres behind its versioned API. The extension receives no database credentials and continues its local search and comparison flows when the service is unavailable. See [Community flight history](./docs/community-history.md) for matching rules, consent, deletion and initial scope.

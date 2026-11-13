@@ -8,6 +8,7 @@ It helps with:
 - Compare Google Flights booking-page offers across selected countries while keeping currency fixed.
 - Open prefilled Where to Credit links for fare-class lookup.
 - Rank curated booking links by local confidence.
+- Optionally contribute shared route/carrier/OTA history to prioritize country checks and show uncertain booking-class estimates from confirmed ITA examples.
 - Filter and insert airport codes on ITA search pages.
 
 The extension is AGPL-3.0-only open-source software owned by Mu Travel LLC. The optional hosted MooTravel backend is separate closed-source infrastructure.
@@ -113,6 +114,7 @@ distribution still requires Mozilla Add-ons signing.
 - [Privacy policy](./PRIVACY.md)
 - [Security policy](./SECURITY.md)
 - [Backend contract](./docs/backend-contract.md)
+- [Community flight history](./docs/community-history.md)
 - [Data imports](./docs/data-imports.md)
 - [Extension runtime](./docs/extension-runtime.md)
 - [Dependency supply chain](./docs/supply-chain.md)

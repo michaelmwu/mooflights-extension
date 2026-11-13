@@ -1,3 +1,4 @@
+import { normalizeCommunityHistory } from "./communitySettings";
 import { DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES, normalizeGoogleFlightsCountryCodes } from "./googleFlightsBooking";
 import { filterAvailableGoogleFlightsCountryCodes } from "./googleFlightsCountries";
 import { DEFAULT_LANGUAGE, normalizeLanguage } from "./i18n";
@@ -13,6 +14,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   preferredFrequentFlyerPrograms: [],
   frequentFlyerProgramTiers: {},
   debugMode: false,
+  communityHistory: { enabled: false, consentVersion: "", baseUrl: "" },
   googleFlights: {
     countryCodes: [...DEFAULT_GOOGLE_FLIGHTS_COUNTRY_CODES],
   },
@@ -52,6 +54,10 @@ export async function patchSettings(patch: Partial<ExtensionSettings>): Promise<
       ...current.backend,
       ...(patch.backend || {}),
     },
+    communityHistory: {
+      ...current.communityHistory,
+      ...(patch.communityHistory || {}),
+    },
     googleFlights: {
       ...current.googleFlights,
       ...(patch.googleFlights || {}),
@@ -66,6 +72,7 @@ export function mergeSettings(value: unknown): ExtensionSettings {
   const airportHelper = isRecord(candidate.airportHelper) ? candidate.airportHelper : {};
   const backend = isRecord(candidate.backend) ? candidate.backend : {};
   const googleFlights = isRecord(candidate.googleFlights) ? candidate.googleFlights : {};
+  const communityHistory = isRecord(candidate.communityHistory) ? candidate.communityHistory : {};
 
   return {
     language: normalizeLanguage(candidate.language),
@@ -80,6 +87,7 @@ export function mergeSettings(value: unknown): ExtensionSettings {
     ),
     frequentFlyerProgramTiers: stringRecord(candidate.frequentFlyerProgramTiers),
     debugMode: booleanValue(candidate.debugMode, DEFAULT_SETTINGS.debugMode),
+    communityHistory: normalizeCommunityHistory(communityHistory),
     googleFlights: {
       countryCodes: googleFlightsCountryCodes(googleFlights.countryCodes),
     },
