@@ -1468,6 +1468,63 @@ test("records fresh country comparisons with OTA names and applies shared countr
   expect(JSON.stringify(payload)).not.toMatch(/https:|bookingUrl|summaryText|priceText/);
 });
 
+test("shows separate segment fare hints on a group return search with a connection", async ({
+  context,
+  page,
+  extensionServiceWorker,
+}) => {
+  await extensionServiceWorker.evaluate(async () => {
+    await chrome.storage.local.set({
+      muTravelSettings: {
+        communityHistory: { enabled: true, consentVersion: "community-v3", baseUrl: "https://history.example.test" },
+      },
+    });
+    chrome.permissions.contains = async () => true;
+    (globalThis as any).segmentFareQueries = [];
+    globalThis.fetch = async (input, init) => {
+      if (String(input).endsWith("/fare-estimates")) {
+        (globalThis as any).segmentFareQueries.push(JSON.parse(String(init?.body)));
+        return new Response(
+          JSON.stringify({
+            status: "historical-estimate",
+            candidates: [{ bookingClass: "V", share: 1, sampleCount: 3 }],
+          }),
+        );
+      }
+      return new Response("{}");
+    };
+  });
+  await context.route("https://www.google.com/travel/flights**", (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: htmlFixture(`
+    <button aria-label="2 adults">2 adults</button><h1>Bangkok to Tokyo</h1><ul><li class="pIav2d">
+    <div class="wtdjmc">7:00 AM - 3:00 PM</div><div class="sSHqwe">Thai Airways, EVA Air</div><div>8 hr 1 stop</div>
+    <div class="U3gSDe"><span class="YMlIz FpEdX" role="text">$1800</span></div>
+    <span data-travelimpactmodelwebsiteurl="https://www.google.com/travel/impact?itinerary=BKK-TPE-TG-634-20270101,TPE-NRT-BR-198-20270101"></span></li></ul>`),
+    }),
+  );
+  const out = "\x0a\x03BKK\x12\x0a2027-01-01\x1a\x03NRT\x2a\x02TG\x32\x03634";
+  const back = "\x0a\x03NRT\x12\x0a2027-01-10\x1a\x03BKK\x2a\x02TG\x32\x03641";
+  const tfs = Buffer.from(
+    `\x1a${String.fromCharCode(out.length)}${out}\x1a${String.fromCharCode(back.length)}${back}`,
+    "binary",
+  ).toString("base64url");
+  await page.goto(`https://www.google.com/travel/flights/search?tfs=${tfs}&curr=USD&gl=US`);
+  const hints = page.locator("[data-moo-flights-fare-estimate]");
+  await expect(hints).toHaveCount(2);
+  await expect(hints.first().getByText("TG634 · BKK–TPE", { exact: true })).toBeVisible();
+  await expect(hints.nth(1).getByText("BR198 · TPE–NRT", { exact: true })).toBeVisible();
+  for (const hint of await hints.all())
+    await expect(hint.getByText("Based on similar flights · per person, per segment", { exact: true })).toBeVisible();
+  const queries = await extensionServiceWorker.evaluate(() => (globalThis as any).segmentFareQueries);
+  expect(queries).toHaveLength(2);
+  expect(queries.map((query: any) => [query.origin, query.destination, query.priceContext])).toEqual([
+    ["BKK", "TPE", "itinerary"],
+    ["TPE", "NRT", "itinerary"],
+  ]);
+});
+
 test("previews uncertain fare-class earnings locally and removes the UI when sharing is disabled", async ({
   context,
   page,
@@ -1529,7 +1586,13 @@ test("previews uncertain fare-class earnings locally and removes the UI when sha
   await page.goto(`https://www.google.com/travel/flights/search?tfs=${tfs}&curr=USD&gl=US`);
   // Passenger controls may arrive after otherwise unchanged search results.
   await expect(page.locator("#mooflights-google-flights-panel")).toBeAttached();
-  await expect(page.locator("[data-moo-flights-fare-estimate]")).toHaveCount(0);
+  await expect(page.locator("[data-moo-flights-fare-estimate]")).toHaveCount(2);
+  await expect(
+    page
+      .locator("[data-moo-flights-fare-estimate]")
+      .first()
+      .getByText("Based on similar flights · per person, per segment", { exact: true }),
+  ).toBeVisible();
   await page.evaluate(() => {
     const passenger = document.createElement("button");
     passenger.setAttribute("aria-label", "1 adult");
@@ -1592,7 +1655,7 @@ test("previews uncertain fare-class earnings locally and removes the UI when sha
     ]);
   }
   const requests = await extensionServiceWorker.evaluate(() => (globalThis as any).farePreviewRequests);
-  expect(requests.filter((path: string) => path.endsWith("/fare-estimates"))).toHaveLength(1);
+  expect(requests.filter((path: string) => path.endsWith("/fare-estimates"))).toHaveLength(2);
   expect(requests.some((path: string) => path.endsWith("/fare-observations"))).toBe(false);
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);

@@ -481,3 +481,52 @@ it("keeps community-v2 contributions paused until explicit community-v3 acceptan
   });
   expect(fetchMock.mock.calls.filter(([target]) => String(target).endsWith("/usage-events"))).toHaveLength(1);
 });
+
+it.each(["fallback", "matched", "empty", "error", "timeout"] as const)(
+  "handles fare price matching: %s",
+  async (outcome) => {
+    settings.communityHistory = { enabled: true, consentVersion: "community-v3", baseUrl: "https://api.example.com" };
+    const candidate = { status: "historical-estimate", candidates: [{ bookingClass: "V", share: 1, sampleCount: 3 }] };
+    const unknown = { status: "unknown", candidates: [] };
+    if (outcome === "timeout") vi.useFakeTimers();
+    fetchMock.mockImplementation((_url, init) => {
+      if (outcome === "timeout")
+        return new Promise((_resolve, reject) =>
+          init.signal.addEventListener("abort", () => reject(new Error("timeout"))),
+        );
+      if (outcome === "error") return Promise.reject(new Error("offline"));
+      const broad = JSON.parse(init.body).priceContext === "itinerary";
+      return Promise.resolve({
+        ok: true,
+        json: async () => (outcome === "matched" || (outcome === "fallback" && broad) ? candidate : unknown),
+      });
+    });
+    try {
+      const { estimateFare } = await import("./communityHistory");
+      const pending = estimateFare({
+        origin: "TPE",
+        destination: "NRT",
+        carrier: "BR",
+        cabin: "COACH",
+        departureDate: "2027-01-01",
+        currency: "USD",
+        price: 200,
+        tripType: "one-way",
+        passengerCount: 1,
+      });
+      if (outcome === "timeout") await vi.runAllTimersAsync();
+      expect(await pending).toEqual(
+        outcome === "fallback"
+          ? { ...candidate, matchBasis: "similar-flights" }
+          : outcome === "matched"
+            ? candidate
+            : unknown,
+      );
+      expect(fetchMock).toHaveBeenCalledTimes(outcome === "fallback" || outcome === "empty" ? 2 : 1);
+      if (outcome === "fallback")
+        expect(JSON.parse(fetchMock.mock.calls[1]?.[1].body)).toMatchObject({ priceContext: "itinerary", price: 200 });
+    } finally {
+      vi.useRealTimers();
+    }
+  },
+);

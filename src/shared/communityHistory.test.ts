@@ -1,6 +1,7 @@
 import {
   buildFareObservation,
   buildMarketObservation,
+  fareQueriesForSearchRow,
   fareQueryForSearchRow,
   historyBaseUrl,
   marketQueriesForSearchRows,
@@ -117,7 +118,7 @@ describe("community flight history", () => {
     ).toEqual(["JP", "US", "TW"]);
     expect(orderHistoricalCountries(countries, null)).toEqual(countries);
   });
-  it("requires exact single-segment identity and known single-adult context for search estimates", () => {
+  it("uses a price-free segment prior for group and connecting searches", () => {
     const row = { itineraryKey: "TPE-NRT-BR198-2027-01-01", currency: "USD", price: 200 };
     expect(fareQueryForSearchRow(url, row, true)).toMatchObject({
       origin: "TPE",
@@ -125,10 +126,16 @@ describe("community flight history", () => {
       price: 200,
       passengerCount: 1,
     });
-    expect(fareQueryForSearchRow(url, row, false)).toBeNull();
+    expect(fareQueryForSearchRow(url, row, false)).toMatchObject({ priceContext: "itinerary" });
     expect(
-      fareQueryForSearchRow(url, { ...row, itineraryKey: `${row.itineraryKey}|NRT-HND-BR1-2027-01-01` }, true),
-    ).toBeNull();
+      fareQueriesForSearchRow(url, { ...row, itineraryKey: "TPE-KIX-BR1-20270101|KIX-NRT-JL2-20270101" }, true),
+    ).toMatchObject([
+      { fare: { origin: "TPE", destination: "KIX", priceContext: "itinerary" }, flightNumber: "1" },
+      { fare: { origin: "KIX", destination: "NRT", priceContext: "itinerary" }, flightNumber: "2" },
+    ]);
+    expect(
+      fareQueriesForSearchRow(url, { ...row, itineraryKey: "TPE-KIX-BR1-20270101|HND-NRT-JL2-20270101" }, true),
+    ).toEqual([]);
     expect(fareQueryForSearchRow(url, { ...row, itineraryKey: "KIX-NRT-BR198-2027-01-01" }, true)).toBeNull();
   });
   it("supports compact Google itinerary dates and derives carrier priors from search rows", () => {
@@ -143,6 +150,23 @@ describe("community flight history", () => {
       ["US", "JP"],
     );
     expect(queries.map((query) => query.carriers)).toEqual([["BR"], ["JL"]]);
+  });
+  it("supports return searches and rejects stale row identities", () => {
+    const back = "\x0a\x03NRT\x12\x0a2027-01-10\x1a\x03TPE\x2a\x02BR\x32\x03197";
+    const roundTrip = `https://www.google.com/travel/flights/search?curr=USD&tfs=${btoa(`\x1a${String.fromCharCode(segment.length)}${segment}\x1a${String.fromCharCode(back.length)}${back}`)}`;
+    expect(
+      fareQueriesForSearchRow(roundTrip, { itineraryKey: "TPE-NRT-BR198-20270101", currency: "USD", price: 800 }, true),
+    ).toMatchObject([{ fare: { priceContext: "itinerary", origin: "TPE" } }]);
+    expect(
+      fareQueriesForSearchRow(
+        roundTrip,
+        { itineraryKey: "NRT-TPE-BR197-20270110", currency: "USD", price: 800 },
+        false,
+      ),
+    ).toMatchObject([{ fare: { priceContext: "itinerary", origin: "NRT" } }]);
+    expect(
+      fareQueriesForSearchRow(roundTrip, { itineraryKey: "TPE-NRT-BR198-20270201", currency: "USD", price: 800 }, true),
+    ).toEqual([]);
   });
   it("validates predictions as uncertain hints rather than confirmed labels", () => {
     expect(

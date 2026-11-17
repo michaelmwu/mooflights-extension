@@ -267,7 +267,15 @@ export async function prioritizeCountries(query: MarketQuery | null, countries: 
 export async function estimateFare(query: FareQuery): Promise<ReturnType<typeof validatedFareEstimate>> {
   try {
     const context = await configuredUrl();
-    if (context) return validatedFareEstimate(await request(context, "fare-estimates", "POST", query));
+    if (context) {
+      const estimate = validatedFareEstimate(await request(context, "fare-estimates", "POST", query));
+      if (estimate.status === "historical-estimate") return estimate;
+      if (query.priceContext === "itinerary") return estimate;
+      const broader = validatedFareEstimate(
+        await request(context, "fare-estimates", "POST", { ...query, priceContext: "itinerary" }),
+      );
+      return broader.status === "historical-estimate" ? { ...broader, matchBasis: "similar-flights" } : broader;
+    }
   } catch {
     /* No estimate is a valid offline fallback. */
   }
