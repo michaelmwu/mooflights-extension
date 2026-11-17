@@ -128,7 +128,7 @@ function renderSummary(host: HTMLElement, state: PreviewState): void {
   if (!root) return;
   const t = createContentTranslator(state.language);
   root.innerHTML = `<style>${summaryStyles}</style>
-    ${state.context.fare.priceContext === "itinerary" ? `<span>${textEscape(`${state.context.fare.carrier}${state.context.flightNumber} · ${state.context.fare.origin}–${state.context.fare.destination}`)}</span><span>${textEscape(t("farePreviewSimilarFlights"))}</span>` : ""}
+    ${state.context.fare.priceContext === "itinerary" || state.estimate.matchBasis === "similar-flights" ? `<span>${textEscape(`${state.context.fare.carrier}${state.context.flightNumber} · ${state.context.fare.origin}–${state.context.fare.destination}`)}</span><span>${textEscape(t("farePreviewSimilarFlights"))}</span>` : ""}
     <span class="estimate">${textEscape(t("estimatedFareClasses", { classes: state.model.classes.map((row) => row.bookingClass).join(" / ") }))}</span>
     <span class="earnings">${textEscape(localizedMileageProgramDisplay(state.model.program, state.language))}${state.model.program ? ": " : ""}${textEscape(summaryText(state))}</span>
     <button type="button" aria-haspopup="dialog" aria-expanded="${!!state.portal}">${textEscape(t("compareFareClasses"))}</button>`;

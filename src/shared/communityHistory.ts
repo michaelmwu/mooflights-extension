@@ -50,6 +50,7 @@ export type FareObservation = Omit<FareQuery, "priceContext"> & {
   flightNumber: string;
 };
 export type FareEstimate = {
+  matchBasis?: "similar-flights";
   status: "historical-estimate" | "unknown";
   candidates: { bookingClass: string; share: number; sampleCount: number }[];
 };
@@ -204,7 +205,13 @@ export function validatedFareEstimate(value: unknown): FareEstimate {
         c.sampleCount >= 3,
     )
     .slice(0, 26);
-  return candidates.length ? { status: "historical-estimate", candidates } : unknown;
+  return candidates.length
+    ? {
+        status: "historical-estimate",
+        candidates,
+        ...(value.matchBasis === "similar-flights" ? { matchBasis: "similar-flights" as const } : {}),
+      }
+    : unknown;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
