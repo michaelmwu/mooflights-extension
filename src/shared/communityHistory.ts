@@ -38,8 +38,10 @@ export type FareQuery = {
   price: number;
   tripType: "one-way";
   passengerCount: 1;
+  priceContext?: "segment" | "itinerary";
 };
-export type FareObservation = FareQuery & {
+export type FareObservation = Omit<FareQuery, "priceContext"> & {
+  priceContext?: "segment";
   contractVersion: "v1";
   idempotencyKey: string;
   source: "ita-matrix";
@@ -209,39 +211,69 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
-/** A search row needs a complete single-segment identity and explicit one-adult context. */
-export function fareQueryForSearchRow(
+/** Query each identified flight independently; never divide an itinerary total. */
+export function fareQueriesForSearchRow(
   url: string,
   row: { itineraryKey?: string; currency: string; price: number },
   singleAdult: boolean,
-): FareQuery | null {
+): Array<{ fare: FareQuery; flightNumber: string }> {
   const search = parseGoogleFlightsMatrixSearch(url);
-  const match = row.itineraryKey?.match(/^([A-Z]{3})-([A-Z]{3})-([A-Z0-9]{2})(\d{1,4}[A-Z]?)-(\d{4}-?\d{2}-?\d{2})$/);
+  const segments = row.itineraryKey
+    ?.split("|")
+    .map((key) => key.match(/^([A-Z]{3})-([A-Z]{3})-([A-Z0-9]{2})(\d{1,4}[A-Z]?)-(\d{4}-?\d{2}-?\d{2})$/));
   if (
-    !singleAdult ||
     !search ||
-    search.tripType !== "one-way" ||
-    search.slices.length !== 1 ||
-    !match ||
+    !segments?.length ||
+    segments.length > 8 ||
+    segments.some((s) => !s) ||
     !/^[A-Z]{3}$/.test(row.currency) ||
     row.currency === "UNKNOWN" ||
     !Number.isFinite(row.price) ||
     row.price <= 0
   )
-    return null;
-  const [, origin, destination, carrier, , departureDate] = match;
-  if (origin !== search.slices[0]?.origin || destination !== search.slices[0]?.destination) return null;
-  return {
-    origin: origin || "",
-    destination: destination || "",
-    carrier: carrier || "",
-    departureDate: (departureDate || "").replace(/^(\d{4})(\d{2})(\d{2})$/, "$1-$2-$3"),
-    cabin: search.cabin,
-    currency: row.currency,
-    price: row.price,
-    tripType: "one-way",
-    passengerCount: 1,
-  };
+    return [];
+  // A visible row may describe the outbound or return slice. Require its full route.
+  if (
+    !search.slices.some(
+      (slice) =>
+        slice.origin === segments[0]?.[1] &&
+        slice.destination === segments.at(-1)?.[2] &&
+        slice.departureDate === segments[0]?.[5]?.replace(/^(\d{4})(\d{2})(\d{2})$/, "$1-$2-$3"),
+    )
+  )
+    return [];
+  if (segments.some((s, i) => i > 0 && segments[i - 1]?.[2] !== s?.[1])) return [];
+  const exactPrice = singleAdult && search.tripType === "one-way" && segments.length === 1;
+  return segments.flatMap((segment) => {
+    if (!segment) return [];
+    const [, origin, destination, carrier, flightNumber, date] = segment;
+    return [
+      {
+        fare: {
+          origin: origin || "",
+          destination: destination || "",
+          carrier: carrier || "",
+          departureDate: (date || "").replace(/^(\d{4})(\d{2})(\d{2})$/, "$1-$2-$3"),
+          cabin: search.cabin,
+          currency: row.currency,
+          price: row.price,
+          tripType: "one-way" as const,
+          passengerCount: 1 as const,
+          ...(exactPrice ? {} : { priceContext: "itinerary" as const }),
+        },
+        flightNumber: flightNumber || "",
+      },
+    ];
+  });
+}
+
+/** Compatibility helper for consumers expecting a single query. */
+export function fareQueryForSearchRow(
+  url: string,
+  row: { itineraryKey?: string; currency: string; price: number },
+  singleAdult: boolean,
+): FareQuery | null {
+  return fareQueriesForSearchRow(url, row, singleAdult)[0]?.fare || null;
 }
 
 export function marketQueriesForSearchRows(

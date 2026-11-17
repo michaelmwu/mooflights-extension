@@ -2,6 +2,7 @@ import type { AppLanguage } from "./types";
 
 const CONTENT_TRANSLATIONS = {
   en: {
+    farePreviewSimilarFlights: "Based on similar flights · per person, per segment",
     estimatedFareClasses: "Estimated class {classes}",
     compareFareClasses: "Compare classes",
     farePreviewDialog: "Booking class earnings preview",
@@ -141,6 +142,7 @@ const CONTENT_TRANSLATIONS = {
     openingFirstMatrixResult: "Opening first Matrix result...",
   },
   es: {
+    farePreviewSimilarFlights: "基于相似航班 · 每人、每航段",
     estimatedFareClasses: "Clase estimada {classes}",
     compareFareClasses: "Comparar clases",
     farePreviewDialog: "Vista previa de millas por clase",
@@ -284,6 +286,7 @@ const CONTENT_TRANSLATIONS = {
     openingFirstMatrixResult: "Abriendo el primer resultado de Matrix...",
   },
   "zh-Hans": {
+    farePreviewSimilarFlights: "根據相似航班 · 每人、每航段",
     estimatedFareClasses: "估计舱位 {classes}",
     compareFareClasses: "比较舱位",
     farePreviewDialog: "订座舱位里程预览",
@@ -420,6 +423,7 @@ const CONTENT_TRANSLATIONS = {
     openingFirstMatrixResult: "正在打开第一个 Matrix 结果...",
   },
   "zh-Hant": {
+    farePreviewSimilarFlights: "類似便に基づく推定 · 1名・1区間あたり",
     estimatedFareClasses: "估計艙等 {classes}",
     compareFareClasses: "比較艙等",
     farePreviewDialog: "訂位艙等里程預覽",
@@ -556,6 +560,7 @@ const CONTENT_TRANSLATIONS = {
     openingFirstMatrixResult: "正在開啟第一個 Matrix 結果...",
   },
   ja: {
+    farePreviewSimilarFlights: "유사 항공편 기준 · 1인·구간당",
     estimatedFareClasses: "推定クラス {classes}",
     compareFareClasses: "クラスを比較",
     farePreviewDialog: "予約クラス別の獲得マイルプレビュー",
@@ -698,6 +703,7 @@ const CONTENT_TRANSLATIONS = {
     openingFirstMatrixResult: "最初の Matrix 結果を開いています...",
   },
   ko: {
+    farePreviewSimilarFlights: "Basado en vuelos similares · por persona y tramo",
     estimatedFareClasses: "추정 클래스 {classes}",
     compareFareClasses: "클래스 비교",
     farePreviewDialog: "예약 클래스별 적립 마일 미리보기",

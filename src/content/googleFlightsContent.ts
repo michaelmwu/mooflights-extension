@@ -2,7 +2,7 @@ import "../shared/firefoxChromeCompat";
 import type { PreviewEvent } from "../shared/analytics";
 import { boundedDebounce } from "../shared/boundedDebounce";
 import { safeChromeCall, sendRuntimeMessage } from "../shared/chromeRuntime";
-import { type FareEstimate, fareQueryForSearchRow, validatedFareEstimate } from "../shared/communityHistory";
+import { type FareEstimate, fareQueriesForSearchRow, validatedFareEstimate } from "../shared/communityHistory";
 import { createContentTranslator } from "../shared/contentI18n";
 import {
   type CountryResult,
@@ -4133,62 +4133,70 @@ function applyHistoricalFareEstimates(snapshot?: SearchPageSnapshot): void {
     const row = currentSearchResultForVisibleRow(element, index, parsedRows, used);
     if (!row) continue;
     used.add(row.rowKey);
-    const query = fareQueryForSearchRow(href, row, singleAdult);
-    const existing = element.querySelector(FARE_ESTIMATE_SELECTOR);
-    if (!query) {
-      existing?.remove();
-      continue;
+    const contexts = fareQueriesForSearchRow(href, row, singleAdult);
+    const activeKeys = new Set(contexts.map((context) => JSON.stringify(context)));
+    for (const preview of element.querySelectorAll<HTMLElement>(FARE_ESTIMATE_SELECTOR)) {
+      if (!activeKeys.has(preview.dataset.mooFareKey || "")) preview.remove();
     }
-    const key = JSON.stringify(query);
-    const estimate = fareEstimates.get(key);
-    if (estimate?.status === "historical-estimate") {
-      const flightNumber = row.itineraryKey?.match(/^[A-Z]{3}-[A-Z]{3}-[A-Z0-9]{2}(\d{1,4}[A-Z]?)-/)?.[1];
-      if (!flightNumber) continue;
-      const preview = reconcileFarePreview(
-        existing,
-        `${row.itineraryKey}:${key}`,
-        { fare: query, flightNumber },
-        estimate,
-        farePreviewSettings,
-        state.language,
-        (url) => {
-          void openMatrixWithAutoOpen(url);
-        },
-        trackFarePreview,
-      );
-      const target = searchBadgeTarget(element, row);
-      if (preview.parentElement !== target) target.append(preview);
-    } else {
-      existing?.remove();
-      if (
-        estimate ||
-        pendingFareEstimates.has(key) ||
-        requests >= 10 ||
-        pendingFareEstimates.size >= 3 ||
-        farePageQueries.size >= 20
-      )
-        continue;
-      requests += 1;
-      pendingFareEstimates.add(key);
-      farePageQueries.add(key);
-      void chrome.runtime
-        .sendMessage({ command: "estimateHistoricalFare", fareQuery: query })
-        .then((response) => {
-          if (historyGeneration !== generation || !historyEnabled) return;
-          if (fareEstimates.size >= 200) {
-            const oldest = fareEstimates.keys().next().value;
-            if (oldest) fareEstimates.delete(oldest);
-          }
-          fareEstimates.set(key, validatedFareEstimate(response));
-        })
-        .catch(() => {
-          if (historyGeneration === generation) fareEstimates.set(key, { status: "unknown", candidates: [] });
-        })
-        .finally(() => {
-          if (historyGeneration !== generation) return;
-          pendingFareEstimates.delete(key);
-          if (window.location.href === href) scheduleFarePreviewUpdate();
-        });
+    for (const context of contexts) {
+      const query = context.fare;
+      const identity = JSON.stringify(context);
+      const existing =
+        [...element.querySelectorAll<HTMLElement>(FARE_ESTIMATE_SELECTOR)].find(
+          (preview) => preview.dataset.mooFareKey === identity,
+        ) || null;
+      const key = JSON.stringify(query);
+      const estimate = fareEstimates.get(key);
+      if (estimate?.status === "historical-estimate") {
+        const flightNumber = context.flightNumber;
+        if (!flightNumber) continue;
+        const preview = reconcileFarePreview(
+          existing,
+          `${row.itineraryKey}:${key}`,
+          { fare: query, flightNumber },
+          estimate,
+          farePreviewSettings,
+          state.language,
+          (url) => {
+            void openMatrixWithAutoOpen(url);
+          },
+          trackFarePreview,
+        );
+        preview.dataset.mooFareKey = identity;
+        const target = searchBadgeTarget(element, row);
+        if (preview.parentElement !== target) target.append(preview);
+      } else {
+        existing?.remove();
+        if (
+          estimate ||
+          pendingFareEstimates.has(key) ||
+          requests >= 10 ||
+          pendingFareEstimates.size >= 3 ||
+          farePageQueries.size >= 20
+        )
+          continue;
+        requests += 1;
+        pendingFareEstimates.add(key);
+        farePageQueries.add(key);
+        void chrome.runtime
+          .sendMessage({ command: "estimateHistoricalFare", fareQuery: query })
+          .then((response) => {
+            if (historyGeneration !== generation || !historyEnabled) return;
+            if (fareEstimates.size >= 200) {
+              const oldest = fareEstimates.keys().next().value;
+              if (oldest) fareEstimates.delete(oldest);
+            }
+            fareEstimates.set(key, validatedFareEstimate(response));
+          })
+          .catch(() => {
+            if (historyGeneration === generation) fareEstimates.set(key, { status: "unknown", candidates: [] });
+          })
+          .finally(() => {
+            if (historyGeneration !== generation) return;
+            pendingFareEstimates.delete(key);
+            if (window.location.href === href) scheduleFarePreviewUpdate();
+          });
+      }
     }
   }
   pruneFarePreviews();
