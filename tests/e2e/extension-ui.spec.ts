@@ -246,9 +246,6 @@ test("offers sharing on first popup use and remembers a dismissal without opting
   await page.setViewportSize({ width: 320, height: 600 });
   const banner = page.getByRole("region", { name: "Get more from MooFlights" });
   await expect(banner).toBeVisible();
-  await expect(banner.locator(".community-retention")).toHaveText(
-    "Grouped statistics without an installation link may remain after deletion.",
-  );
   await expect(
     banner.getByText("Get fare-class estimates and better country suggestions when history is available."),
   ).toBeVisible();
