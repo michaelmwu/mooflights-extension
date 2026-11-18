@@ -83,12 +83,6 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   void comparisonTabs.forget(tabId).catch(() => undefined);
 });
 
-chrome.runtime.onInstalled.addListener((details) => {
-  if (details.reason === "install") {
-    openOptionsPage();
-  }
-});
-
 chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
   if (!message || typeof message !== "object") return false;
   const payload = message as RuntimeMessage;

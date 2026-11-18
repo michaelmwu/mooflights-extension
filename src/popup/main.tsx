@@ -118,8 +118,7 @@ function Popup(): React.ReactElement {
   const showPrompt =
     !settingsLoading &&
     nativeDataConsent !== null &&
-    promptDecision !== null &&
-    promptDecision !== COMMUNITY_CONSENT_VERSION &&
+    promptDecision === "" &&
     !settings.communityHistory.enabled &&
     settings.communityHistory.consentVersion !== COMMUNITY_CONSENT_VERSION;
 
@@ -130,40 +129,14 @@ function Popup(): React.ReactElement {
         <p>{t("popupTagline")}</p>
       </header>
 
-      <section>
-        <dl>
-          <div>
-            <dt>{t("backend")}</dt>
-            <dd>{settings.backend.enabled ? t("enabled") : t("localOnly")}</dd>
-          </div>
-          <div>
-            <dt>{t("preferredLinks")}</dt>
-            <dd>{preferredProviderSummary(settings.preferredProviderIds, t)}</dd>
-          </div>
-        </dl>
-      </section>
-
-      <section className="actions">
-        <button type="button" onClick={() => chrome.tabs.create({ url: "https://matrix.itasoftware.com/" })}>
-          {t("openItaMatrix")}
-        </button>
-        <button
-          type="button"
-          className="secondary"
-          onClick={() => chrome.runtime.sendMessage({ command: "openOptionsPage" })}
-        >
-          {t("options")}
-        </button>
-      </section>
-
       {showPrompt && (
         <section className="community-card community-prompt" aria-labelledby="community-prompt-heading">
           <div className="community-heading">
             <CommunityIcon />
             <h2 id="community-prompt-heading">{t("historyPromptTitle")}</h2>
           </div>
-          <p className="community-description">{t("historyNote")}</p>
-          <p className="community-retention">{t("historyRetainedStatistics")}</p>
+          <p className="community-description">{t("historyPromptBenefits")}</p>
+          <p className="community-disclosure">{t("historyPromptDisclosure")}</p>
           <div className="community-prompt-actions">
             <button type="button" disabled={sharingBusy} onClick={() => void enableSharing()}>
               {t("historyEnable")}
@@ -181,7 +154,6 @@ function Popup(): React.ReactElement {
               {t("historyDetails")}
             </a>
           </div>
-          <p className="community-optional">{t("historyOptional")}</p>
           {sharingError && (
             <p className="community-message" role="status">
               {sharingError}
@@ -189,6 +161,32 @@ function Popup(): React.ReactElement {
           )}
         </section>
       )}
+
+      <section className="actions">
+        <button type="button" onClick={() => chrome.tabs.create({ url: "https://matrix.itasoftware.com/" })}>
+          {t("openItaMatrix")}
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => chrome.runtime.sendMessage({ command: "openOptionsPage" })}
+        >
+          {t("options")}
+        </button>
+      </section>
+
+      <section>
+        <dl>
+          <div>
+            <dt>{t("backend")}</dt>
+            <dd>{settings.backend.enabled ? t("enabled") : t("localOnly")}</dd>
+          </div>
+          <div>
+            <dt>{t("preferredLinks")}</dt>
+            <dd>{preferredProviderSummary(settings.preferredProviderIds, t)}</dd>
+          </div>
+        </dl>
+      </section>
     </main>
   );
 }

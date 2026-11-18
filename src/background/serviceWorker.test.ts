@@ -171,3 +171,11 @@ it("consumes an ITA auto-open ticket once and avoids no-op writes", async () => 
   await vi.advanceTimersByTimeAsync(0);
   expect(api.storage.local.set).toHaveBeenCalledTimes(1);
 });
+
+it("does not interrupt install or update with an automatic tab", async () => {
+  await import("./serviceWorker");
+  api.runtime.onInstalled.emit({ reason: "install" });
+  api.runtime.onInstalled.emit({ reason: "update" });
+  await vi.runAllTimersAsync();
+  expect(api.tabs.create).not.toHaveBeenCalled();
+});

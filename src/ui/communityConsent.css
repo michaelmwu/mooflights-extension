@@ -155,9 +155,6 @@
   margin-top: 10px;
 }
 .community-prompt {
-  position: sticky;
-  bottom: 0;
-  z-index: 1;
   background: #f0f9f5;
   border-color: #bcded2;
   padding: 16px;
@@ -174,8 +171,14 @@
 .community-prompt .community-description {
   font-size: 13px;
 }
+.community-prompt .community-disclosure {
+  margin-top: 8px;
+  color: #526477;
+  font-size: 12px;
+}
 .community-prompt-actions {
   display: flex;
+  flex-direction: column;
   gap: 8px;
   margin-top: 14px;
 }
