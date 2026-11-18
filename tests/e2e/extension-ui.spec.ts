@@ -11,7 +11,7 @@ test("loads the Manifest V3 service worker", async ({ extensionId, extensionServ
 test("renders the popup against extension storage defaults", async ({ openExtensionPage }) => {
   const page = await openExtensionPage("popup/index.html");
 
-  await expect(page.getByRole("heading", { name: "MooFlights" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "MooFlights", exact: true })).toBeVisible();
   await expect(page.getByText("Offline-first ITA Matrix tools.")).toBeVisible();
   await expect(page.getByText("Local only")).toBeVisible();
   await expect(page.getByText("Kayak")).toBeVisible();
@@ -20,7 +20,7 @@ test("renders the popup against extension storage defaults", async ({ openExtens
 test("persists Google Flights country settings from the options page", async ({ openExtensionPage }) => {
   const page = await openExtensionPage("options/index.html");
 
-  await expect(page.getByRole("heading", { name: "MooFlights" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "MooFlights", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Google Flights" })).toBeVisible();
 
   await page.getByLabel("Add country").fill("FR");
@@ -180,7 +180,7 @@ test("prepares no deletion session or network request when this installation has
   expect(await extensionServiceWorker.evaluate(() => (globalThis as any).managementFetches)).toEqual([]);
   const popup = await openExtensionPage("popup/index.html");
   await expect(popup.locator("main")).toHaveAttribute("aria-busy", "false");
-  await expect(popup.getByRole("region", { name: "Better searches, together" })).toHaveCount(0);
+  await expect(popup.getByRole("region", { name: "Get more from MooFlights" })).toHaveCount(0);
 });
 
 test("accepts deletion preparation only from Options and exposes no contributor credential in its reference", async ({
@@ -244,15 +244,27 @@ test("offers sharing on first popup use and remembers a dismissal without opting
 }) => {
   const page = await openExtensionPage("popup/index.html");
   await page.setViewportSize({ width: 320, height: 600 });
-  const banner = page.getByRole("region", { name: "Better searches, together" });
+  const banner = page.getByRole("region", { name: "Get more from MooFlights" });
   await expect(banner).toBeVisible();
   await expect(banner.locator(".community-retention")).toHaveText(
     "Grouped statistics without an installation link may remain after deletion.",
   );
-  await expect(banner).toHaveCSS("position", "sticky");
+  await expect(
+    banner.getByText(
+      "Enable community sharing to unlock fare-class estimates and smarter country suggestions as the community grows.",
+    ),
+  ).toBeVisible();
+  await expect(
+    banner.getByText(
+      "Share flight comparisons, confirmed ITA fare classes, and basic feature usage. No account details or booking links are shared.",
+    ),
+  ).toBeVisible();
+  const cardBounds = await banner.boundingBox();
+  const toolsBounds = await page.locator(".actions").boundingBox();
+  expect(cardBounds && toolsBounds && cardBounds.y + cardBounds.height <= toolsBounds.y).toBe(true);
   await page.screenshot({ path: ".context/qa/community-popup.png" });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await banner.getByRole("button", { name: "No thanks" }).click();
+  await banner.getByRole("button", { name: "Continue without sharing" }).click();
   await expect(banner).toHaveCount(0);
   await page.reload();
   await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
@@ -262,6 +274,13 @@ test("offers sharing on first popup use and remembers a dismissal without opting
   );
   expect(stored.muTravelSettings?.communityHistory?.enabled).not.toBe(true);
   expect(stored.mooFlightsCommunityPromptDecision).toBe("community-v3");
+  // A previous dismissal stays respected when consent disclosures change.
+  await extensionServiceWorker.evaluate(() =>
+    chrome.storage.local.set({ mooFlightsCommunityPromptDecision: "community-v2" }),
+  );
+  await page.reload();
+  await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
+  await expect(banner).toHaveCount(0);
 });
 
 test("popup requires permission before opting in and updates sharing controls across views", async ({
@@ -269,7 +288,7 @@ test("popup requires permission before opting in and updates sharing controls ac
   extensionServiceWorker,
 }) => {
   const page = await openExtensionPage("popup/index.html");
-  const banner = page.getByRole("region", { name: "Better searches, together" });
+  const banner = page.getByRole("region", { name: "Get more from MooFlights" });
   await expect(banner).toBeVisible();
   await page.evaluate(() => {
     chrome.permissions.request = async () => false;
@@ -310,10 +329,10 @@ test("does not prompt existing users who have already chosen to turn sharing off
   );
   const page = await openExtensionPage("popup/index.html");
   await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
-  await expect(page.getByRole("region", { name: "Better searches, together" })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Get more from MooFlights" })).toHaveCount(0);
 });
 
-test("asks community-v2 users to accept the retention disclosure before community-v3 sharing resumes", async ({
+test("keeps old popup decisions while requiring renewed sharing consent in Options", async ({
   openExtensionPage,
   extensionServiceWorker,
 }) => {
@@ -337,9 +356,10 @@ test("asks community-v2 users to accept the retention disclosure before communit
   const options = await openExtensionPage("options/index.html");
   await expect(options.getByRole("checkbox", { name: "Help improve MooFlights" })).not.toBeChecked();
   const popup = await openExtensionPage("popup/index.html");
-  const banner = popup.getByRole("region", { name: "Better searches, together" });
-  await expect(banner).toBeVisible();
-  await expect(banner.locator(".community-retention")).toHaveText(
+  const banner = popup.getByRole("region", { name: "Get more from MooFlights" });
+  await expect(popup.locator("main")).toHaveAttribute("aria-busy", "false");
+  await expect(banner).toHaveCount(0);
+  await expect(options.getByRole("region", { name: "Community insights" }).locator(".community-retention")).toHaveText(
     "Grouped statistics without an installation link may remain after deletion.",
   );
   const before = await extensionServiceWorker.evaluate(() => (globalThis as any).transitionCalls);
@@ -351,10 +371,11 @@ test("asks community-v2 users to accept the retention disclosure before communit
         call.body.retentionConsentVersion === null,
     ),
   ).toBe(true);
-  await popup.evaluate(() => {
+  await options.evaluate(() => {
     chrome.permissions.request = async () => true;
   });
-  await banner.getByRole("button", { name: "Enable sharing" }).click();
+  await options.getByRole("checkbox", { name: "Help improve MooFlights" }).click();
+  await expect(options.getByRole("checkbox", { name: "Help improve MooFlights" })).toBeChecked();
   await expect(banner).toHaveCount(0);
   await expect
     .poll(() =>

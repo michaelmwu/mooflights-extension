@@ -17,13 +17,17 @@ export const APP_LANGUAGE_CODES = new Set<AppLanguage>(LANGUAGE_OPTIONS.map((lan
 
 const TRANSLATIONS = {
   en: {
+    historyPromptBenefits:
+      "Enable community sharing to unlock fare-class estimates and smarter country suggestions as the community grows.",
+    historyPromptDisclosure:
+      "Share flight comparisons, confirmed ITA fare classes, and basic feature usage. No account details or booking links are shared.",
     historySaveFailed: "Couldn’t save your choice. Please try again.",
     historySharingOn: "Sharing on",
     historySharingOff: "Sharing off",
     historyOptional: "Optional. You can change this anytime.",
-    historyPromptTitle: "Better searches, together",
+    historyPromptTitle: "Get more from MooFlights",
     historyEnable: "Enable sharing",
-    historyDecline: "No thanks",
+    historyDecline: "Continue without sharing",
     historyDevelopment: "Development API",
 
     historyTitle: "Community insights",
@@ -113,13 +117,17 @@ const TRANSLATIONS = {
     historyDetails: "What gets shared",
   },
   es: {
+    historyPromptBenefits:
+      "Activa el intercambio comunitario para acceder a estimaciones de clases de reserva y mejores sugerencias de países a medida que crece la comunidad.",
+    historyPromptDisclosure:
+      "Comparte comparaciones de vuelos, clases de reserva confirmadas en ITA y uso básico de funciones. No se comparten datos de cuentas ni enlaces de reserva.",
     historySaveFailed: "No se pudo guardar tu elección. Vuelve a intentarlo.",
     historySharingOn: "Envío activado",
     historySharingOff: "Envío desactivado",
     historyOptional: "Opcional. Puedes cambiarlo cuando quieras.",
-    historyPromptTitle: "Mejores búsquedas, juntos",
+    historyPromptTitle: "Aprovecha más MooFlights",
     historyEnable: "Activar envío",
-    historyDecline: "No, gracias",
+    historyDecline: "Continuar sin compartir",
     historyDevelopment: "API de desarrollo",
 
     historyTitle: "Información de la comunidad",
@@ -212,13 +220,15 @@ const TRANSLATIONS = {
     historyDetails: "Qué se comparte",
   },
   "zh-Hans": {
+    historyPromptBenefits: "开启社区共享，随着社区数据积累，获取舱位代码估算和更智能的国家建议。",
+    historyPromptDisclosure: "共享航班比价、ITA 已确认的舱位代码和基本功能使用情况。不共享账号信息或预订链接。",
     historySaveFailed: "无法保存您的选择，请重试。",
     historySharingOn: "分享已开启",
     historySharingOff: "分享已关闭",
     historyOptional: "自愿参与，随时可以更改。",
-    historyPromptTitle: "一起改善航班搜索",
+    historyPromptTitle: "让 MooFlights 更好用",
     historyEnable: "开启分享",
-    historyDecline: "暂不参与",
+    historyDecline: "继续使用，不共享",
     historyDevelopment: "开发 API",
 
     historyTitle: "社区见解",
@@ -306,13 +316,15 @@ const TRANSLATIONS = {
     historyDetails: "分享哪些数据",
   },
   "zh-Hant": {
+    historyPromptBenefits: "開啟社群共享，隨著社群資料累積，取得訂位艙等估算和更智慧的國家建議。",
+    historyPromptDisclosure: "共享航班比價、ITA 已確認的訂位艙等和基本功能使用情況。不共享帳號資訊或預訂連結。",
     historySaveFailed: "無法儲存您的選擇，請重試。",
     historySharingOn: "分享已開啟",
     historySharingOff: "分享已關閉",
     historyOptional: "自由參與，隨時可以更改。",
-    historyPromptTitle: "一起改善航班搜尋",
+    historyPromptTitle: "讓 MooFlights 更好用",
     historyEnable: "開啟分享",
-    historyDecline: "暫不參與",
+    historyDecline: "繼續使用，不共享",
     historyDevelopment: "開發 API",
 
     historyTitle: "社群見解",
@@ -400,13 +412,17 @@ const TRANSLATIONS = {
     historyDetails: "分享哪些資料",
   },
   ja: {
+    historyPromptBenefits:
+      "コミュニティ共有を有効にすると、データの蓄積に応じて予約クラスの推定や、より役立つ国の候補を利用できます。",
+    historyPromptDisclosure:
+      "運賃比較、ITAで確認された予約クラス、基本的な機能の利用状況を共有します。アカウント情報や予約リンクは共有しません。",
     historySaveFailed: "設定を保存できませんでした。もう一度お試しください。",
     historySharingOn: "共有オン",
     historySharingOff: "共有オフ",
     historyOptional: "任意です。いつでも変更できます。",
-    historyPromptTitle: "みんなで検索をもっと便利に",
+    historyPromptTitle: "MooFlightsをもっと便利に",
     historyEnable: "共有を有効にする",
-    historyDecline: "今はしない",
+    historyDecline: "共有せずに続ける",
     historyDevelopment: "開発用 API",
 
     historyTitle: "コミュニティの情報",
@@ -495,13 +511,17 @@ const TRANSLATIONS = {
     historyDetails: "共有する情報",
   },
   ko: {
+    historyPromptBenefits:
+      "커뮤니티 공유를 켜면 데이터가 쌓이면서 예약 클래스 추정과 더 나은 국가 추천을 이용할 수 있습니다.",
+    historyPromptDisclosure:
+      "항공편 가격 비교, ITA에서 확인된 예약 클래스, 기본 기능 사용 정보를 공유합니다. 계정 정보나 예약 링크는 공유하지 않습니다.",
     historySaveFailed: "선택을 저장하지 못했습니다. 다시 시도하세요.",
     historySharingOn: "공유 켜짐",
     historySharingOff: "공유 꺼짐",
     historyOptional: "선택 사항이며 언제든 변경할 수 있습니다.",
-    historyPromptTitle: "함께 만드는 더 나은 검색",
+    historyPromptTitle: "MooFlights를 더 유용하게",
     historyEnable: "공유 켜기",
-    historyDecline: "참여하지 않기",
+    historyDecline: "공유하지 않고 계속",
     historyDevelopment: "개발 API",
 
     historyTitle: "커뮤니티 인사이트",
