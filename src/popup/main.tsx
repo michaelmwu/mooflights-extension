@@ -155,7 +155,6 @@ function Popup(): React.ReactElement {
               {t("historyDetails")}
             </a>
           </div>
-          <p className="community-optional">{t("historyOptional")}</p>
           {sharingError && (
             <p className="community-message" role="status">
               {sharingError}

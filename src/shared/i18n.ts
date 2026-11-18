@@ -17,10 +17,8 @@ export const APP_LANGUAGE_CODES = new Set<AppLanguage>(LANGUAGE_OPTIONS.map((lan
 
 const TRANSLATIONS = {
   en: {
-    historyPromptBenefits:
-      "Enable community sharing to unlock fare-class estimates and smarter country suggestions as the community grows.",
-    historyPromptDisclosure:
-      "Share flight comparisons, confirmed ITA fare classes, and basic feature usage. No account details or booking links are shared.",
+    historyPromptBenefits: "Get fare-class estimates and better country suggestions when history is available.",
+    historyPromptDisclosure: "Shares flight comparisons, confirmed ITA fare classes, and basic usage.",
     historySaveFailed: "Couldn’t save your choice. Please try again.",
     historySharingOn: "Sharing on",
     historySharingOff: "Sharing off",
@@ -118,9 +116,8 @@ const TRANSLATIONS = {
   },
   es: {
     historyPromptBenefits:
-      "Activa el intercambio comunitario para acceder a estimaciones de clases de reserva y mejores sugerencias de países a medida que crece la comunidad.",
-    historyPromptDisclosure:
-      "Comparte comparaciones de vuelos, clases de reserva confirmadas en ITA y uso básico de funciones. No se comparten datos de cuentas ni enlaces de reserva.",
+      "Consulta estimaciones de clase de reserva y mejores sugerencias de países cuando haya datos.",
+    historyPromptDisclosure: "Comparte comparaciones de vuelos, clases confirmadas en ITA y datos básicos de uso.",
     historySaveFailed: "No se pudo guardar tu elección. Vuelve a intentarlo.",
     historySharingOn: "Envío activado",
     historySharingOff: "Envío desactivado",
@@ -220,8 +217,8 @@ const TRANSLATIONS = {
     historyDetails: "Qué se comparte",
   },
   "zh-Hans": {
-    historyPromptBenefits: "开启社区共享，随着社区数据积累，获取舱位代码估算和更智能的国家建议。",
-    historyPromptDisclosure: "共享航班比价、ITA 已确认的舱位代码和基本功能使用情况。不共享账号信息或预订链接。",
+    historyPromptBenefits: "有历史数据时，可查看舱位代码估算和更好的国家建议。",
+    historyPromptDisclosure: "共享航班比价、ITA 确认的舱位代码和基本使用情况。",
     historySaveFailed: "无法保存您的选择，请重试。",
     historySharingOn: "分享已开启",
     historySharingOff: "分享已关闭",
@@ -316,8 +313,8 @@ const TRANSLATIONS = {
     historyDetails: "分享哪些数据",
   },
   "zh-Hant": {
-    historyPromptBenefits: "開啟社群共享，隨著社群資料累積，取得訂位艙等估算和更智慧的國家建議。",
-    historyPromptDisclosure: "共享航班比價、ITA 已確認的訂位艙等和基本功能使用情況。不共享帳號資訊或預訂連結。",
+    historyPromptBenefits: "有歷史資料時，可查看訂位艙等估算和更合適的國家建議。",
+    historyPromptDisclosure: "共享航班比價、ITA 確認的訂位艙等和基本使用情況。",
     historySaveFailed: "無法儲存您的選擇，請重試。",
     historySharingOn: "分享已開啟",
     historySharingOff: "分享已關閉",
@@ -412,10 +409,8 @@ const TRANSLATIONS = {
     historyDetails: "分享哪些資料",
   },
   ja: {
-    historyPromptBenefits:
-      "コミュニティ共有を有効にすると、データの蓄積に応じて予約クラスの推定や、より役立つ国の候補を利用できます。",
-    historyPromptDisclosure:
-      "運賃比較、ITAで確認された予約クラス、基本的な機能の利用状況を共有します。アカウント情報や予約リンクは共有しません。",
+    historyPromptBenefits: "履歴データがあれば、予約クラスの推定や、より役立つ国の候補が表示されます。",
+    historyPromptDisclosure: "運賃比較、ITAで確認した予約クラス、基本的な利用状況を共有します。",
     historySaveFailed: "設定を保存できませんでした。もう一度お試しください。",
     historySharingOn: "共有オン",
     historySharingOff: "共有オフ",
@@ -511,10 +506,8 @@ const TRANSLATIONS = {
     historyDetails: "共有する情報",
   },
   ko: {
-    historyPromptBenefits:
-      "커뮤니티 공유를 켜면 데이터가 쌓이면서 예약 클래스 추정과 더 나은 국가 추천을 이용할 수 있습니다.",
-    historyPromptDisclosure:
-      "항공편 가격 비교, ITA에서 확인된 예약 클래스, 기본 기능 사용 정보를 공유합니다. 계정 정보나 예약 링크는 공유하지 않습니다.",
+    historyPromptBenefits: "기록이 있으면 예약 클래스 추정과 더 나은 국가 추천을 볼 수 있습니다.",
+    historyPromptDisclosure: "항공편 가격 비교, ITA에서 확인한 예약 클래스, 기본 사용 정보를 공유합니다.",
     historySaveFailed: "선택을 저장하지 못했습니다. 다시 시도하세요.",
     historySharingOn: "공유 켜짐",
     historySharingOff: "공유 꺼짐",

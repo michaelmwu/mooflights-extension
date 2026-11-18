@@ -250,14 +250,10 @@ test("offers sharing on first popup use and remembers a dismissal without opting
     "Grouped statistics without an installation link may remain after deletion.",
   );
   await expect(
-    banner.getByText(
-      "Enable community sharing to unlock fare-class estimates and smarter country suggestions as the community grows.",
-    ),
+    banner.getByText("Get fare-class estimates and better country suggestions when history is available."),
   ).toBeVisible();
   await expect(
-    banner.getByText(
-      "Share flight comparisons, confirmed ITA fare classes, and basic feature usage. No account details or booking links are shared.",
-    ),
+    banner.getByText("Shares flight comparisons, confirmed ITA fare classes, and basic usage."),
   ).toBeVisible();
   const cardBounds = await banner.boundingBox();
   const toolsBounds = await page.locator(".actions").boundingBox();
