@@ -178,10 +178,6 @@ function Popup(): React.ReactElement {
       <section>
         <dl>
           <div>
-            <dt>{t("backend")}</dt>
-            <dd>{settings.backend.enabled ? t("enabled") : t("localOnly")}</dd>
-          </div>
-          <div>
             <dt>{t("preferredLinks")}</dt>
             <dd>{preferredProviderSummary(settings.preferredProviderIds, t)}</dd>
           </div>

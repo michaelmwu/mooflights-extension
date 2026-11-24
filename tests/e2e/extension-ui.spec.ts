@@ -13,7 +13,6 @@ test("renders the popup against extension storage defaults", async ({ openExtens
 
   await expect(page.getByRole("heading", { name: "MooFlights", exact: true })).toBeVisible();
   await expect(page.getByText("Offline-first ITA Matrix tools.")).toBeVisible();
-  await expect(page.getByText("Local only")).toBeVisible();
   await expect(page.getByText("Kayak")).toBeVisible();
 });
 
