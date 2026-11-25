@@ -15,7 +15,51 @@ test("renders the popup against extension storage defaults", async ({ openExtens
   await expect(page.getByText("Tools for Google Flights, Skyscanner, and ITA Matrix.")).toBeVisible();
   await expect(page.locator("header img")).toHaveJSProperty("naturalWidth", 64);
   await expect(page.getByRole("button", { name: "Options", exact: true })).toBeVisible();
-  await expect(page.getByText("Kayak")).toBeVisible();
+  await expect(page.getByText("Open a flight search to use MooFlights")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Google Flights" })).toHaveAttribute(
+    "href",
+    "https://www.google.com/travel/flights",
+  );
+  await expect(page.getByRole("link", { name: "Skyscanner" })).toHaveAttribute("href", "https://www.skyscanner.net/");
+  await expect(page.getByRole("link", { name: "ITA Matrix" })).toHaveAttribute(
+    "href",
+    "https://matrix.itasoftware.com/",
+  );
+  await expect(page.getByText("Preferred links", { exact: true })).toHaveCount(0);
+});
+
+test("reports a supported tab and restores its minimized or hidden panel", async ({
+  context,
+  extensionId,
+  extensionServiceWorker,
+}) => {
+  const url = "https://matrix.itasoftware.com/search";
+  await context.route(url, (route) => route.fulfill({ contentType: "text/html", body: "<h1>Flight search</h1>" }));
+  const flightPage = await context.newPage();
+  await flightPage.goto(url);
+  const panel = flightPage.locator("#mooflights-panel");
+  await panel.locator('summary[aria-label="Panel actions"]').click();
+  await panel.getByRole("button", { name: "Minimize" }).click();
+  const tab = await extensionServiceWorker.evaluate(async (flightUrl) => {
+    const [tab] = await chrome.tabs.query({ url: flightUrl });
+    return { id: tab.id, url: tab.url };
+  }, url);
+  const popup = await context.newPage();
+  await popup.addInitScript((activeTab) => {
+    chrome.tabs.query = ((_query, callback) => callback([activeTab])) as typeof chrome.tabs.query;
+  }, tab);
+  await popup.goto(`chrome-extension://${extensionId}/popup/index.html`);
+  await expect(popup.getByText("Active on ITA Matrix")).toBeVisible();
+  await popup.getByRole("button", { name: "Show panel" }).click();
+  await expect(panel.locator('summary[aria-label="Panel actions"]')).toBeVisible();
+  await expect(popup.getByRole("button", { name: "Show panel" })).toHaveCount(0);
+
+  await panel.locator('summary[aria-label="Panel actions"]').click();
+  await panel.getByRole("button", { name: "Hide for this session" }).click();
+  await expect(panel).toHaveCount(0);
+  await popup.reload();
+  await popup.getByRole("button", { name: "Show panel" }).click();
+  await expect(panel.locator('summary[aria-label="Panel actions"]')).toBeVisible();
 });
 
 test("persists Google Flights country settings from the options page", async ({ openExtensionPage }) => {
@@ -254,8 +298,8 @@ test("offers sharing on first popup use and remembers a dismissal without opting
     banner.getByText("Shares flight comparisons, confirmed ITA fare classes, and basic usage."),
   ).toBeVisible();
   const cardBounds = await banner.boundingBox();
-  const toolsBounds = await page.locator(".actions").boundingBox();
-  expect(cardBounds && toolsBounds && cardBounds.y + cardBounds.height <= toolsBounds.y).toBe(true);
+  const toolsBounds = await page.locator(".tab-context").boundingBox();
+  expect(cardBounds && toolsBounds && toolsBounds.y + toolsBounds.height <= cardBounds.y).toBe(true);
   await page.screenshot({ path: ".context/qa/community-popup.png" });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await banner.getByRole("button", { name: "Continue without sharing" }).click();
@@ -263,6 +307,7 @@ test("offers sharing on first popup use and remembers a dismissal without opting
   await page.reload();
   await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
   await expect(banner).toHaveCount(0);
+  await expect(page.getByText("Sharing off", { exact: true })).toBeVisible();
   const stored = await extensionServiceWorker.evaluate(() =>
     chrome.storage.local.get(["muTravelSettings", "mooFlightsCommunityPromptDecision"]),
   );
@@ -293,6 +338,7 @@ test("popup requires permission before opting in and updates sharing controls ac
   const before = await extensionServiceWorker.evaluate(() => chrome.storage.local.get("muTravelSettings"));
   expect(before.muTravelSettings?.communityHistory?.enabled).not.toBe(true);
   await page.evaluate(() => {
+    chrome.permissions.contains = async () => true;
     chrome.permissions.request = async (requested) => {
       (window as any).requestedOrigins = requested.origins;
       return true;
@@ -304,7 +350,10 @@ test("popup requires permission before opting in and updates sharing controls ac
   const options = await openExtensionPage("options/index.html");
   const toggle = options.getByRole("checkbox", { name: "Help improve MooFlights" });
   await expect(toggle).toBeChecked();
-  await toggle.uncheck();
+  await expect(page.getByText("Sharing on", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Pause sharing" }).click();
+  await expect(page.getByText("Sharing off", { exact: true })).toBeVisible();
+  await expect(toggle).not.toBeChecked();
   await page.reload();
   await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
   await expect(banner).toHaveCount(0);

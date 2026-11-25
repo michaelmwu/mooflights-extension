@@ -28,7 +28,7 @@ import {
   uniqueMileageProgramOptions,
 } from "../shared/mileageEarnings";
 import { ALWAYS_SHOWN_PROVIDER_IDS, LOCAL_PROVIDERS, providerConfidence } from "../shared/providers";
-import { DEFAULT_SETTINGS, loadSettings, saveSettings } from "../shared/storage";
+import { DEFAULT_SETTINGS, loadSettings, mergeSettings, SETTINGS_KEY, saveSettings } from "../shared/storage";
 import type { AirportFilters, ExtensionSettings } from "../shared/types";
 import { CommunityIcon } from "../ui/CommunityIcon";
 import "./options.css";
@@ -68,6 +68,28 @@ function Options(): React.ReactElement {
       setHistoryUrl(next.communityHistory.baseUrl || DEFAULT_HISTORY_API_ORIGIN);
       setHistoryLoaded(true);
     });
+  }, []);
+
+  useEffect(() => {
+    function syncSharing(changes: Record<string, chrome.storage.StorageChange>, area: string): void {
+      if (area !== "local" || !changes[SETTINGS_KEY]) return;
+      const { communityHistory } = mergeSettings(changes[SETTINGS_KEY].newValue);
+      const current = latestSettings.current;
+      if (
+        communityHistory.enabled === current.communityHistory.enabled &&
+        communityHistory.consentVersion === current.communityHistory.consentVersion &&
+        communityHistory.baseUrl === current.communityHistory.baseUrl
+      )
+        return;
+      if (communityHistory.baseUrl !== current.communityHistory.baseUrl) {
+        setHistoryUrl(communityHistory.baseUrl || DEFAULT_HISTORY_API_ORIGIN);
+      }
+      const next = { ...current, communityHistory };
+      latestSettings.current = next;
+      setSettings(next);
+    }
+    chrome.storage.onChanged.addListener(syncSharing);
+    return () => chrome.storage.onChanged.removeListener(syncSharing);
   }, []);
 
   useEffect(() => {

@@ -48,6 +48,7 @@ import {
   skyscannerSearchResultRows,
 } from "../shared/skyscannerBooking";
 import { DEFAULT_SETTINGS, loadSettings, mergeSettings, SETTINGS_KEY } from "../shared/storage";
+import { listenForToolbarPanel } from "../shared/toolbarPanel";
 import type { AppLanguage } from "../shared/types";
 import {
   FARE_PREVIEW_PORTAL_SELECTOR,
@@ -645,6 +646,29 @@ function isBookingOption(value: unknown): value is CountryResult["options"][numb
     typeof candidate.isDirect === "boolean"
   );
 }
+
+listenForToolbarPanel(
+  () => {
+    if (comparisonWorker || !currentPanelPageKey(currentGoogleFlightsPanelMode())) return "waiting";
+    if (shouldHidePanel() || state.panelMinimized) return "hidden";
+    return document.getElementById(PANEL_ID) ? "active" : "waiting";
+  },
+  () => {
+    try {
+      sessionStorage.removeItem(PANEL_SESSION_HIDE_STORAGE_KEY);
+    } catch {
+      // Browser storage can be unavailable on some pages.
+    }
+    if (state.panelMinimized) {
+      state.panelCollapsePosition = state.panelPosition;
+      restoreExpandedPanelPosition();
+      state.panelMinimized = false;
+      savePanelUiState();
+    }
+    render();
+    scheduleRender();
+  },
+);
 
 chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
   const payload = message as {
