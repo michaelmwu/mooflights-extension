@@ -351,9 +351,22 @@ test("popup requires permission before opting in and updates sharing controls ac
   const toggle = options.getByRole("checkbox", { name: "Help improve MooFlights" });
   await expect(toggle).toBeChecked();
   await expect(page.getByText("Sharing on", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Pause sharing" }).click();
+  const backendUrl = options.locator(".dev-panel").getByRole("textbox");
+  await backendUrl.fill("http://localhost:3000");
+  // Activate the popup action without blurring and saving the draft first.
+  await page.getByRole("button", { name: "Pause sharing" }).evaluate((button) => (button as HTMLButtonElement).click());
   await expect(page.getByText("Sharing off", { exact: true })).toBeVisible();
   await expect(toggle).not.toBeChecked();
+  await expect(backendUrl).toHaveValue("http://localhost:3000");
+  await backendUrl.blur();
+  await expect
+    .poll(() =>
+      extensionServiceWorker.evaluate(async () => {
+        const { muTravelSettings } = await chrome.storage.local.get("muTravelSettings");
+        return { baseUrl: muTravelSettings?.backend?.baseUrl, sharing: muTravelSettings?.communityHistory?.enabled };
+      }),
+    )
+    .toEqual({ baseUrl: "http://localhost:3000", sharing: false });
   await page.reload();
   await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
   await expect(banner).toHaveCount(0);

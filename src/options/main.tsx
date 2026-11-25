@@ -679,7 +679,14 @@ function Options(): React.ReactElement {
       </section>
 
       {__MOOFLIGHTS_DEV_BUILD__ ? (
-        <DeveloperBackend settings={settings} setSettings={setSettings} persist={persist} />
+        <DeveloperBackend
+          settings={settings}
+          setSettings={(next) => {
+            latestSettings.current = next;
+            setSettings(next);
+          }}
+          persist={persist}
+        />
       ) : null}
 
       <footer className="legal-footer">Copyright (c) 2026 Mu Travel LLC.</footer>
