@@ -21,8 +21,13 @@ main {
 }
 
 header {
-  display: grid;
-  gap: 2px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+header img {
+  flex: none;
 }
 
 h1,

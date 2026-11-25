@@ -12,7 +12,9 @@ test("renders the popup against extension storage defaults", async ({ openExtens
   const page = await openExtensionPage("popup/index.html");
 
   await expect(page.getByRole("heading", { name: "MooFlights", exact: true })).toBeVisible();
-  await expect(page.getByText("Offline-first ITA Matrix tools.")).toBeVisible();
+  await expect(page.getByText("Tools for Google Flights, Skyscanner, and ITA Matrix.")).toBeVisible();
+  await expect(page.locator("header img")).toHaveJSProperty("naturalWidth", 64);
+  await expect(page.getByRole("button", { name: "Options", exact: true })).toBeVisible();
   await expect(page.getByText("Kayak")).toBeVisible();
 });
 

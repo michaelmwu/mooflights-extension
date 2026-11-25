@@ -125,8 +125,11 @@ function Popup(): React.ReactElement {
   return (
     <main aria-busy={settingsLoading}>
       <header>
-        <h1>{t("appName")}</h1>
-        <p>{t("popupTagline")}</p>
+        <img src="../assets/extension-icons/icon-64.png" alt="" width="32" height="32" />
+        <div>
+          <h1>{t("appName")}</h1>
+          <p>{t("popupTagline")}</p>
+        </div>
       </header>
 
       {showPrompt && (
@@ -163,9 +166,6 @@ function Popup(): React.ReactElement {
       )}
 
       <section className="actions">
-        <button type="button" onClick={() => chrome.tabs.create({ url: "https://matrix.itasoftware.com/" })}>
-          {t("openItaMatrix")}
-        </button>
         <button
           type="button"
           className="secondary"
