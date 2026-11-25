@@ -21,8 +21,13 @@ main {
 }
 
 header {
-  display: grid;
-  gap: 2px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+header img {
+  flex: none;
 }
 
 h1,
@@ -34,8 +39,7 @@ h1 {
   font-size: 18px;
 }
 
-p,
-dd {
+p {
   color: #64748b;
 }
 
@@ -46,30 +50,60 @@ section {
   padding: 12px;
 }
 
-dl {
+.tab-context {
   display: grid;
-  gap: 10px;
-  margin: 0;
-}
-
-dl > div {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-dt {
-  font-weight: 650;
-}
-
-dd {
-  margin: 0;
-  text-align: right;
-}
-
-.actions {
-  display: flex;
   gap: 8px;
+}
+
+.site-links,
+footer,
+.sharing-status > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+footer a,
+.site-links a,
+button.text-button {
+  color: #0f766e;
+}
+
+.site-links a {
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  padding: 4px 7px;
+  text-decoration: none;
+  font-size: 12px;
+}
+
+footer {
+  padding-top: 8px;
+  border-top: 1px solid #e2e8f0;
+  font-size: 12px;
+}
+
+footer .version {
+  margin-inline-start: auto;
+  color: #64748b;
+}
+
+.sharing-status {
+  font-size: 12px;
+  padding-block: 7px;
+}
+
+.sharing-status > div {
+  justify-content: space-between;
+}
+
+button.text-button {
+  flex: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-decoration: underline;
 }
 
 button {

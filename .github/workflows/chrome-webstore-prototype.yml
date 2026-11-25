@@ -1,16 +1,16 @@
-name: Chrome Web Store Prototype
+name: Chrome Web Store Submission
 
 on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Build/package and show intended Web Store request without uploading."
+        description: "Validate the release ZIP and preview the request without uploading."
         required: true
         default: true
         type: boolean
       release_tag:
-        description: "Optional existing vX.Y.Z tag to package. Leave blank to package the selected ref."
-        required: false
+        description: "Published vX.Y.Z release tag whose ZIP should be submitted."
+        required: true
         type: string
       publish_type:
         description: "Publish behavior after Chrome Web Store approval."
@@ -30,12 +30,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: chrome-webstore-prototype-${{ inputs.release_tag || github.ref }}
+  group: chrome-webstore-submission
   cancel-in-progress: false
 
 jobs:
   submit:
-    name: Package and submit
+    name: Verify release and submit
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -45,50 +45,43 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.release_tag || github.ref }}
-          fetch-depth: 0
           persist-credentials: false
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: package.json
-
-      - name: Setup Chrome
-        id: setup-chrome
-        uses: browser-actions/setup-chrome@48ad923757ca74d66703209fe939badbdf80f2f4 # v2
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Verify
-        run: |
-          bun run check
-          bun run typecheck
-          bun run test
-
-      - name: Verify release version
-        if: inputs.release_tag != ''
-        run: node scripts/verify-release-version.mjs "${RELEASE_TAG}"
-
-      - name: Package extension
+      - name: Download and verify released Chrome ZIP
+        id: release
         env:
-          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
-          MOOFLIGHTS_CRX_KEY_B64: ${{ secrets.MOOFLIGHTS_CRX_KEY_B64 }}
-          MOOFLIGHTS_REQUIRE_CRX_KEY: ${{ inputs.release_tag != '' && '1' || '' }}
-        run: bun run package
-
-      - name: Upload package artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: chrome-webstore-prototype-package
-          path: |
-            artifacts/mooflights-*.zip
-            artifacts/mooflights-*.crx
-          if-no-files-found: error
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if [[ "$DRY_RUN" != true && "$GITHUB_REF" != refs/heads/main ]]; then
+            echo "::error::Run live submissions from main."
+            exit 1
+          fi
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Enter a release tag like v0.0.11."
+            exit 1
+          fi
+          if [[ "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" != false ]]; then
+            echo "::error::The release must be published."
+            exit 1
+          fi
+          asset="mooflights-${RELEASE_TAG#v}.zip"
+          archive="$RUNNER_TEMP/$asset"
+          gh release download "$RELEASE_TAG" --pattern "$asset" --output "$archive"
+          unzip -tq "$archive"
+          unzip -p "$archive" manifest.json | node -e '
+            const manifest = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
+            const expected = process.env.RELEASE_TAG.slice(1);
+            if (manifest.version !== expected) {
+              throw new Error("ZIP manifest version " + manifest.version + " does not match " + expected);
+            }
+          '
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
 
       - name: Submit to Chrome Web Store
         env:
+          RELEASE_ARCHIVE: ${{ steps.release.outputs.archive }}
           CHROME_WEBSTORE_DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
           CHROME_WEBSTORE_UPLOAD_ONLY: ${{ inputs.upload_only && '1' || '' }}
           CHROME_WEBSTORE_PUBLISH_TYPE: ${{ inputs.publish_type }}
@@ -97,4 +90,4 @@ jobs:
           CHROME_WEBSTORE_REFRESH_TOKEN: ${{ secrets.CHROME_WEBSTORE_REFRESH_TOKEN }}
           CHROME_WEBSTORE_PUBLISHER_ID: ${{ secrets.CHROME_WEBSTORE_PUBLISHER_ID }}
           CHROME_WEBSTORE_EXTENSION_ID: ${{ secrets.CHROME_WEBSTORE_EXTENSION_ID }}
-        run: bun run webstore:submit
+        run: node scripts/submit-chrome-webstore.mjs --artifact="$RELEASE_ARCHIVE"

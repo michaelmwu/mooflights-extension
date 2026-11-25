@@ -25,6 +25,7 @@ import {
 } from "../shared/mileageEarnings";
 import { ALWAYS_SHOWN_PROVIDER_IDS, rankProviderLinks, summarizeItinerary } from "../shared/providers";
 import { DEFAULT_SETTINGS, loadSettings, mergeSettings, SETTINGS_KEY, saveSettings } from "../shared/storage";
+import { listenForToolbarPanel } from "../shared/toolbarPanel";
 import type { ExtensionSettings, ItinerarySegment, NormalizedItinerary, RankedProviderLink } from "../shared/types";
 import {
   mooFlightsPanelHeaderStyles,
@@ -229,6 +230,29 @@ function panelChromeLabels(): {
     expandPanel: translate("expandPanel"),
   };
 }
+
+listenForToolbarPanel(
+  () => {
+    if (isFlightsPage()) return "active";
+    if (!state.settings) return "waiting";
+    if (isPanelHiddenForSession() || state.panelMinimized) return "hidden";
+    return document.getElementById(PANEL_ID) ? "active" : "waiting";
+  },
+  () => {
+    try {
+      sessionStorage.removeItem(PANEL_SESSION_HIDE_STORAGE_KEY);
+    } catch {
+      // Browser storage can be unavailable on some pages.
+    }
+    if (state.panelMinimized) {
+      state.panelCollapsePosition = state.panelPosition;
+      restoreExpandedPanelPosition();
+      state.panelMinimized = false;
+      savePanelUiState();
+    }
+    render();
+  },
+);
 
 function render(): void {
   if (shouldHidePanel()) {

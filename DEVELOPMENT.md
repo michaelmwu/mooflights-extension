@@ -120,12 +120,19 @@ bun run release:verify
 - `CI`: runs on pull requests and pushes to `main`; installs with Bun, runs Biome, typecheck, tests, and production build.
 - `Release Extension Package`: runs manually or on `v*` tags; verifies the repo, checks the release tag matches the extension version when provided, builds versioned Chrome `artifacts/mooflights-*.zip` and `artifacts/mooflights-*.crx` packages plus the Firefox `artifacts/mooflights-firefox-*.xpi` package, uploads the package artifacts, generates GitHub release notes from the tag history, and attaches the packages to a single GitHub release for that source version. Manual runs can omit `release_tag` to build only, use the default `next_patch` strategy to package the next unused patch version as a build artifact, choose `next_minor` for a `0.1.0`-style bump, or provide an existing `vX.Y.Z` tag to create/update a draft release.
 
-The release workflow intentionally does not publish to the Chrome Web Store or sign Firefox packages yet. Until Mu Travel
-LLC has the relevant store automation credentials, store submission and Mozilla Add-ons signing remain manual and outside
-GitHub Actions. The Firefox XPI attached to GitHub releases is unsigned and intended for Mozilla Add-ons submission or
-developer testing.
+- `Chrome Web Store Submission`: runs on demand for an existing published GitHub release. It downloads the release's Chrome ZIP, verifies the archive and manifest version, and defaults to a dry run.
 
-Neither workflow needs backend secrets. The extension build must not read `.env`.
+For a live submission, configure the following GitHub Actions secrets using [Google's Chrome Web Store API setup guide](https://developer.chrome.com/docs/webstore/using-api/):
+
+- `CHROME_WEBSTORE_CLIENT_ID`
+- `CHROME_WEBSTORE_CLIENT_SECRET`
+- `CHROME_WEBSTORE_REFRESH_TOKEN`
+- `CHROME_WEBSTORE_PUBLISHER_ID`
+- `CHROME_WEBSTORE_EXTENSION_ID`
+
+In **Actions → Chrome Web Store Submission → Run workflow**, select `main`, enter the published tag, and leave **dry_run** enabled for the first run. For a live run, disable **dry_run** and choose `DEFAULT_PUBLISH` to publish after Google approves the submission or `STAGED_PUBLISH` to publish later. Enable **upload_only** to upload without submitting for review.
+
+Firefox Add-ons signing and submission are manual. GitHub releases contain an unsigned XPI for submission or testing. The extension build must not read `.env`.
 
 ## Stable Unpacked Extension Path
 

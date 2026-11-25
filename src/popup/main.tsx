@@ -2,7 +2,11 @@ import "../shared/firefoxChromeCompat";
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { communityPermissions, supportsNativeDataConsent } from "../shared/communityPermissions";
+import {
+  communityPermissions,
+  hasCommunityPermission,
+  supportsNativeDataConsent,
+} from "../shared/communityPermissions";
 import {
   COMMUNITY_CONSENT_VERSION,
   COMMUNITY_PROMPT_KEY,
@@ -10,20 +14,24 @@ import {
   historyBaseUrl,
 } from "../shared/communitySettings";
 import { createTranslator, htmlLang } from "../shared/i18n";
-import { LOCAL_PROVIDERS } from "../shared/providers";
 import { DEFAULT_SETTINGS, loadSettings, mergeSettings, patchSettings, SETTINGS_KEY } from "../shared/storage";
 import type { ExtensionSettings } from "../shared/types";
 import { CommunityIcon } from "../ui/CommunityIcon";
+import { FLIGHT_SITES, readActiveFlightTab, requestPanelStatus, type SupportedTab } from "./tabContext";
 import "./popup.css";
 import "../ui/communityConsent.css";
 
-const PROVIDER_LABELS = new Map(LOCAL_PROVIDERS.map((provider) => [provider.id, provider.label]));
+const PRIVACY_URL = "https://github.com/michaelmwu/mooflights-extension/blob/main/PRIVACY.md";
+const ISSUES_URL = "https://github.com/michaelmwu/mooflights-extension/issues/new";
 
 function Popup(): React.ReactElement {
   const [settings, setSettings] = useState<ExtensionSettings>(DEFAULT_SETTINGS);
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [promptDecision, setPromptDecision] = useState<string | null>(null);
   const [nativeDataConsent, setNativeDataConsent] = useState<boolean | null>(null);
+  const [flightTab, setFlightTab] = useState<SupportedTab | null>();
+  const [sharingAvailable, setSharingAvailable] = useState<boolean | null>(null);
+  const [showingPanel, setShowingPanel] = useState(false);
   const [sharingBusy, setSharingBusy] = useState(false);
   const [sharingError, setSharingError] = useState("");
   const t = useMemo(() => createTranslator(settings.language), [settings.language]);
@@ -81,6 +89,70 @@ function Popup(): React.ReactElement {
     document.documentElement.lang = htmlLang(settings.language);
   }, [settings.language]);
 
+  useEffect(() => {
+    let active = true;
+    void readActiveFlightTab()
+      .catch(() => null)
+      .then((tab) => {
+        if (active) setFlightTab(tab);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    let permissionCheck = 0;
+    function updatePermission(): void {
+      const check = ++permissionCheck;
+      const { enabled, baseUrl } = settings.communityHistory;
+      setSharingAvailable(null);
+      void (enabled && baseUrl ? hasCommunityPermission(baseUrl) : Promise.resolve(false))
+        .catch(() => false)
+        .then((allowed) => {
+          if (active && check === permissionCheck) setSharingAvailable(allowed);
+        });
+    }
+    updatePermission();
+    chrome.permissions.onAdded.addListener(updatePermission);
+    chrome.permissions.onRemoved.addListener(updatePermission);
+    return () => {
+      active = false;
+      chrome.permissions.onAdded.removeListener(updatePermission);
+      chrome.permissions.onRemoved.removeListener(updatePermission);
+    };
+  }, [settings.communityHistory]);
+
+  async function showPanel(tab: SupportedTab): Promise<void> {
+    setShowingPanel(true);
+    try {
+      const status = await requestPanelStatus(tab.id, "showToolbarPanel");
+      setFlightTab({ ...tab, status });
+    } catch {
+      setFlightTab({ ...tab, status: "unavailable" });
+    } finally {
+      setShowingPanel(false);
+    }
+  }
+
+  async function pauseSharing(): Promise<void> {
+    setSharingBusy(true);
+    setSharingError("");
+    try {
+      const current = await loadSettings();
+      setSettings(
+        await patchSettings({
+          communityHistory: { ...current.communityHistory, enabled: false },
+        }),
+      );
+    } catch {
+      setSharingError(t("historyOptOutFailed"));
+    } finally {
+      setSharingBusy(false);
+    }
+  }
+
   async function dismissPrompt(): Promise<void> {
     try {
       await chrome.storage.local.set({ [COMMUNITY_PROMPT_KEY]: COMMUNITY_CONSENT_VERSION });
@@ -125,9 +197,44 @@ function Popup(): React.ReactElement {
   return (
     <main aria-busy={settingsLoading}>
       <header>
-        <h1>{t("appName")}</h1>
-        <p>{t("popupTagline")}</p>
+        <img src="../assets/extension-icons/icon-64.png" alt="" width="32" height="32" />
+        <div>
+          <h1>{t("appName")}</h1>
+          <p>{t("popupTagline")}</p>
+        </div>
       </header>
+
+      {flightTab !== undefined && (
+        <section className="tab-context" aria-live="polite">
+          {flightTab ? (
+            <>
+              <strong>
+                {flightTab.status === "active" || flightTab.status === "hidden"
+                  ? t("popupActiveSite", { site: flightTab.site })
+                  : flightTab.site}
+              </strong>
+              {flightTab.status === "hidden" && (
+                <button type="button" disabled={showingPanel} onClick={() => void showPanel(flightTab)}>
+                  {t("popupShowPanel")}
+                </button>
+              )}
+              {flightTab.status === "waiting" && <p>{t("popupRunSearch")}</p>}
+              {flightTab.status === "unavailable" && <p>{t("popupReloadTab")}</p>}
+            </>
+          ) : (
+            <>
+              <strong>{t("popupOpenFlightSearch")}</strong>
+              <div className="site-links">
+                {FLIGHT_SITES.map(({ name, url }) => (
+                  <a key={name} href={url} target="_blank" rel="noreferrer">
+                    {name}
+                  </a>
+                ))}
+              </div>
+            </>
+          )}
+        </section>
+      )}
 
       {showPrompt && (
         <section className="community-card community-prompt" aria-labelledby="community-prompt-heading">
@@ -146,11 +253,7 @@ function Popup(): React.ReactElement {
             </button>
           </div>
           <div className="community-footer">
-            <a
-              href="https://github.com/michaelmwu/mooflights-extension/blob/main/PRIVACY.md"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
+            <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer">
               {t("historyDetails")}
             </a>
           </div>
@@ -162,43 +265,42 @@ function Popup(): React.ReactElement {
         </section>
       )}
 
-      <section className="actions">
-        <button type="button" onClick={() => chrome.tabs.create({ url: "https://matrix.itasoftware.com/" })}>
-          {t("openItaMatrix")}
-        </button>
+      {!settingsLoading && !showPrompt && sharingAvailable !== null && (
+        <section className="sharing-status" aria-live="polite">
+          <div>
+            <span>{t(sharingAvailable ? "historySharingOn" : "historySharingOff")}</span>
+            {settings.communityHistory.enabled && (
+              <button type="button" className="text-button" disabled={sharingBusy} onClick={() => void pauseSharing()}>
+                {t("popupPauseSharing")}
+              </button>
+            )}
+          </div>
+          {sharingError && (
+            <p className="community-message" role="status">
+              {sharingError}
+            </p>
+          )}
+        </section>
+      )}
+
+      <footer>
         <button
           type="button"
-          className="secondary"
-          onClick={() => chrome.runtime.sendMessage({ command: "openOptionsPage" })}
+          className="text-button"
+          onClick={() => void chrome.runtime.sendMessage({ command: "openOptionsPage" })}
         >
           {t("options")}
         </button>
-      </section>
-
-      <section>
-        <dl>
-          <div>
-            <dt>{t("backend")}</dt>
-            <dd>{settings.backend.enabled ? t("enabled") : t("localOnly")}</dd>
-          </div>
-          <div>
-            <dt>{t("preferredLinks")}</dt>
-            <dd>{preferredProviderSummary(settings.preferredProviderIds, t)}</dd>
-          </div>
-        </dl>
-      </section>
+        <a href={PRIVACY_URL} target="_blank" rel="noreferrer">
+          {t("popupPrivacy")}
+        </a>
+        <a href={ISSUES_URL} target="_blank" rel="noreferrer">
+          {t("popupReportIssue")}
+        </a>
+        <span className="version">v{chrome.runtime.getManifest().version}</span>
+      </footer>
     </main>
   );
-}
-
-function preferredProviderSummary(providerIds: string[], t: ReturnType<typeof createTranslator>): string {
-  const labels = providerIds.map((providerId) => PROVIDER_LABELS.get(providerId) || providerId);
-  if (labels.length === 0) return t("defaultRanking");
-  if (labels.length <= 2) return labels.join(", ");
-  return t("preferredProviderSummaryMore", {
-    providers: labels.slice(0, 2).join(", "),
-    count: labels.length - 2,
-  });
 }
 
 createRoot(document.getElementById("root") as HTMLElement).render(<Popup />);
